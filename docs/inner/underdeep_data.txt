@@ -1,0 +1,522 @@
+******************************************************************************
+     THE UNDERDEEP - PSEUDO-RANDOM DUNGEON              design notes v0.7
+******************************************************************************
+
+This document has been orphaned from the main design documentation to avoid
+bloat. I'll maintain a separate version numbering for this document
+specifically to note updates to the Underdeep's logic and configuration.
+
+
+ ___________,————————————————————————————————————————————————————,___________
+\           |        Basic Info and Generated Floor Data         |           /
+/___________,————————————————————————————————————————————————————,___________\
+
+
+The Underdeep is an optional dungeon that contains randomized sequences of
+floors and treasure content. The information below explains how the dungeon is
+pieced together, and relative X,Y coordinates where treasures can be spawned.
+
+The first and last floors of the Underdeep are static maps with specific
+events and warp points. Once the player uses the warp found on the first
+floor, they're dropped into the first of 6 randomized floors. At this point,
+the player cannot use the Teleport spell to exit the dungeon, and there are no
+return warp points leading back to previous floors.
+
+
+ ———— Just how long is the Underdeep? ————
+
+Each visit to the Underdeep produces 8 generated floors and 1 static map. (not
+counting the entrance / lobby to the Underdeep) Once the player sets foot into
+the generated sequence of maps, one static floor is randomly selected from a
+pool of 6 possibilities, and will appear after the 4th generated floor.
+
+The very final floor of the Underdeep (essentially the 10th floor) always
+leads to the "underdeep_end" static floor where Leviathan dwells.
+
+
+The random static pool consists of the following: (see "underdeep_static" dir)
+
+broken_bows.gsm				selkie_village.gsm
+mnemosyne.gsm				undead_dwarves.gsm
+twilight_hollows.gsm         		ancient_library.gsm
+
+
+Some events and treasure coordinates corresponding to these maps will be
+documented here, although general dialogs will appear in the "dialogs" folder.
+
+
+ ———— How are the generated floors constructed? ————
+
+Each floor will contain nine 16x16-tile sections arranged to form a 48x48 map.
+The sections are labeled according to how the script should position them.
+e.g. [topleft1.gsm] would be placed in the top left-hand corner of the floor.
+There are three variations on each type of section, and the script will choose
+these variations on a random basis.
+
+There are three rules that the generation script needs to apply to each floor:
+
+ - There must be at least one section with a staircase (but no more than one)
+ - There can be only two sections per floor containing treasure chests or pots
+ - There must be at least one section with a warp tile (emergency exit)
+
+The staircase found in some sections allows the player to descend to the next
+randomized floor, while the (star) warp tile give the player the option to
+return to the entrance of the Underdeep, forfeiting their progress altogether.
+
+
+The sections that contain staircases are as follows:
+
+bottomcenter3       sideright1
+bottomright1        topleft1
+center1             topright3
+
+The sections that contain treasure chests or pots are as follows:
+
+bottomleft1	    sideright3
+bottomleft3	    topcenter2
+bottomright3	    topleft1
+center2		    topright3
+sideleft3	    topright3
+
+The sections that contain emergency exit warp tiles are as follows:
+
+topcenter1	    topright1
+topleft3
+
+
+ ———— Where do staircases lead? ————
+
+Staircases will drop the player off at a semi-random point on the next floor.
+The player can not be dropped onto pieces that contain treasure or staircases.
+
+The exact X,Y coordinates where the player can be dropped are:
+
+bottomcenter1 - 10,4	      sideright2 - 8,3
+bottomcenter2 - 8,3	      topcenter1 - 5,4
+  bottomleft2 - 5,7	      topcenter3 - 9,5
+ bottomright2 - 11,6	        topleft2 - 12,4
+      center3 - 6,2	        topleft3 - 11,7
+    sideleft1 - 6,11	       topright2 - 7,6
+    sideleft2 - 11,5
+
+(Note that the player's facing is always set to down)
+
+
+ ———— How is loot (in the generated floors) randomized? ————
+
+All unopened treasure chest tiles will contain a piece of equipment. From most
+to least likely to appear:
+
+Coral sword	       Healing staff
+Serpent staff	       Mirage clothes
+Flame sword	       Rune armlet
+Venom claw	       Defense sword
+Flame armor	       Catclaw
+Power clothes	       Protect armlet
+Titan armlet
+
+
+All pots may contain potions, but a majority (maybe 66%) of them should be
+empty. The following potions can spawn in pots, from order of most to least
+likely to appear:
+
+Potion   	Wisdom
+Ether		Speed
+Health		Vitality
+Mana		Elixir
+Strength
+
+
+ ———— Random NPC encounters ————
+
+Occasionally, NPCs should be interspersed throughout the generated floors.
+There can be a maximum of two NPCs per floor, with a 25% chance of appearance.
+The specific NPCs who appear should be totally randomized, with no NPC being
+more likely to appear than another. There's no need to limit the appearance of
+duplicate NPCs, as all NPCs are limited to only one specific block.
+
+The random NPCs are as follows:
+
+
+* "Lost Dwarf" [dwarf.png, facing right] This character can appear only at
+12,13 of underdeep_topright1.gsm. The character displays a simple dialog
+rather than doing anything eventful:
+#######################
+"I jus' know 'ere's
+ mythril 'round 'ere
+>>>>>>>>>>>>>>>>>>>>>>>
+ somewhere!"
+#######################
+* Wait a brief moment
+* The dwarf looks up, left and down, then returns to facing the player
+
+#######################
+"Eh? ..."
+#######################
+"Where'd mah
+colleagues go?!"
+#######################
+
+ ************* DIVIDER *************
+
+* "Evil Pixie" - [fey.png, facing normal] This character can appear only at
+11,4 of underdeep_topleft2.gsm. If the party interacts with her, she says:
+#######################
+"Oh, my!"
+#######################
+"You look weary!"
+#######################
+"Here, let me soothe
+ your wounds!"
+#######################
+* Commence a Yes / No prompt
+* if YES, then briefly flash a light and poison the entire party, regardless
+of whether or not anyone possesses poison resistance
+#######################
+The party was poisoned!
+#######################
+
+* Wait a brief moment
+#######################
+"Tee-hee!"
+#######################
+"Let's play again
+ sometime!"
+#######################
+* The pixie flickers out completely and the event is erased (temporary flag)
+
+* If the player selected NO, then
+#######################
+"You're no fun!"
+#######################
+* The pixie then flickers out completely
+
+ ************* DIVIDER *************
+
+* "Viper Lady" - [villager_f.png, facing down] This character can appear only
+at 14,18 of underdeep_bottomleft2.gsm
+#######################
+"Oh, thank goodness!"
+#######################
+"I've been wandering
+ around for hours!"
+#######################
+"I don't know how I
+ ended up here."
+#######################
+"Please, can you
+ help me find a
+>>>>>>>>>>>>>>>>>>>>>>>
+ way out?"
+#######################
+* Display a Yes / No prompt
+* If YES, then
+#######################
+"Heh heh..."
+#######################
+"Didn't your mother
+ tell you never to
+>>>>>>>>>>>>>>>>>>>>>>>
+ talk to strangers?"
+#######################
+* Commence boss battle: 30
+* After the battle, the woman's sprite catches fire and flickers out
+
+* If NO, then
+#######################
+"How rude!"
+#######################
+"Didn't anyone ever
+ teach you to respect
+>>>>>>>>>>>>>>>>>>>>>>>
+ your elders?!"
+#######################
+* The woman remains in place, and the dialogs can be repeated
+
+ ************* DIVIDER *************
+
+* "Friendly Mage" - [mage.png, facing down] 0,2 underdeep_center1.gsm
+#######################
+"Don't worry - I'm
+ not lost."
+#######################
+"Quite the contrary!"
+#######################
+"My colleagues and I
+ have had some mild
+>>>>>>>>>>>>>>>>>>>>>>>
+ success in charting
+ these depths."
+#######################
+"You on the other hand
+ could probably use
+>>>>>>>>>>>>>>>>>>>>>>>
+ some help."
+#######################
+"Here, this is the
+ least I can do!"
+#######################
+* Randomly give the player a Potion, a Life potion, a Remedy or an Elixir in
+any preferred order, then set a temporary flag so this doesn't repeat. The
+mage's subsequent dialog will be:
+
+#######################
+"Be careful with whom
+you choose to interact."
+#######################
+"Leviathan's curse
+takes on many forms!"
+#######################
+
+
+ ************* DIVIDER *************
+
+* "Not-so-Holy Spring" - Not really an NPC per se, but I thought it should be
+documented in this section nonetheless. The "spring" is located at 4-7,11 of
+underdeep_bottomleft2.gsm. Unlike the NPCs above, the Not-so-Holy Spring will
+ALWAYS appear in its respective location. Interacting with it brings up the
+usual holy spring prompt, with some differences:
+
+#######################
+This spring is blessed
+by holy magic.
+#######################
+Throw something in?
+#######################
+* Yes / No prompt
+
+* If YES, then
+#######################
+"Hah, hah - psych!"
+#######################
+* Permanently remove whatever item was thrown in
+
+* If NO, then
+#######################
+"What are you
+ scared of?"
+#######################
+"Go on - do it!"
+#######################
+* Once again, display a Yes / No prompt
+
+* If YES, then defer back to the "Psych!" dialog above
+
+* If NO this time, then
+#######################
+"Tch. Fine."
+#######################
+
+
+This ends the data for random NPCs.
+
+
+ ___________,————————————————————————————————————————————————————,___________
+\           |                   Static Floor Data                |           /
+/___________,————————————————————————————————————————————————————,___________\
+
+
+In addition to the pseudo-randomly generated caverns, a static map will be
+placed randomly after every second floor. There are five possible static maps
+that can be selected, but no single map can be repeated per visit.
+
+Some of the events that transpire on the static maps set permanent flags,
+which will be noted in the project's "dialogs" folder. Not all maps set
+permanent flags, however. For example, pots or chests with randomly generated
+loot will always generate loot when those areas are revisited.
+
+
+ ———— Undead Dwarves ————
+
+This map is essentially identical to the Trade Route, except the outer
+Badlands passage is removed, the chests are emptied, and several skulls
+progressively blot the player's path as they move farther into the cavern.
+
+The dwarves here mimic their earlier dialogs in order to give the player the
+impression that they've somehow been teleported to the real Trade Route; so
+copy the NPC data from the real Trade Route and place it here. (minus the
+chimera boss that guards the exit) Similarly, the encounter zone is identical
+to that of the real Trade Route.
+
+Once the player has cleared this map, it can never be respawned in the
+Underdeep again. Be ready to set a permanent flag for this.
+
+
+ ———— Broken Bows ————
+
+This is a short treasure map. There are several derelict ships suspended above
+an abyss. The staircases will randomly lead to different parts of the ship
+internals, with only one staircase causing the player to exit the map and
+advance to the next generated map. The script should go something like this:
+
+ 11,3 can lead to 26,26 or 21,15
+ 16,3 can lead to   2,5 or 28,15
+ 6,13 can lead to 26,26 or 21,15
+11,13 can lead to   2,5 or 28,15
+11,23 can lead to 26,26 or 21,15
+
+Player facing doesn't matter. It can be either down for all warps, or retained
+from the player's original facing.
+
+Whatever routes are generated, the reverse routes must logically apply. For
+instance, if 11,23 is chosen to lead to 21,15, then 21,15 must logically
+return the player to 11,23.
+
+The number of descending and ascending staircases is uneven, which means one
+descending staircase will be orphaned. That staircase will cause the player to
+exit this area and advance to the next generated map.
+
+As already noted in the design doc., the encounter zones for this area are:
+1.29 2.2A 3.2C 4.2A
+Moderate enc. rate
+
+Treasures are randomly spawned on this map similar to those spawned on the
+generated floors. The possible treasure containers are as follows...
+
+Barrels locations:
+
+4,4	 8,14	   30,16     19,24     30,26
+4,5	 6,15	   28,17     26,24     31,25
+4,6	 9,15	   1,24	     28,26
+13,12	 19,14	   3,26	     29,24
+14,12	 19,15	   1,28	     29,28
+9,12	 30,15	   19,23     30,24
+
+Note that the barrels at 20,2 and 21,3 are out of reach and should be
+disregarded, since the player can't investigate them. Their only purpose is
+for decoration.
+
+About ~30% of barrels should be filled with potions and gold, from most to
+least likely of appearance: Potion, 200 G, Ether, 1000 G, Health potion,
+Mana potion, Mana potion, Speed potion, Strength potion, Vitality potion
+
+Treasure chest locations:
+
+28,3	  29,6	     14,14	13,22
+28,3	  30,7	     26,13	14,22
+30,4	  14,13	     27,13
+
+About ~20% of treasure chests should be filled with the following items
+ranging from most to least likely: 200 Cursed Gold, Staff, Clothes, Broad
+sword, Hellfire item, Kaiser shield, Magic shield, 1200 G, Elixir
+
+
+ ———— Twilight Hollows ————
+
+When being deposited onto the map, the player can randomly spawn at one of
+four points: 24,25 facing up, 4,25 facing down, 21,4 facing left or 16,27
+facing down.
+
+The pots at 15,18 and 22,16 and 23,15 and 4,24 and 5,34 and 3,36 each have a
+30% chance of containing one of the following items, in order of most to least
+common: Potion, Remedy, 600G, Life, Ether, 1200 G, Hellfire item, Thanatos
+item, Health potion, Mana Potion
+
+The pot at 7,25 has a 70/30 chance of containing either a Rune armlet or a
+Protect armlet, which can be reclaimed upon return visits to the map.
+
+The chests at 19,34 and 20,34 and 21,36 can contain any of the following
+(including redundant items) from most to least likely of appearance: Mythril
+shield, 2000 G, Nostrum item, Mirage clothes, Vitality potion, Elixir,
+Colossus claw, Gaia armor, 60000 G
+
+The chest at 21,34 has a 70/30 chance of containing either 10,000 CURSED gold
+or a Colossus claw
+
+Tile 7,26 is a fixed encounter (boss) with formation ID 29
+
+Exit: The staircase at 26,8 leads the player to the next generated floor of
+the Underdeep.
+
+The doorway at 17,18 leads to 6,37 facing up. 6,38 exits back to 17,19 facing
+down.
+
+The staircase at 3,34 leads to 16,35 facing down. 16,34 leads back to 3,34
+facing down.
+
+ ———— Ancient Library ————
+
+This area is a large library populated by several mages. There are also some
+item and magic vendors here. The player will randomly spawn at 15,27 or 11,14
+or 18,7 or 19,15. If the player should use the exit doors at 13,30 or 18,30,
+they'll be dropped into the next generated floor.
+
+
+* Magic shop A at X,Y 17,22 (no sprite, uses mage tile)
+#######################
+Cure
+Esuna
+Life
+Sleep
+#######################
+
+
+* Magic shop B at X,Y 18,11 (no sprite, uses mage tile)
+#######################
+Heal
+Flare
+Aura
+Shield
+#######################
+
+
+* Magic shop C at X,Y 28,10 (no sprite, uses mage tile)
+#######################
+Quake
+Dispel
+Holy
+Meteor
+#######################
+
+
+* Alchemy salesman. Will randomly appear at 8,19 or 21,4 using [mage.png]
+facing down.
+#######################
+"We alchemists thrive on
+pursuit of the unknown."
+#######################
+Ether
+Remedy
+Life
+Elixir
+#######################
+
+
+* Magic item salesman. Will randomly appear at 16,15 or 23,9 using [mage.png]
+facing down.
+#######################
+"Say, can I interest you
+in some magic artifacts?"
+#######################
+Hellfire
+Nostrum
+Bacchus
+Thanatos
+#######################
+
+
+* Magic weapon salesman. Appears only at 24,14 using [mage.png] facing up.
+#######################
+"Magic weapons, you say?"
+#######################
+Hades staff
+Lilith staff
+Zeus staff
+Magic shield
+#######################
+
+
+The pot at 23,19 has a 60%/30%/10% chance of containing Ether / Nostrum /
+Elixir.
+
+The pot at 27,3 has a 70%/30% chance of containing Ether / Mana potion.
+
+The pot at 7,12 has a 70%/30% chance of containing Ether / Wisdom potion.
+
+Roughly 33% of all other pots on the map should be filled with any of the
+following items in order of least to most likely to appear: 200 G, Potion, 400
+G, Ether, 600 G, Remedy, Hellfire item, Fairy armlet, Mana potion, Wisdom
+potion, Rune armlet. Note that some pots will be unreachable by the player due
+to NPCs or other objects in the way, but this is of negligible consequence.
+It's frankly easier to have the system scan for the locations of pots than
+specify the coordinates individually.

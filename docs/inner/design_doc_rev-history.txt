@@ -1,0 +1,639 @@
+————— Revision History: ——————————————————————————————————————————————————————
+
+[rev.002]  04/15/15
+Errata: Enemies do *not* have accuracy ratings. The accuracy of an enemy
+attack depends solely on the evasion rating of a character's equipped shield.
+Reworded to reflect this.
+
+Errata: Base Agility should determine eligibility for dual-wielding, not
+*derived* Agility.
+
+Forgot to specify target parameter explanations for spells.
+
+Clarified mutually-exclusive properties like poison and HP regeneration
+occurring at the same time.
+
+Explained how enemies would choose targets when using friendly spells like
+Cure or Blink.
+
+ ----
+
+[rev.003]  04/18/15
+Forgot to specificy that, when a bomb explodes, it KOs itself in the process.
+
+Forgot to note the X / O parameters used to note enemy resistance / weakness.
+
+Updated Shadow Lord's command sequence.
+
+ ----
+
+[rev.004]  04/20/15
+Clothing should probably increase Agility +2, not merely +1.
+
+Updated shop info. (Asnoth Castle / Town)
+
+Added an additional staff, which will be a quest reward for defeating
+Leviathan (2).
+
+ ----
+
+[rev.005]  04/22/15
+Expanded character data: Guest NPCs.
+
+Slightly reorganized equipment tables.
+
+ ----
+
+[rev.006]  04/27/15
+Added information about encounter zones and formations. (major revision)
+
+ ----
+
+[rev.006a] 04/27/15
+Expanded encounter zones.
+
+ ----
+
+[rev.006b] 04/27/15
+Added information about actual encounter rates.
+
+ ----
+
+[rev.006c] 04/27/15
+Implemented an idea for extended enemy rank types; reworded relevant sections
+to reflect this addition.
+
+ ----
+
+[rev.006d] 04/28/15
+Errata: Shield evasion rates.
+
+ ----
+
+[rev.007]  05/11/15
+Noted additional targeting parameters of spells unleashed by equipment when
+used as items.
+
+Elaborated on shop locations.
+
+Too few enemies had the Fire parameter added to their physical attacks.
+Adjusted so that the Dragon's attack is now Fire-based.
+
+ ----
+
+[rev.008]  05/16/15
+Added ogre enemies.
+
+Re-arranged encounter zones and formations. (incomplete)
+
+ ---
+
+[rev.008a] 05/16/15
+Fixed (rather, completed) re-arranged encounter zones.
+
+Detailed information about where the battle backgrounds are used.
+
+ ---
+
+[rev.008b] 05/17/15
+Rebalanced Maya's initial stats and spells.
+
+ ---
+
+[rev.009]  05/19/15
+Reworded parameter strings to reflect changes to status menu layout.
+
+ ---
+
+[rev.010]  05/25/15
+Minor correction. Added "Terrible Dragon" enemy.
+
+ ---
+
+[rev.011]  05/27/15
+Rewording - "ring" > "armlet"
+
+ ---
+
+[rev.012]  06/02/15
+Defense sword / evasion boost.
+
+ ---
+
+[rev.012a] 06/02/15
+Removed outdated info about hit / evasion figures.
+
+ ---
+
+[rev.013]  06/17/15
+Corrections. Completed encounter table for Dreadnought.
+
+Elaborated on HP regeneration versus poison.
+
+Elaborated on Cursed armlet > Holy armlet.
+
+ ---
+
+[rev.014]  07/09/15
+Updated some enemy behavior. Rebalanced clothing stats.
+
+ ---
+
+[rev.014a] 08/09/15
+Rose can equip both male and female-specific armor. Minor corrections.
+
+ ---
+
+[rev.015]  08/13/15
+Corrections. Rearranged Rosencrantz magic shops.
+
+ ---
+
+[rev.016]  08/21/15
+Rebalanced statistics for character-specific skills. Added "Dragon's Den" to
+encounter tables.
+
+ ---
+
+[rev.017]  08/25/15
+Gave Talos some Intellect points. Altered starting equipment for some of the
+later characters, for balance.
+
+Elaborated on spells used outside of battle.
+
+Adjusted MP costs and noted that the Shield spell adds elemental resistances.
+Rebalanced second wind skills.
+
+Noted that spells cannot miss their targets.
+
+ ---
+
+[rev.018]  08/26/15
+Noted that Agility should influence Hit Rate and evasion, and appropriately
+reworded other sections accordingly.
+
+ ---
+
+[rev.018a] 08/26/15
+Quick rebalancing of dual-wielding mechanics: Off-hand weapon recieves 50%
+less damage.
+
+ ---
+
+[rev.018b] 08/26/15
+Correction: Adjusted derived Hit Rate and Evade values in lieu of the fact
+that the calculations are based on a value up to 256.
+
+Gave enemies a formal evasion score.
+
+ ---
+
+[rev.018c] 08/27/15
+Migrating revision history to a separate document for readability.
+
+ ---
+
+[rev.019]  08/28/15
+Added Faze enemy skill.
+
+Dragon's Den > Dragon's Pass
+
+ ---
+
+[rev.020]  08/31/15
+Lowered value of consumables.
+
+ ---
+
+[rev.021]  08/31/15
+Added claw-type weapons. Barius' starting equipment is consequently adjusted.
+
+ ---
+
+[rev.022]  08/31/15
+Rebalanced equipment stats: Armor should incur Intellect penalties; claws
+should add Evasion.
+
+ ---
+
+[rev.023]  08/31/15
+Rebalanced Evasion penalties on equipment, and updated PC base Agility.
+
+ ---
+
+[rev.024]  09/03/15
+Rebalanced equipment.
+
+Removed details about character recruitment, as the section wasn't necessary.
+
+ ---
+
+[rev.025]  09/24/15
+Rebalancing some enemy data and character special skills.
+
+ ---
+
+[rev.026]  09/26/15
+Corrections.
+
+Repurposing "Rune Key" to another key item.
+
+ ---
+
+[rev.027]  09/26/15
+Explained party swapping.
+
+ ---
+
+[rev.028]  09/27/15
+Noted that an enemy drops the Diamond armor.
+
+Removed mention of battle backgrounds, which are no longer used.
+
+ ---
+
+[rev.029]  09/29/15
+Corrections.
+
+Minor rearrangement of shop wares.
+
+ ---
+
+[rev.030]  09/30/15
+Expanding on Talos a bit:
+
+ - Increased MP to 40
+ - Increased Agility to 30
+ - Added a "Graviton" ability to his repertoire
+
+  ---
+
+[rev.031]  09/30/15
+Rebalanced default character growth to counter disparities in totals.
+Now all characters have 10 distributed points.
+
+  ---
+
+[rev.032]  10/04/15
+Added formation ID for Terrible Dragon.
+
+  ---
+
+[rev.033]  10/05/15
+Restructured the layout of character-specific skills and "trigger states" to
+make them appear better organized.
+
+  ---
+
+[rev.034]  10/05/15
+Corrections.
+
+Changed the Rune armlet's unleash spell from Life to Cure. (Unleashed spells
+have restrictive targeting parameters that would have made the item useless)
+
+  ---
+
+[rev.035]  10/07/15
+Fixed formatting.
+
+Correction: Soul-series enemies have 120 Defense, not 20.
+
+Added data pertaining to an unlockable "Hard" mode.
+
+  ---
+
+[rev.036]  10/10/15
+Added section detailing the nature of the Underdeep dungeon.
+
+  ---
+
+[rev.037]  10/12/15
+Expanded info on the Underdeep.
+
+  ---
+
+[rev.038]  10/13/15
+Underdeep corrections.
+
+  ---
+
+[rev.039]  10/14/15
+More Underdeep corrections.
+
+  ---
+
+[rev.040]  10/19/15
+Addressed issues with party swap coordinates.
+
+  ---
+
+[rev.041]  10/21/15
+Zombies and Revenants can now drop Cursed armlets, albeit very rarely.
+
+  ---
+
+[rev.042]  10/27/15
+Reworked character-specific skills and second wind abilities for balance.
+
+Updated undocumented revisions that were made to encounter rates.
+
+Removed encounters from the Arcanian summit.
+
+  ---
+
+[rev.043]  11/09/15
+Correction: Rune Key no longer exists.
+
+Minor rebalancing of character-specific skills.
+
+  ---
+
+[rev.044]  11/09/15
+Rebalanced spells to make them more practical.
+
+  ---
+
+[rev.045]  11/12/15
+Slight reworking of character-specific skills again.
+
+  ---
+
+[rev.046]  11/18/15
+Typo: Telsa > Tesla
+
+Increased effect of poison and regeneration from 8% to 16%.
+
+  ---
+
+[rev.047]  11/18/15
+Updated parameter strings to reflect changes in the app.
+
+  ---
+
+[rev.048]  11/19/15
+Rebalanced spell prices.
+
+Rebalanced enemies to emphasize elemental spells and weapons.
+
+  ---
+
+[rev.049]  11/20/15
+The Seraph staff should apply the Holy element.
+
+  ---
+
+[rev.050]  11/22/15
+Corrected formatting error: The Mirror armor appeared in the shield section of
+the buy values listing.
+
+  ---
+
+[rev.051]  11/23/15
+Dispel now reduces its target's Magic power by 20.
+
+  ---
+
+[rev.052]  11/23/15
+Typo; formatting.
+
+  ---
+
+[rev.053]  12/10/15
+Noted rules for preemptive / ambush attacks.
+
+  ---
+
+[rev.054]  02/09/16
+Rebalanced spell targeting parameters and prices.
+
+Rebalanced Shadow Lord and Arcanian Sphere tactics, and the Shadow Lord's
+Maelstrom ability.
+
+  ---
+
+[rev.055]  02/12/16
+Documenting spell fusions (experimental)
+
+  ---
+
+[rev.056]  02/13/16
+Blink > Protect
+
+Extended spell fusions.
+
+  ---
+
+[rev.057]  03/15/16
+Changed Celestial Sphere to a split encounter zone similar to the overworld.
+
+  ---
+
+[rev.058]  03/15/16
+Defense sword effect = +12% Evasion boost.
+
+  ---
+
+[rev.059]  03/15/16
+Formation 2A was unassigned - added to the Underdeep.
+
+  ---
+
+[rev.060]  03/29/16
+Rebalanced equipment statistics.
+
+  ---
+
+[rev.061]  03/29/16
+Adjusted enemy critical rates.
+
+  ---
+
+[rev.062]  04/06/16
+Trimmed cruft (reduced number of spell fusions, removed "hard mode" data)
+
+  ---
+
+[rev.063]  04/06/16
+Maya and Rose now share the same character-specific skill.
+
+  ---
+
+[rev.064]  04/08/16
+Removed additional cruft. Orphaned details about the Underdeep to another doc.
+
+  ---
+
+[rev.065]  04/11/16
+Revised character and equipment growth rates.
+
+  ---
+
+[rev.066]  04/22/16
+Expanded enemy species and rearranged formations and zones.
+
+  ---
+
+[rev.067]  04/24/16
+Redid Badlands encounters.
+
+ ---
+
+[rev.068]  04/26/16
+Corrections.
+
+ ---
+
+[rev.069]  04/30/16
+Corrections. Renamed Ebony equipment to Ebon.
+
+ ---
+
+[rev.070]  05/03/16
+Meteor now costs 60 MP to cast.
+
+ ---
+
+[rev.071]  05/12/16
+Additional enemies and formations for the Underdeep.
+
+ ---
+
+[rev.072]  05/14/16
+Corrections?
+
+ ---
+
+[rev.073]  05/15/16
+Renamed Tornado > Storm
+
+ ---
+
+[rev.074]  05/15/16
+Nixed spell fusions.
+
+ ---
+
+[rev.075]  05/16/16
+Repurposed the "Sigil" key item.
+
+ ---
+
+[rev.076]  05/22/16
+Added "Ogre Berserker" and arranged some enemy data.
+
+ ---
+
+[rev.077]  05/23/16
+Sigil > Grimoire. Possibly rebalanced some enemy data?
+
+ ---
+
+[rev.078]  06/19/16
+Added Magic-type consumables that unleash spells. Adjusted enemy drops.
+
+ ---
+
+[rev.079]  07/04/16
+Rename: Potion > Tonic, X-Potion > Potion. Corrections, truncating.
+
+ ---
+
+[rev.080]  07/06/16
+Celestial Spire (part 2) encounter zone data.
+
+ ---
+
+[rev.081]  07/30/16
+Rebalancing player vs. enemy statistics. Rewording a few things.
+Added encounter zones for Asnoth 2.
+
+ ---
+
+[rev.082]  08/18/16
+Encounter zones. Corrections?
+
+ ---
+
+[rev.083]  08/24/16
+Minor adjustments to enemy tables. (mostly drop rates)
+
+ ---
+
+[rev.084]  08/25/16
+Initial balancing of enemy stats and commands for testing purposes.
+Added Evade boosts for selective armor and armlets. (If supported?)
+
+ ---
+
+[rev.085]  08/26/16
+Reformatting encounter zones table. Also removed an old table.
+Rebalanced encounters in the Arcanian ruins (Badlands)
+Some minor corrections.
+
+ ---
+
+[rev.086]  09/02/16
+ITEMS: A few adjustment to equipment stats and prices. Addition of an Antidote
+item and Detox spell, which cure Poison status. Adjusted some prices of items.
+
+MAGIC: The Faze enemy skill is now a spell that player characters can learn.
+Slight increase to Blizzard / Freeze's damage (and cost) to incentivize it
+over other elemental spells, as there are few enemies weak to ice.
+
+Reorganized spell sorting so Blizzard / Freeze goes after Thunder / Storm, for
+consistency with how spells tend to be sorted by least-to-greatest power, and
+the fact that the status menu lists lightning before ice. (This also looks
+more consistent with FF1's spell level sorting, I guess?)
+
+OTHER: More adjustments to enemy drops and rates. Formatting corrections.
+
+ ---
+
+[rev.087]  09/02/16
+Edmund starts with no spells and 12 MP. Forgot to add poison-removal spell.
+
+ ---
+
+[rev.088]  09/10/16
+Adjusted Talos' Magic power and the efficiency of his unique "spells."
+Balanced other character starting stats. Balanced default character growth
+rates so everyone is allocated 8 points across all stats. (Previously,
+Edmund had an additional one point, and Barius had one fewer.)
+
+Minor corrections.
+
+Armlets now grant odd stat bonuses, as noted in the equipment tables.
+
+Condensed the enemy formation tables into something more organized.
+Condensed encounter zone tables into something more organized, as well.
+(Sorry, Iambian - I know this is a pain)
+
+ ---
+
+[rev.089]  09/14/16
+Rebalanced some enemy Agility.
+
+Reworded preemptive / ambush to give it some probability instead of being
+purely deterministic.
+
+---
+
+[rev.090]  10/22/16
+Gave Maya some initial experience to keep her rank from being proportionate
+to Edmund's rank.
+
+Slightly reworked rules for dual-wielding (efficiency of Attack power)
+
+Increased initial stats for some characters to balance out AGI penalties.
+
+---
+
+[rev.091]  11/02/16
+Removed conflicting information about weapon slots, which erroneously
+suggested that the primary weapon slot could be emptied.
+
+---
+
+[rev.092]  02/07/17
+Repurposed the "MaxRepel" debug item into an item that's obtainable within
+the game itself.

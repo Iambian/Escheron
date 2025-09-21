@@ -1,0 +1,38 @@
+Total frames for the title screen: 32 (31 and 32 continuously loop until the
+title screen is skipped by the player)
+
+
+Frame  -  Duration in 1/10th of a second
+
+ 1     -   90
+ 2     -   10
+ 3     -   10
+ 4     -   10
+ 5     -   10
+ 6     -   10
+ 7     -   10
+ 8     -   10
+ 9     -  190
+10     -   10
+11     -   10
+12     -   10
+13     -   10
+14     -   10
+15     -   10
+16     -   10
+17     -  190
+18     -  190
+19     -   10
+20     -   10
+21     -   10
+22     -   10
+23     -   10
+24     -   10
+25     -   90
+26     -  240
+27     -   10
+28     -   10
+29     -   10
+30     -   10
+31     -   10
+32     -   10

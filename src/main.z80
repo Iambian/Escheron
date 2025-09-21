@@ -1,0 +1,41 @@
+#include "src/inc/app.inc"
+#include "src/inc/macros.inc"
+#include "src/inc/osdefs.inc"
+
+
+.initapp
+    jr programStart
+.echo "Branch current location: ",$, ", predicted address binding: ",$&$0FFF
+.branch(printString)
+
+programStart:
+    ld  hl,testString
+    bcall(_printString)
+    ei
+    bcall(_GetKey)
+    bjump(_JForceCmdNoChar)
+
+otherTestString:
+.db "This is another string.",0
+
+.nextpage
+printString:
+    ld  a,(hl)
+    inc hl
+    or  a
+    ret z
+    push hl
+        bcall(_PutC)
+    pop hl
+    jp  printString
+
+
+testString:
+.db "Hello, world!",0
+
+
+.echo "Hello, world. This is call: ",_printString," located at ",printString
+
+.endapp
+;TODO: FIND WABBITEMU AND TEST THIS GOODAMNED APP TO SEE IF IT'S COMPILING RIGHT
+.end

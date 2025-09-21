@@ -1,0 +1,345 @@
+ ———— Quick overview of events ——————————————————————————————————————————————
+
+ 1.) Maya starts in Ragnoth Village. She recruits Edmund into the resistance.
+
+ 2.) Maya and Edmund travel to the Badlands and learn from Morai that Arcanian
+ relics are used to power airships.
+
+ 3.) Maya and Edmund commandeer an Asnoth ship and sail to Tristran where Maya
+ is reunited with childhood friend Glenn.
+
+ 4.) Glenn escorts the party to the Arcanian tower ruins where they recover an
+ Arcanian relic.
+
+ 5.) Glenn leaves the party to be alone with his thoughts. Maya and Edmund
+ return to the Badlands where Morai uses the relic to power an airship.
+
+ 6.) Maya and Edmund fly the ship into Asnoth's castle towers. A dark knight
+ requests to join the party to confront Lord Leonis about his behavior.
+
+ 7.) The dark knight is revealed to be Princess Rose, and Lord Leonis is
+ revealed to by a Doppelganger whom the Shadow Lord appointed to take
+ Lord Leonis' place.
+
+ 8.) The Doppelganger murders the princes, leaving Edmund and Princess Rose
+ devastated. Maya and Rose depart for the Dreadnought to confront the Shadow
+ Lord en route to the Arcanian summit. Edmund meanwhile commandeers an Asnoth
+ airship and heads to the Arcanian summit to sabotage the Shadow Lord's plans.
+
+ 9.) In attempting to smash an Arcanian orb, Edmund is transported to a
+ purgatorial world where he must relive the occupation of Asnoth. He
+ encounters apparitions of the real Lord Leonis, as well as Prince Gielgud,
+ who transport him back to the real world.
+
+10.) Maya and Rose board the Dreadnought and attempt to confront the Shadow
+ Lord, but are ejected from the ship during an explosion.
+
+11.) Edmund swoops in and captures both Maya and Rose as they tumble from the
+ Dreadnought's deck. The Dreadnought crashes into the Arcanian tower summit,
+ creating an opening through which the party may enter.
+
+12.) At the tower summit, Maya and Edmund must divide into two teams and
+ attempt to break two seals at the same time, permitting them access to the
+ realm of the gods where the Shadow Lord has already taken refuge.
+
+13.) Maya makes her way into the final dungeon and defeats the Shadow Lord.
+
+
+ ———— Game start - Ragnoth and surrounding area —————————————————————————————
+
+After the opening cutscene, the game starts the player in Ragnoth Village,
+facing one of the tombstones in the cemetery. The player controls Maya with no
+other allies currently present.
+
+The player is free to leave the village and explore any surrounding areas. The
+ruins of Ragnoth Castle (a side area) are immediately accessible, and will
+always remain accessible; however, the ruins are filled with high-level
+monsters. Maya is unlikely to survive alone.
+
+Asnoth is inaccessible because the castle is nestled within the mountains. The
+only way to enter Asnoth is via airship transportation.
+
+The Trade Route is accessible, but a chimera blocks the exit to the Badlands.
+If Maya approaches the chimera, she'll comment that the creature appears too
+strong for her to handle alone, and the player will be prevented from
+proceeding.
+
+If Maya steps into the pub in Ragnoth Village and walks within proximity of
+Edmund, (who is positioned near the counter) Edmund will stop her, explain his
+exile from Asnoth, and request to join the resistance. Maya accepts his offer.
+Edmund then suggests that the two travel to the Badlands and speak with the
+dwarves about obtaining an airship, as it would be the only means of
+infiltrating Asnoth's defenses.
+
+If the player then returns to the Trade Route, Maya and Edmund can confront
+and defeat the chimera together, allowing them passage into the Badlands.
+
+ ———— The Badlands - learning of the Arcanian tower —————————————————————————
+
+In the Badlands, the player's next objective is to head to the Shipyard and
+speak with a dwarven engineer named Morai. Morai will inform the party that
+Asnoth powers its airship with relics excavated from the Arcanian tower.
+Edmund suggests that the party could commandeer a ship from Ragnoth's trade
+port, travel to Tristran, then reach the Arcanian tower (located on the
+Crescent Island) by ferry. Once this cutscene is complete, a ship appears in
+the port near Ragnoth.
+
+Before the party rushes off, Morai notes that they may not stand a chance
+against Asnoth's forces with their current equipment. He suggests they explore
+a section of the Arcanian tower located within the Badlands itself, and
+attempt to recover a chunk of mythril ore. The blacksmith in Guilden could
+then use the ore to forge mythril weapons and armor. This step is optional.
+The party can proceed back to the overworld without collecting the mythril
+ore. If the party does collect the mythril ore and speaks with the blacksmith
+in Guilden, then he opens his shop consisting of mythril items.
+
+Also located with the Arcanian tower in the Badlands is a rune key. This key
+item is optional, but if collected, it allows the player to open locked
+treasure chests that are spread throughout the game.
+
+ ———— Return to the overworld - commandeering a ship ————————————————————————
+
+The only way for the player to leave the main continent and explore other
+parts of the world is via a ship, or airship. After the cutscene with Morai in
+the Badlands, a (sea) ship will appear docked at the port just south of
+Ragnoth Village. When the player attempts to enter the ship, a cutscene ensues
+in which Maya and Edmund storm onto the ship's deck and fight a group of
+Asnoth soldiers. They then set sail for Tristran, the forested continent to
+the east.
+
+The player doesn't gain control over the ship just yet. Just before the party
+leaves the port, an apparition appears and warns them that the Shadow Lord is
+aware of their plans, and has arranged a surprise for them. As the party
+attempts to sail toward Tristran, a sea creature appears in their path, and
+they're forced to defeat a weaker iteration of the Leviathan monster. With the
+creature defeated, the player gains control of the ship.
+
+Slightly west of Ragnoth is the Flooded Village, another side area the player
+can explore when they have access to a ship.
+
+ ———— Heading to Tristran - exploring the Fey Wood ——————————————————————————
+
+After docking at the port north of Tristran, attempting to set foot in any of
+the forest tiles transports the party to the Fey Wood. Maya mentions that she
+learned about the fey creatures that inhabit these woods, and how they like to
+play tricks on travelers. The player has to navigate through a short series of
+labyrinthine paths while various fey creatures appear near each of the exits,
+attempt to mislead the player along the way.
+
+If the player successfully reaches the real exit, then they appear outside of
+the forest, standing just near Tristran Village. Subsequently exploring the
+forested area around Tristran does not place the player back into the Fey Wood
+map - the warps leading to the map are permanently erased from the game.
+
+When Maya and Edmund first set foot into Tristran Village, a cutscene
+automatically executes. Glenn, a childhood friend of Maya, recognizes her and
+explains how he had fled from Ragnoth during the beginning of the Asnoth-
+Ragnoth war years ago. To make amends for abandoning Maya, he offers to join
+the resistance. Glenn then joins the party. At this point, a ship appears in
+the dock just south of Tristran. The player can board the ship and sail to the
+Crescent Island, allowing them entrance to the Arcanian tower located there.
+
+ ———— The Arcanian tower - recovering a relic ———————————————————————————————
+
+The player's objective is to recover a relic that could be used to power an
+airship. This relic is a magical orb located on the topmost floor. When the
+player collects the orb, the party automatically re-appears back in Tristran
+via a cutscene fade-in / fade-out. Glenn expresses that seeing Maya again has
+brought a lot of painful memories to the surface, and that he would like to
+remain in Tristran to clear his head. This removes Glenn from the party for
+the time being. Maya and Edmund must then return to their original ship docked
+north of Tristran, double back through the Trade Route, and speak with Morai
+in the Badlands again.
+
+ ———— Return to the Badlands - obtaining an airship —————————————————————————
+
+Upon speaking with Morai, Morai uses the relic recovered from the tower to
+power an airship, which he then gives to the party at no expense. He explains
+that although dwarves are largely motivated by economic incentives, he
+sympathizes with Ragnoth, and has qualms about continuing to supply Asnoth's
+forces with his technology. He hopes that Maya and her resistance will use his
+technology to more productive ends.
+
+The cutscene fades out, then we see a ship rising from the ocean, and floating
+mid air. The player now has an airship, and free reign over most of the game
+world. The player may advance the plot by flying the airship into Asnoth
+Castle, but the player cannot yet fly the airship into the summit of the
+Arcanian tower. Doing so will simply cause the airship to move through it, as
+the warp isn't set yet.
+
+There are a couple of new areas now accessible to the player: A small island
+just north of Tristran, the Rosencrantz area and the Underdeep. There's a set
+of ruins hidden in the small island, inhabited by Barius, a lycan. If the
+player sets foot in the ruins, Barius quickly runs off screen and hides, being
+distrustful of humans. Nothing else is eventful about the ruins at the moment.
+
+If the player returns to the ruins after the Arcanian summit event, then
+Barius will open up to Maya and explain how his race has been driven into
+extinction by the increasing monster population. He then offers to join Maya's
+resistance in hopes of avenging his the deaths of his people. This doesn't
+actually place Barius in the active party, it just makes him available for
+recruitment in the Arcanian tower summit. (This will be elaborate upon later)
+
+In Rosencrantz village, one of the houses the player can explore has a bed-
+ridden woman and a mermaid-like creature at her bedside. The mermaid explains
+that she is a member of the selkie tribe, and she and her mother were driven
+out of their home in the Underdeep by the creature Leviathan. She explains
+that her mother has had difficulty adapting to life on dry land, and has
+fallen ill. At this point, there's nothing the player can do.
+
+If the player returns to Rosencrantz after the Arcanian summit event, then the
+player can offer Kyrie an Elixir from their inventory, which remedies her
+mother's condition, prompting Kyrie to join Maya's party as a token of her
+gratitude. Like Barius, Kyrie simply appears in the Arcanian summit for
+recruitment at any time.
+
+The Underdeep is simply an optional dungeon containing a superboss. The player
+may attempt this dungeon at any time. Completing it doesn't result in anything
+particularly eventful, aside from a minor cutscene.
+
+ ———— Raid on Asnoth Castle —————————————————————————————————————————————————
+
+By flying the airship into Asnoth Castle, the party appears on top of the
+castle's towers. As soon as they set foot off the ship, a dark knight
+approaches them and inquires about their intentions. The dark knight explains
+that he has begun to question Lord Leonis' state of mind, and requests to join
+the party to confront Lord Leonis directly. This places the "????" character
+in the active party. At this point, the player is allowed to explore Asnoth
+Castle (and the surrounding village) at their leisure.
+
+The player is not allowed to leave this area until certain events are
+completed. Scattered through the castle are various guards blocking the
+party's path. Speaking with any of these guards prompts various present
+battles. The save file doesn't track which guards have been defeated, so
+quitting and reloading a save will cause all the guards to reappear in their
+original positions.
+
+If the player approaches Asnoth's throne room, a cutscene automatically
+ensues. Maya explains the struggles her people have endured as a result of
+Asnoth's senseless violence, and the Dark Knight questions Lord Leonis'
+sanity. Lord Leonis expresses no sympathy for his actions, and reaffirms his
+belief that a genocide against the Arcanian's descendents (e.g. Maya) is
+completely justified. The Dark Knight then sheds his armor, revealing himself
+to be Princess Rose, who was previously presumed to be deceased. She explains
+that she faked her own death so she could spy upon her father and the Shadow
+Lord without drawing suspicion that she was a dissident. Lord Leonis then
+reveals himself to be a Doppelganger. The Shadow Lord had murdered the real
+Lord Leonis years ago, and assigned the Doppelganger in his place.
+
+The party then Doppelganger. Before perishing, he vanishes in a magic smoke.
+Suddenly, a scream is heard from the prince's chamber. The party rushes in,
+but is too late. With the last of its strength, the Doppelganger appears in
+the prince's chamber and murders him before the party can intervene. The
+Doppelganger then perishes.
+
+Devastated by his loss, Edmund flees the room. Rose momentarily locks up. The
+player regains control of Maya alone. If the player attempts to leave the
+room, Rose speaks up, and suggests that she and Maya pursue the Shadow Lord,
+who is en route to the Arcanian summit right now. Since Edmund is nowhere to
+be found, Maya and Rose leave the castle alone.
+
+ ———— Intermission - Edmund's quest —————————————————————————————————————————
+
+We then open on a cutscene showing Edmund still in the castle. He vows revenge
+against the Shadow Lord, and commandeers one of Asnoth's airships. Believing
+that the Shadow Lord may be attempting to collect the remaining relics, Edmund
+travels to the Arcanian summit in an effort to find and destroy the relics
+before the Shadow Lord can get his hands on them. As Edmund approaches one of
+the relics and attempts to smash it, it transports him to an alternate realm.
+
+Edmund suddenly finds himself in a burning village similar to Ragnoth during
+the early years of the occupation. The player now has control of Edmund, who
+is stranded in this village. Note that the Teleport spell is disabled here.
+
+There's a functional inn and shop accessible to Edmund, but the only other
+NPCs found in the area are all undead. Speaking with them prompts forced
+encounters with zombies and other such creatures.
+
+Beyond the village is a forest. The village exit is blocked by another dark
+knight. The dark knight identifies himself as Lars, and believes Edmund to be
+a fellow member of Asnoth's forces due to the insignia on his armor. Lars
+claims that several villagers are attempting escape, and that he and Edmund
+have orders to track them down and slaughter them. Trying to gather clues of
+his whereabouts, Edmund goes along with Lars. The player may now proceed into
+the forest.
+
+At the edge of the forest, apparitions of Lord Leonis and Prince Gielgud
+appear. They explain that Edmund's attempt to destroy one of the Arcanian
+relics prompted a defensive action, causing him to be transported to a sort of
+purgatorial realm. Lord Leonis explains the circumstances of his murder, and
+how the Shadow Lord had placed a Doppelganger in his place. Lars is unwilling
+to accept the revelation that he's already dead, and believes Edmund to be
+some sort of illusion woven by the Arcanians to mislead him. This prompts Lars
+to attack. Edmund must defeat Lars' soul, banishing it from the realm.
+
+Secure in the knowledge that he and the prince will someday be reunited,
+Edmund gains a renewed sense of purpose. The prince then uses magic to return
+Edmund to the real world.
+
+ ———— Confrontation on the Dreadnought —————————————————————————————————————
+
+The scene then opens on Maya and Rose, docked side-by-side with Asnoth's
+warship, the Dreadnought. The player cannot leave this area until certain
+events have been completed.
+
+After making their way through the decks of the ship and doubling back to the
+other side of the deck, Maya and Rose confront the Shadow Lord. In a last
+ditch effort to prevent him from reaching the Arcanian summit, Maya and Rose
+combine their strength to unleash a devastating spell with the intention of
+destroying themselves, the Shadow Lord and the Dreadnought in one deft blow.
+Unfortunately, the Shadow Lord partially deflects the spell, but not without
+causing substantial damage to the Dreadnought. As the ship veers back and
+forth uncontrollably, Maya and Rose are thrown from the deck.
+
+The scene them opens on Edmund, back in the airship he commandeered from
+Asnoth Castle earlier. He spots Maya and Rose tumbling from the Dreadnought,
+and in a miraculous maneuver, manages to swoop both of them up safely.
+Suddenly, a loud explosion is heard nearby - the Dreadnought has crashed into
+the tower summit, creating a large opening through which the party may now
+enter.
+
+ ———— Arcanian summit event - the Arcanian trials ———————————————————————————
+
+The party docks their airship near the opening to investigate. Inside, they
+find a an unpowered robot guarding a portal. Edmund suggests that the robot
+may be powered by one of the Arcanian relics, and suggests attempting to
+recover the same one he came in contact with earlier. The player must traverse
+the lower floors of the tower and recover the relic, then bring it back to the
+robot to use as a power source.
+
+The player may return to their airship at any time, and any available allies
+may be recruited by the player at this point, including Glenn, Barius and
+Kyrie. Glenn may be recruited simply by returning to Tristran and speaking to
+him. When an ally is recruited, they appear here, in this room of the Arcanian
+tower. Speaking to any recruited ally within the room causes a party swap menu
+to appear, and any character (except Maya) can be swapped for that character.
+
+If the player recovers the relic that Edmund mentioned, it can be used to
+power the robot, who immediately recognizes Maya as a descent of the
+Arcanians. The robot (Talos) goes into a detailed explanation of the tower's
+purpose, and explains that to reach the realm of the gods beyond the tower,
+two seals must be activated at the same time. The player must divide up into
+two separate parties - one lead by Maya, and the other by Edmund. If the
+player hasn't bothered to recruit any additional allies, then the only useable
+allies will be Rose and Talos.
+
+Maya's party is warped to a room from which there is no return. (The Teleport
+spell is disabled here) This is the first trial. At the end of the trial lies
+a boss. Once Maya's party defeats the boss, the scene then shifts over to
+Edmund's party, who is placed in a similar predicament. Edmund must also
+complete a trial and confront a boss. Once these objectives are completed, the
+seals are broken, and the portal behind Talos is now active. The player may
+step into the portal to be transported to the final dungeon.
+
+ ———— Endgame ———————————————————————————————————————————————————————————————
+
+Now that the player has access to the final dungeon, they may freely exit the
+tower at any point and return by flying their airship into the summit and
+stepping through the portal leading to the final dungeon again. There are no
+restrictions on any other location the player may revisit, except certain
+story-related events such as Edmund's otherworld intermission. Asnoth Castle
+remains accessible, but the guards are no longer present.
+
+Completing the game simply means traveling to the end of the dungeon and
+confronting the Shadow Lord. Once the Shadow Lord is defeated, the ending
+sequence takes place.

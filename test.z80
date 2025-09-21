@@ -1,0 +1,39 @@
+
+#define ISMACRO 1
+#define MYMACRO(param, param2) call macroroutine \ .dw param, 0, param2
+; This is a comment
+ LD A, ($C000) ; Load A from address C000h
+ ld hl,LBL2
+ ld b,(hl)      ;TODO: Figure out how to get VSCode to stop suggesting autocomplete for registers.
+ MYMACRO(MyString, MYMACRO, "PARAMETER", param2+1), MYMACRO(SOMETHING, SOMETHING(SOMETHING,$C000)))
+ CALL MyLabel
+ jp LBL2
+
+SOL_directive:
+.db "Ohai thar",0
+MyLabel:
+    ld a,'\t'
+    ex af, af'  ;' This is supposed to be a comment adjoining 
+    nop
+    NOP
+    RET
+    
+MyString .equ $+2
+;Note: StringStart should be a label too. Or a constant? idk.
+StringStart .db $00,$00,"Hello, world\n",0,$22,$FF \ .db 3324 \.dw $3324
+
+LBL2    NOP     ;Inline label with comment
+        NOP
+        RET
+macroroutine:
+    pop hl
+    ld  a,(hl)
+    inc hl
+    ld  h,(hl)
+    ld  l,a
+    ret
+.end
+.end    ;EOF Comment
+
+
+;TODO: FIX THE COMMENT BIT WITH THE WEIRD EDGE CASE IN SINGLEQUOTES.

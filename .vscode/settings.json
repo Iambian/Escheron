@@ -1,0 +1,104 @@
+{
+  "files.associations": {
+      "*.inc": "z80asm-etor_b",
+      "*.z80": "z80asm-etor_b"
+  },
+  "editor.tokenColorCustomizations": {
+    "[Default Dark+]": {
+      "textMateRules": [
+        {
+          "scope": "comment.line.semicolon.z80",
+          "settings": {
+            "foreground": "#608B4E", // softer green
+            "fontStyle": "italic"
+          }
+        },
+        {
+          "scope": "comment.other.z80",
+          "settings": {
+            "foreground": "#9CDCFE", // light blue for TODOs etc
+            "fontStyle": "italic"
+          }
+        },
+        {
+          "scope": "keyword.instruction.z80",
+          "settings": {
+            "foreground": "#C586C0" // lavender-purple for mnemonics
+          }
+        },
+        {
+          "scope": "variable.register.z80",
+          "settings": {
+            "foreground": "#D19A66", // orange like variables
+            "fontStyle": "bold"
+          }
+        },
+        {
+          "scope": "variable.other.z80",
+          "settings": {
+            "foreground": "#4EC9B0" // teal — distinct from registers
+          }
+        },
+        {
+          "scope": "entity.name.label.z80",
+          "settings": {
+            "foreground": "#61AFEF", // soft blue
+            "fontStyle": "bold"
+          }
+        },
+        {
+          "scope": "entity.name.function.preprocessor.z80",
+          "settings": {
+            "foreground": "#C678DD", // strong purple
+            "fontStyle": "bold"
+          }
+        },
+        {
+          "scope": "constant.numeric.z80",
+          "settings": {
+            "foreground": "#B5CEA8" // pale green (default-ish)
+          }
+        },
+        {
+          "scope": "keyword.directive.assembler.z80",
+          "settings": {
+            "foreground": "#E5C07B" // gold
+          }
+        },
+        {
+          "scope": "keyword.preprocessor.assembler.z80",
+          "settings": {
+            "foreground": "#E06C75" // pinkish red
+          }
+        },
+        {
+          "scope": "keyword.preprocessor.external.z80",
+          "settings": {
+            "foreground": "#FF79C6", // hot pink (distinct)
+            "fontStyle": "bold italic"
+          }
+        },
+        {
+          "scope": "string.quoted.double.z80",
+          "settings": {
+            "foreground": "#98C379" // green
+          }
+        },
+        {
+          "scope": "constant.character.z80",
+          "settings": {
+            "foreground": "#D19A66" // orange
+          }
+        },
+        {
+          "scope": "constant.character.escape.z80",
+          "settings": {
+            "foreground": "#56B6C2" // bright teal
+          }
+        }
+      ]
+    }    
+  },
+  "editor.acceptSuggestionOnEnter": "off",
+  "editor.quickSuggestionsDelay": 300
+}

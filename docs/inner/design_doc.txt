@@ -1,0 +1,1703 @@
+******************************************************************************
+  "ESCHERON — TWILIGHT OVER RAGNOTH"            Design Documentation rev.092
+******************************************************************************
+
+THIS DOCUMENT IS FORMATED WITH A LINE BREAK AT EVERY 78 CHARACTERS ········ 78
+
+——————————————————————————————————————————————————————————————————————————————
+ SECTION OVERVIEW                                                         KEY
+——————————————————————————————————————————————————————————————————————————————
+Playable Characters and Statistics .................................... .[pc1]
+Damage and Other Formulas ............................................. .[dm2]
+Equipment and Price Listings .......................................... .[qs3]
+Magic and Enemy Skills ................................................ .[sk4]
+Enemies, Formations and Zones ......................................... .[zn5]
+
+Use the quick-search function (Ctrl+F) to copy-and-paste the keys above to be
+taken directly to any specific section of the document.
+
+
+ ___________,————————————————————————————————————————————————————,___________
+\           |        Playable Characters and Statistics   .[pc1] |           /
+/___________,————————————————————————————————————————————————————,___________\
+
+This section will detail each of the characters who can be recruited into the
+main party, along with their initial and max stats and any other information
+that may be relevant to managing the party system.
+
+First, an overview of each of the six player characters whose stats, equipment
+and spells have to be logged in the player's save file:
+
+———— Maya Anson ——————————————————————————————————————————————————————————————
+STATS: 022 HP · 028 MP · 06 / 60 ATK · 04 / 60 DEF · 12 / 99 MAG · 20 / 60 AGI
+EQUIP: Staff, Buckler, Clothes
+MAGIC: Fire
+
+* Maya starts with 6 experience pts. to keep her rank from being proportionate
+to Edmund's. (i.e. she'll rank up first, followed by Edmund later)
+
+———— Edmund Giovane ——————————————————————————————————————————————————————————
+STATS: 032 HP · 012 MP · 12 / 80 ATK · 08 / 99 DEF · 10 / 60 MAG · 22 / 40 AGI
+EQUIP: Broad sword, Large shield, Plate armor
+MAGIC: (nothing)
+
+———— Glenn Oswald ————————————————————————————————————————————————————————————
+STATS: 048 HP · 008 MP · 16 / 99 ATK · 10 / 80 DEF · 06 / 40 MAG · 28 / 60 AGI
+EQUIP: Broad sword, Buckler, Clothes, Bracer
+MAGIC: (nothing)
+
+———— Rose Leonis —————————————————————————————————————————————————————————————
+STATS: 056 HP · 032 MP · 20 / 60 ATK · 16 / 60 DEF · 24 / 80 MAG · 28 / 80 AGI
+EQUIP: Mythril sword, Buckler, Blaze robe, Fairy armlet
+MAGIC: Blizzard, Scourge, Doom
+
+———— Barius Voi ——————————————————————————————————————————————————————————————
+STATS: 070 HP · 024 MP · 28 / 80 ATK · 16 / 60 DEF · 08 / 40 MAG · 40 / 99 AGI
+EQUIP: Venom claw, Steel claw, Power clothes, Bracer
+MAGIC: Berserk
+
+———— Kyrie Elysion ———————————————————————————————————————————————————————————
+STATS: 052 HP · 090 MP · 12 / 40 ATK · 12 / 40 DEF · 40 / 99 MAG · 32 / 99 AGI
+EQUIP: Healing staff, Magic shield, Wizard clothes, Fairy armlet
+MAGIC: Cure, Heal, Esuna, Life
+
+——————————————————————————————————————————————————————————————————————————————
+
+Of these characters, Maya is the only one the player begins the game with.
+Edmund is the first character to join Maya's party, then various other
+characters join and leave as dictated by the story. There are occasional guest
+characters whose stats and equipment cannot be modified, but most characters
+who join the party (every character listed above) can be freely equipped
+however the player chooses.
+
+Note in the columns above that characters have stat maximums. Once they reach
+these values through the process of leveling up, those stats can no longer be
+increased. Equipping an item will still (temporarily) raise the stat beyond
+its maximum value, all the way up to 255.
+
+Below is information corresponding to the guest NPCs who are recruited at
+different points in the story:
+
+———— ???? and Lars ———————————————————————————————————————————————————————————
+STATS: 056 HP · 032 MP · 20 / 60 ATK · 16 / 60 DEF · 24 / 80 MAG · 28 / 80 AGI
+EQUIP: Ebon sword, Ebon shield, Ebon armor, Ebon armlet
+MAGIC: Blizzard, Scourge, Doom
+
+———— Talos ———————————————————————————————————————————————————————————————————
+STATS: 200 HP · 040 MP · 120 / - ATK · 60 / - DEF · 00 / - MAG · 30 / - AGI
+EQUIP: Plasma sword, Tesla shield, Frame armor, Circuit armlet
+MAGIC: Repair, Array, Graviton, Destruct
+
+——————————————————————————————————————————————————————————————————————————————
+
+Note that the robot sentry (Talos) found near the entrance of the Arcanian
+tower summit can be recruited into the party as much as the player wishes, but
+like guest NPCs, his stats, equipment and spells cannot be altered.
+
+
+ ———— Each character has a special battle ability ————
+
+Besides the standard, "Attack, Magic, Item, Parry and Flee" commands that all
+characters have access to, each character has a unique special command. I will
+explain each of these commands below:
+
+
+    —————· Maya and Rose ·————————————————————————————————————————————
+"Focus" - Boosts the character's own Magic by 8, and recovers 5 MP.
+
+    —————· Edmund ·———————————————————————————————————————————————————
+"Rouse" - This ability boosts the entire party's Attack and Agility by 8.
+
+    —————· Glenn ·————————————————————————————————————————————————————
+"Blitz" - Scores a critical hit at an efficiency of Attack and Hit Rate/2.
+Dual-wielding is not factored, so only the weapon in the character's weapon
+slot will be used to determine Attack and Hit Rate. Weapon properties such as
+element, status and unleash spells are not applied.
+
+    —————· Kyrie ·————————————————————————————————————————————————————
+"Pray" - Restores HP to the entire party equal to Kyrie's Magic/6.
+
+    —————· Barius, ????, Lars ·———————————————————————————————————————
+"Sweep" - Attacks all enemies. The damage formula is based on the user's
+Attack/2, and normal accuracy checks are applied. Weapon properties (such as
+element) are not applied. Note that some enemies can use this skill as well.
+
+    —————· Talos ·————————————————————————————————————————————————————
+"Warp" - Functionally similar to Teleport, but with no MP cost.
+
+
+ ———— Characters have a "trigger" state ————
+
+Each time a character suffers an attack that drops their current HP below 16%
+of its maximum value, there's a 64/256 chance that a character will immediate-
+ly retaliate with a "second wind" skill. There's no limit on the number of
+times a character can unleash these skills over the course of a single battle.
+
+Attack skills will act as counterattacks - i.e. they'll target whatever enemy
+dropped the character's HP to a critical state.
+
+Second wind skills ignore target Defense and cannot miss.
+
+Each time a character unleashes their second wind skill, their Agility is
+boosted by 10 points, similar to stat buffs provided by spells.
+
+
+    —————· Maya, Rose ·———————————————————————————————————————————————
+Quickly animates the various elemental spells, from Fire to Thunder. Unleashes
+a non-elemental attack, using Magic at full efficiency to determine damage.
+
+    —————· Edmund ·———————————————————————————————————————————————————
+Unleashes a critical hit and raises Edmund's Defense by 10.
+
+    —————· Glenn ·————————————————————————————————————————————————————
+Unleashes a critical hit and KOs the target, unless it resists KO status. The
+attack animation should look like a tsunami engulfing the enemy, followed by a
+weapon hit.
+
+    —————· Barius ·———————————————————————————————————————————————————
+Unleashes a critical hit and raises Barius' Attack by 10.
+
+    —————· Kyrie ·————————————————————————————————————————————————————
+Functionally similar to Heal + Esuna, but with no MP cost.
+
+    —————· ????, Lars ·———————————————————————————————————————————————
+Reduces the target's HP to 1, unless Resist Gravity flag.
+
+    —————· Talos ·————————————————————————————————————————————————————
+Non-elemental damage = 220 + Dispel state.
+
+
+When a character enters this state, a message along the lines of "Trigger
+point - Maya has entered second wind!" will display, followed by the second
+wind skill message itself.
+
+
+ ———— What sort of info does the save file need to retain? ————
+
+Each character has four equipment slots: Weapon slot 1, shield slot / weapon
+slot 2, armor slot, and an armlet slot. (The shield slot can be fitted with a
+second weapon, allowing the character to execute two consecutive attacks
+instead of one. Statistical mechanics for dual-wielding are discussed later.)
+
+Each character has a maximum of 12 spell slots. Any character may learn any
+spell, provided they have enough maximum MP to cast it. When the player
+selects a character's spell list from the main menu, a prompt with the choices
+"Cast" and "Discard" will appear. Selecting "Discard" allows the player to
+drop a spell from a character's inventory to make room for another spell.
+
+The party shares a main inventory of up to 32 items. Item quantities don't
+stack, so duplicate items reserve additional inventory slots.
+
+In summary, the save file needs to remember the stats, equipment and spells of
+the six playable characters, the contents of all 32 slots of the party's
+shared inventory, and the current amount of gold pieces held by the party.
+(up to a maximum of 65,535) Of course, the save file will also need to retain
+various story-related flags that will be worked out as the project advances.
+
+There should be two save slots.
+
+
+ ———— How do characters gain stats? ————
+
+Characters have an experience level, but this value is hidden from the player.
+A character's level may range from 1 to 256. When a character gains a level,
+that character's stats increase in two ways: 1.) By a static set of values
+that are tied to the character itself, and 2.) By a set of bonus values,
+depending on which types of equipment the character is currently holding.
+
+Below are tables outlining the static growth rates tied to each character,
+plus the bonus rates granted by equipped items:
+
+ NAME   |HP|MP|AT|DF|MG|AG	      ITEM    |HP|MP|AT|DF|MG|AG
+————————+——+——+——+——+——+———	     —————————+——+——+——+——+——+———
+ Maya   |+2|+2|+0|+0|+2|+2	      Sword   |+0|+0|+2|+0|+0|+0
+ Edmund |+4|+0|+2|+2|+0|+1	      Staff   |+0|+2|+0|+0|+1|+0
+ Glenn  |+3|+0|+3|+1|+0|+1	      Claw    |+0|+0|+1|+0|+0|+1
+ Rose   |+2|+1|+1|+0|+2|+2	      Shield  |+1|+0|+0|+1|+0|+0
+ Barius |+3|+0|+1|+1|+0|+3	      Armor   |+2|+0|+0|+2|+0|+0
+ Kyrie  |+1|+3|+0|+0|+2|+2            Clothes |+1|+0|+0|+1|+0|+2
+                                     (Armlets grant odd bonuses *)
+
+* Specific armlets grant specific growth bonuses, as noted in the equipment
+tables later in this document. Unless an armlet is noted to grant a growth
+bonus, then it has no effect on status growth whatsoever.
+
+Dual-wielding will apply duplicate bonuses. e.g. Wielding two swords will
+result in +4 Attack each time the character levels up.
+
+
+Each enemy defeated grants 1 experience point to every (non-KO'd) character in
+the active party; however, enemies have a level or "rank" value that is
+compared to each character's experience level to determine whether or not that
+character is eligible for receiving experience from that particular enemy in
+the first place.
+
+ Char. Lv.   Enemy Rank
+————————————————————————
+                 0	     e.g. According to this chart, a level 14
+   1 -  5        1	     character would no longer gain experience points
+   6 - 12        2	     from enemies whose ranks are lower than 3.
+  13 - 18        3
+    19+          4
+                 S
+
+Each character requires only 24 experience points per level, for every level,
+all the way up to level 256.
+
+Rank 0 enemies don't give any experience when defeated, and rank S enemies
+cause all still living characters to level up right then and there, regardless
+of their current experience. Only bosses and Great Dragons reserve the S rank.
+
+
+ ___________,————————————————————————————————————————————————————,___________
+\           |            Damage and Other Formulas        .[dm2] |           /
+/___________,————————————————————————————————————————————————————,___________\
+
+
+The basic damage formula for physical attacks is as follows:
+
+ [Attacker's Attack power - target's Defense power = damage output]
+
+Attack power from spells and special abilities each depend on the skill in
+question, and are outlined in their respective sections of this document. At
+any rate, both physical attacks *and* spells are adjusted by the target's
+Defense power. (i.e. There isn't a separate statistical score for magic
+defense.)
+
+ ——· ONE-HANDED WIELDING ·——
+ If a character is wielding a weapon without a shield, then a +50% Attack
+ bonus is applied as if the character were gripping the weapon with both hands
+ at the same time. The status screen should reflect the bonus to Attack power.
+
+ ——· DUAL-WIELDING ·——
+ If a character is dual-wielding, then they will execute two simultaneous
+ attacks, with the accuracy and Attack power outputs being calculated
+ separately. The off-hand weapon's Attack power is calculated at a penalty of
+ -40% efficiency, but Hit Rate remains the same. Dual-wielded claws are not
+ subject to any penalty. (but only claws - not another weapon w/ a claw)
+
+ As for the status screen, the character's Attack power will actually display
+ the combined attack power of both weapons, just as it also displays the
+ Attack power bonuses granted by any other non-weapon equipment. Perhaps the
+ character's Hit Rate value should display whatever value belongs to the
+ weapon in the character's first hand, however.
+
+
+ ———— What about modifiers such as elements? ————
+
+Elemental and status modifiers can be attached to equipment, or innately
+possessed by enemies. If a status modifier exists, then that status state is
+always inflicted by the attack, unless the target is resistant to that state.
+If an elemental modifier is applied, then damage may or may not be adjusted
+depending on the target's resistance or weakness to that element:
+
+ | If weak, then ignore target's Defense power
+ · If resistant, then reduce Attack power output to 1 point
+ | If neutral, then leave Attack power output unchanged
+
+Both enemies and player characters can possess weaknesses and resistances. In
+the case of characters, only resistances are indicated on the status screen.
+
+Some pieces of equipment can grant elemental and status resistances, and some
+(few) will actually cause a character to become weak to elemental damage. The
+system should try to counterbalance this according to what the character has
+equipped. For instance, if a character is equipped with both Dragon armor
+(resists all elements) and the Cursed armlet, (which imposes a weakness to all
+elements) then their elemental resistances will default to neutral.
+
+To keep things simple, there aren't any possible equipment combinations that
+can result in three or more types of resistance states. e.g. If a character is
+equipped with both Dragon armor and the Cursed armlet, there's nothing else
+the character can equip to affect their resistances at that time - only body
+armor and rings can add or remove elemental resistances. (Excepting the Ebon
+shield, but that's equipped only on a specific NPC)
+
+
+  There are four elements: Fire, Ice, Thunder and Holy
+ and three status effects: Poison, Sleep and KO (... and Gravity, I suppose)
+
+Holy is something of a unique element in that it's not displayed on a
+character's status screen, and there's no equipment that grants resistance to
+it. For all intents and purposes, it's an element used by characters to target
+certain enemy weaknesses. For instance, the final boss is weak against Holy.
+
+When a target is poisoned, it loses 16% of its maximum HP at the end of each
+round. The result can KO the target. Outside of battle, a poisoned character
+loses 1 HP for every step taken, but the result cannot KO them. If the target
+also has an HP regeneration effect, (which restores 16% of their maximum HP
+every round) then I suppose that poison should cancel the HP regeneration
+effect completely, and continue to inflict damage.
+
+While under the effects of sleep, a target cannot act, cannot evade attacks
+and its Defense power is reduced to 0. The target will awaken upon one of two
+conditions: 1.) The target is attacked, or 2.) Three rounds have expired.
+
+KO status simply means that the character is at 0 HP and cannot act until they
+have been resuscitated. There is a KO modifier that can allow characters and
+enemies to resist certain spells (or weapons) that are capable of inducing an
+instant KO. For instance, the Vorpal sword will instantly KO any enemy that
+doesn't resist this property. Although there are items that characters can
+equip to resist KO, this resistance is not indicated on the status screen.
+
+
+ ———— How is the accuracy of an attack determined? ————
+
+The accuracy of an attack is tied to the equipped weapon itself, and a small
+bonus is derived from the character's Agility score equal to Agility/2.5,
+rounded up. Derived Agility bonuses apply here, as well as Agility penalties
+from equipping heavy armor. Evasion receives a bonus of Agility/6.
+
+
+There are two types of calculations made to determine whether or not an attack
+hits its intended target:
+
+   If the player is attacking an enemy, then the routine should generate a
+ | random value ranging from 1 to 256. Adjust the outcome of this value by
+ · deducting the Hit Rate penalty imposed by the enemy. (i.e. The enemy's own
+ | evasion rate) If the adjusted outcome is equal to or greater than the
+   character's Hit Rate, then the attack is a success.
+
+   If the enemy is attacking a player, then the routine should generate a
+ | random value (again) ranging from 1 to 256. If the evasion rating of the
+ · character's shield + derived Agility bonus is equal to or greater than the
+ | generated value, then the enemy's attack misses. Enemies don't have an
+   accuracy rating of their own - as long as a character's shield doesn't
+   evade the attack, the attack will always hit.
+
+
+Note that a character cannot be without a weapon, but they can be without a
+shield. Without a shield, their evasion is entirely dependent on their derived
+Agility bonus. Also without a shield, the character's equipped weapon receives
+a +50% damage bonus, as already noted a couple of sections up.
+
+
+ ———— Critical hits ————
+
+A character's chance to score a critical hit depends on the weapon in
+question. Each weapon has its own value, similar to the weapon's accuracy
+value. First, the routine should determine whether or not the weapon
+successfully hits the enemy in the first place. If it does, then an additional
+check it made to determine the chance for critical hit, based on the same
+procedure without any adjustment from the enemy's Evade stat. The result of
+a critical hit is that the attack ignores the enemy's Defense power. Enemies
+can score critical hits as well.
+
+
+ ———— What does "Parry" do? ————
+
+When a character selects the Parry command, damage from all attacks and spells
+is halved for that round. (After any Defense adjustments are made) If the
+character received a physical attack, there's a 50% probability of retaliating
+with a standard physical attack, factoring in all normal weapon properties,
+including dual-wielding.
+
+The command is used immediately, and does not require the character to wait
+through the normal turn queue.
+
+
+ ———— How are battle order and chance to flee determined? ————
+
+Whichever unit has the highest Agility value assumes their turn first,
+followed by the unit with the second highest, and so forth. It's possible that
+two or more units could have the same Agility values. In that case, I leave it
+up to you to determine how the system would sort that out.
+
+To determine the party's chance for fleeing from an encounter, pool together
+the Agility values of all enemies, then compare that to the Agility values of
+all characters. If the character Agility pool is greater than the enemy
+Agility pool, then the party flees; otherwise the battle cannot be fled.
+
+A character can cast the Teleport spell to escape any non-boss (or non-chest)
+battle regardless of Agility checks.
+
+
+ ———— Preemptive attacks and ambushes ————
+
+The party's chance to initiate a preemptive attack against an enemy uses a
+similar comparison when determining their chance to flee, except the the
+median of all characters' / enemies' Agility is used instead of a combined
+total. If the party's median Agility is 50% higher than that of the enemy,
+then there's a 1/4 chance the party will initiate a preemptive strike; if vice
+versa, then a 1/2 chance of the enemy initiating an ambush attack instead.
+
+This scenario allows the attacking side to execute a full round of commands
+while the other side sits the round out. Note that any abilities intiated by
+counterattack can still be executed by the ambushed party. (i.e. second wind)
+
+
+ ———— How do enemies determine which character to attack? ————
+
+Assuming the enemy is using a physical attack or a spell / ability that
+targets a single character, then the formula should go like this: Generate a
+random value from 1 to 256. If <64, then attack character slot 1, if >64 but
+<128, then attack character slot 2, if >128 but <192, then attack character
+slot 3, if >192, then attack the character with the lowest maximum HP.
+
+If there are only two characters in the party, then the formula should be: If
+<128, then attack character slot 1, if >128, then attack character slot 2.
+
+If an enemy is using a spell that can target another enemy, (e.g. Cure or
+Protect) then the enemy will always use that spell on itself.
+
+
+ ———— How is the information on the status screen derived? ————
+
+Attack, Defense, Magic and Agility all have different caps, depending on
+the character in question. Some characters can increase their natural stats
+more than others. Once a character has reached a particular cap, the only way
+to increase it is by applying values from equipment. For instance, a character
+whose Attack power is capped at 80 equips a sword that increases Attack power
+by 20. On the character's status screen, we would see 100 Attack.
+
+The upward limit for how high Attack, Defense, Magic or Agility can be
+raised by equipment values is 255. This is an important restriction, because
+it also applies to how buffs (e.g. from spells) can temporarily raise stats
+during battle. (Note: Be careful not to allow values to roll over to 0!)
+
+
+ ___________,————————————————————————————————————————————————————,___________
+\           |          Equipment and Price Listings       .[qs3] |           /
+/___________,————————————————————————————————————————————————————,___________\
+
+
+Any character can equip any item, and characters may also dual-wield any comb-
+ination of weapons. There is one restriction: Before a weapon can be placed in
+the character's shield slot, the system checks to see if the player's BASE
+Agility (not Agility derived from equipment bonuses) is equal to or greater
+than the weapon's attack power.
+
+Under "OTHER NOTES," the "ITEM" flag indicates that a piece of equipment casts
+a spell if selected from the item inventory and used in that manner. When a
+spell is cast this way, it shouldn't consume any character MP.
+
+If the spell cast by an item is a buff or a curative spell, then it should
+automatically target its user as opposed to allowing the player to select the
+target of the spell.
+
+
+SWORDS   | AT | DF | MG | AG |  HIT %  | CRIT. % | OTHER NOTES
+—————————+————+————+————+————+—————————+—————————+————————————————————————————
+Broad    |+12 | .. |-02 |-02 | 160/256 |  12/256 | ..
+Mythril  |+18 | .. | .. | .. | 180/256 |  20/256 | ..
+Coral    |+20 | .. |-02 |-02 | 160/256 |  12/256 | Thunder elemental
+Ice      |+22 | .. |-02 |-02 | 160/256 |  12/256 | Ice elemental
+Flame    |+28 | .. |-02 |-02 | 160/256 |  12/256 | Fire elemental
+Vorpal   |+36 | .. | .. | .. |  96/256 |  20/256 | Inflict KO
+Defense  |+48 |+08 |-02 |-02 | 160/256 |  12/256 | (1) Defense sword effect
+         |    |    |    |    |         |         | ITEM: Protect
+Runic    | .. | .. |+30 | .. | 160/256 |  12/256 | (2) Runic sword effect
+Revenge  | .. | .. |-02 |-02 | 128/256 |   0/255 | (3) Revenge sword effect
+Blood    |+10 | .. |-02 |-02 |  96/256 |   0/255 | (4) Drain effect
+Ragnarok |+60 | .. |+08 |-02 | 160/256 |  12/256 | Holy elemental
+         |    |    |    |    |         |         | (5) Unleash Blaze
+—————————+————+————+————+————+—————————+—————————+————————————————————————————
+Ebon     | .. | .. | .. | .. | 160/256 |  12/256 | Inflict Poison
+Plasma   | .. | .. | .. | .. | 160/256 |  20/256 | (6) Unleash Shock
+
+(1) The Defense sword boosts its wielder's evasion by 12%. This boost is
+ stacked when dual-wielding any second weapon that shares this effect, such
+ as claws or duplicate Defense swords.
+
+(2) The Runic sword's damage output is based on its wielder's Magic power
+ instead of Attack power.
+
+(3) The Revenge sword's damage is equal to its wielder's current / max HP
+ difference, and the damage output ignores its target's Defense power.
+
+(4) The Blood sword "drains" HP from enemies. For all intents and purposes,
+ this simply means the weapon heals its wielder by an amount equal to the
+ damage that the sword inflicted against its target. If the target has the
+ Undead flag, then the Blood sword's damage / heal effect is reversed.
+
+(5) There's a 32/256 chance that physically attacking will cause this weapon
+ to cast Blaze on its target immediately afterward.
+
+(6) There's a 32/256 chance that physically attacking will cause this weapon
+ to cast Shock on its target immediately afterward.
+
+
+STAVES   | AT | DF | MG | AG |  HIT %  | CRIT. % | OTHER NOTES
+—————————+————+————+————+————+—————————+—————————+————————————————————————————
+Staff    |+08 | .. |+05 |-02 | 128/256 |  12/256 | ..
+Serpent  |+12 | .. |+12 |-02 | 128/256 |  12/256 | Inflict Poison
+         |    |    |    |    |         |         | ITEM: Scourge
+Hades    |+16 | .. |+18 |-02 | 128/256 |  12/256 | Fire elemental; ITEM: Fire
+Healing  |+18 | .. |+22 |-02 | 128/256 |  12/256 | ITEM: Heal
+Lilith   |+24 | .. |+28 |+05 |  96/256 |  12/256 | Inflict Sleep
+Zeus     |+28 | .. |+36 |-02 | 128/256 |  12/256 | Thunder elemental
+         |    |    |    |    |         |         | ITEM: Storm
+Seraph   |+32 |+05 |+48 | .. | 128/256 |  12/256 | Holy elemental
+         |    |    |    |    |         |         | (6) Unleash Shock
+Levatein |+52 | .. |+24 |-02 | 128/256 |  12/256 | ITEM: Deluge
+
+
+CLAWS    | AT | DF | MG | AG |  HIT %  | CRIT. % | OTHER NOTES
+—————————+————+————+————+————+—————————+—————————+————————————————————————————
+Steel    |+08 | .. | .. |+08 | 192/256 |  32/256 | (1) Defense sword effect
+Venom    |+18 | .. | .. |+08 | 192/256 |  32/256 | (1) Defense sword effect
+         |    |    |    |    |         |         | Inflict Poison
+Catclaw  |+28 | .. | .. |+08 | 192/256 |  40/256 | (1) Defense sword effect
+Colossus |+36 |+08 | .. |+08 | 160/256 |  32/256 | (1) Defense sword effect
+
+
+SHIELDS  | AT | DF | MG | AG | EVADE % | OTHER NOTES
+—————————+————+————+————+————+—————————+——————————————————————————————————————
+Buckler  | .. |+02 |-02 | .. |  40/256 | ..
+Large    | .. |+08 |-05 |-05 |  56/256 | ..
+Magic    | .. |+04 |+12 | .. |  40/256 | ..
+Mythril  | .. |+08 | .. | .. |  72/256 | ..
+Kaiser   | .. |+08 |-05 |-05 |  56/256 | ITEM: Berserk
+Aegis    | .. |+12 |-05 |-05 | 128/256 | Resist KO
+Sacri    | .. |+12 |-05 |-05 |  96/256 | Resist Poison, Sleep and KO
+—————————+————+————+————+————+—————————+——————————————————————————————————————
+Ebon     | .. | .. | .. | .. |  40/256 | Resist Ice
+Tesla    | .. | .. | .. | .. |  40/256 | Weak to Lightning
+
+
+ARMOR    | AT | DF | MG | AG | OTHER NOTES
+—————————+————+————+————+————+————————————————————————————————————————————————
+Plate    | .. |+16 |-10 |-10 | ..
+Mythril  | .. |+22 |-05 |-05 | ..
+Flame    | .. |+24 |-10 |-15 | Resist Fire; Weak to Ice
+Ice      | .. |+28 |-10 |-15 | Resist Ice; Weak to Fire
+Gaia     | .. |+36 |-10 |-15 | Resist Poison; (7) HP regeneration effect
+Diamond  | .. |+52 |-10 |-20 | Resist Lightning
+Dragon   | .. |+40 |-10 |-15 | Resist Fire, Ice and Lightning
+Mirror   | .. |+48 |-10 |-15 | Resist Lightning and Gravity
+—————————+————+————+————+————+————————————————————————————————————————————————
+Ebon     | .. | .. | .. | .. | Resist Poison
+Frame    | .. | .. | .. | .. | Resist Gravity and KO
+         |    |    |    |    | (7) HP regeneration effect
+
+(7) At the end of each round, the armor's wearer automatically recovers 16% of
+ their maximum HP, unless they are KO'd. This effect is disabled if the target
+ is under poison status.
+
+
+CLOTHES  | AT | DF | MG | AG | OTHER NOTES
+—————————+————+————+————+————+————————————————————————————————————————————————
+Clothes  | .. |+05 | .. |+02 | ..
+Wizard   | .. |+08 |+12 |+05 | ..
+Blaze    | .. |+10 |+08 |+05 | Resist Fire
+Power    |+10 |+10 | .. |+08 | ..
+Mirage   | .. |+12 | .. |+20 | Evade +8%
+Minerva  | .. |+16 |+20 |+12 | Worn only by females; Resist Ice and Sleep
+Spartan  |+12 |+20 | .. |+08 | Worn only by males*; Resist Fire and Poison
+
+* Rose is flagged as both male and female, given her experience as disguising
+ herself as a male prior to joining the party.
+
+
+ARMLETS  | AT | DF | MG | AG | OTHER NOTES
+—————————+————+————+————+————+————————————————————————————————————————————————
+Bracer   |+05 |+02 | .. | .. | ..
+Mythril  | .. |+05 | .. |+05 | Evade +4%; Agility growth +1
+Fairy    | .. | .. |+05 |+02 | Resist Poison and Sleep; MP growth +1
+Thief    | .. | .. | .. |+12 | Evade +4%; Agility growth +1
+Titan    |+10 |+02 | .. |-02 | Attack growth +1
+Rune     | .. |+02 |+12 | .. | Resist Sleep; ITEM: Cure; MP growth +1
+Protect  | .. |+08 | .. | .. | Resist KO; Defense growth +1
+Cursed   |-05 |-05 |-05 |-05 | Weak to Fire, Ice and Lightning
+Holy     |+05 |+05 |+05 |+05 | Resist all properties; Magic growth +1
+Sanctum  | .. | .. | .. |+08 | * Disable random encounters
+—————————+————+————+————+————+————————————————————————————————————————————————
+Ebon     | .. | .. | .. | .. | Resist Sleep
+Circuit  | .. | .. | .. | .. | Resist Poison and Sleep
+
+Although one may assume that the Cursed armlet would bind itself to a
+character when equipped, it does not. The armlet will be refined into a Holy
+armlet if placed in the blessed spring found at the end of Asnoth Cave.
+
+* Rather than create another item ID, we can just rename the existing
+"MaxRepel" debug armlet and make it obtainable to the player.
+
+
+POTIONS  | EFFECT		      KEYS     | USE
+—————————+————————————————————————    —————————+——————————————————————————————
+Tonic    | Restore 60 HP	      Grimoire | Contains magical power (*)
+Potion   | Restore 90 HP	      Sphere   | Given to Morai for an airship
+Ether    | Restore 40 MP	      Mythril  | Given to a blacksmith to see
+Elixir   | Restore all HP and MP               |  his shop of Mythril items
+Antidote | Remove Poison status
+Remedy   | Remove Poison and Sleep
+Life     | Reverse KO if dead       (*) When used as in battle, the item casts
+         | Restore 60 HP if alive       Flare, Quake or Gravity. Each spell
+Health   | (Permanent) HP +10	        has an equal probability of being
+Mana     | (Permanent) MP +10	        cast, and the Grimoire isn't consumed
+Strength | (Permanent) Attack +1        upon use.
+Vitality | (Permanent) Defense +1
+Wisdom   | (Permanent) Magic +1
+Speed    | (Permanent) Agility +1
+
+Magic-type items listed below are one-time consumables that unleash spells,
+similar to how some pieces of equipment can unleash spells. These items are
+occasionally dropped by enemies and found in treasure chests.
+
+MAGIC    | EFFECT
+—————————+————————————————————————————————————————————————————————————————————
+Hellfire | Same function as a Flare spell
+Nostrum  | Same function as Heal + Esuna, but on the entire party
+Bacchus  | Same function as Haste + Berserk, but on the entire party
+Thanatos | Same as a Doom spell, but affects all enemies (uses same animation)
+
+
+ ———— What price values are associated with equipment and spells? ————
+
+Equipment price values are listed below. The sell value of each piece of
+equipment should be exactly half of its purchase value. If an item is marked
+with the [RARE] tag, then it can neither be sold nor discarded. Although some
+items can't be bought, I'll still specify a purchase value for the sake of
+determining their value when sold. (which should be half of that value)
+
+Note that the Ebon equipment set can't even be removed from the guest
+characters they're equipped on, so I just gave them values of 0. If they
+require a positive value, then simply set the value to 1 or 2.
+
+
+SWORDS              STAVES              SHIELDS             ARMOR
+————————            ————————            ————————            ————————
+Broad    -   200    Staff    -   160    Buckler  -    80    Plate    -   800
+Mythril  -  2200    Serpent  -  1800	Large    -   400    Mythril  -  4000
+Coral    -  3800    Hades    -  4400	Magic    -  3000    Ebon     -     0
+Ice      -  4400    Healing  -  6000	Ebon     -     0    Flame    -  5800
+Flame    -  4800    Lilith   -  8800	Mythril  -  2800    Ice      -  6400
+Ebon     -     0    Zeus     - 11000	Kaiser   -  9600    Gaia     - 24000
+Vorpal   -  9800    Seraph   - 28000	Aegis    - 24000    Diamond  - 64000
+Defense  - 12000    Levatein - 60000	Sacri    - 24000    Dragon   - 32000
+Runic    - 11000    		                            Mirror   - 56000
+Revenge  - 12000    ARMLETS
+Blood    - 20000    ————————		POTIONS             CLAWS
+Ragnarok - [RARE]   Bracer   -   120    ————————            ————————
+                    Mythril  -   600	Tonic    -    40    Steel    -   400
+                    Fairy    -  1200	Potion   -   160    Venom    -  1600
+CLOTHES             Thief    -  1800	Ether    -   200    Catclaw  -  8000
+————————            Ebon     -     0	Elixir   -  2000    Colossus - 22000
+Clothes  -    60    Titan    -  8000    Antidote -    60
+Wizard   -   600    Rune     - 10000	Remedy   -   200    MAGIC
+Blaze    -   900    Protect  - 20000	Life     -   400    ————————
+Power    -  4000    Cursed   - [RARE]	Health   -     2    Hellfire -  1000
+Mirage   - 12000    Holy     - 44000	Mana     -     2    Nostrum  -  1000
+Minerva  - 19600    Sanctum  - 18002   	Strength -     2    Bacchus  -  1000
+Spartan  - 19600                        Vitality -     2    Thanatos -  1000
+		                        Wisdom   -     2
+					Speed    -     2
+
+ All key items (such as the Grimoire) are considered rare and can't be sold.
+
+
+ SPELL    | PRICE	    SPELL    | PRICE
+——————————+———————	   ——————————+———————	    The tables on the left
+ Cure     |   100	    Fire     |   200	    indicate the prices of
+ Detox    |    80	    Blizzard |   180	    spells. Note that spells
+ Esuna    |   600	    Thunder  |   140	    cannot be sold.
+ Heal     |   800	    Scourge  |   400
+ Life     |  1200	    Sleep    |   400	    Characters can discard
+ Protect  |   400	    Doom     |   800	    spells from their inven-
+ Shield   |   800	    Flare    |  1400	    tories via the main menu,
+ Berserk  |   600	    Storm    |  1400	    provided they aren't
+ Haste    |   800	    Freeze   |  1800	    guest NPCs such as the
+ Aura     |  3200	    Gravity  |  6000	    Dark Knight or Lars.
+ Faze     |  2000	    Dispel   |  4800
+ Teleport |   800	    Quake    | 12000
+ Holy     | 16000	    Meteor   | 20000
+
+
+ ___________,————————————————————————————————————————————————————,___________
+\           |                Magic and Enemy Skills       .[sk4] |           /
+/___________,————————————————————————————————————————————————————,___________\
+
+To learn a new spell, the player must purchase a spell from a magic shop. The
+only requirement for learning a spell is that the character possesses enough
+maximum MP to cast it in the first place. I suppose a check for this isn't
+technically necessary though.
+
+The spells in a character's inventory cannot be rearranged, nor can they be
+removed. When a spell is selected from the main menu, a "Cast" / "Forget"
+prompt should appear to allow the character to manage the inventory.
+
+Spells cannot miss their targets, but they can be resisted. This applies to
+enemy spells as well.
+
+You'll notice that some spells factor the caster's Magic at decreased
+efficiency, such as /2 or /4. For such calculations, round up when the result
+is uneven. If the result is 0 or a negative value, then credit 1 point.
+
+Although not noted in the tables below, spell damage is generally adjusted by
+the target's Defense, unless the spell is indicated to ignore Defense instead.
+It probably doesn't need to be said, but curative magic should ignore its
+target's Defense as well.
+
+
+Target parameters are:
+			               Consider how these parameters apply to
+| ally (a single party member)	       enemies, as well. For example, if an
+· party (the entire party)	       enemy casts Cure, (which would target
+| single (a single opponent)	       an ally) then naturally this means an
+  enemy (all opponents)		       ally of the *enemy*, not one of the
+				       player characters.
+
+MAGIC     | MP | TARGET | EFFECT
+——————————+————+————————+—————————————————————————————————————————————————————
+Cure      | 06 | ally   | Restore HP = caster Magic +8
+Detox     | 03 | ally   | Remove Poison status
+Esuna     | 10 | ally   | Remove Poison and Sleep statuses
+Heal      | 12 | party  | Restore HP = caster Magic/2 +8
+Life      | 20 | ally   | Remove KO and restore 33% of maximum HP
+Protect   | 08 | ally   | Boost Defense +10, Evasion +8%
+Shield    | 12 | ally   | Boost Defense +16
+          |    |        | Set resistance to Fire, Ice and Lightning
+Berserk   | 12 | ally   | Boost Attack +16
+Haste     | 16 | ally   | Boost Agility +40, Hit Rate +10%
+Aura      | 20 | party  | Boost Attack and Magic +8, Agility +20, Hit Rate +8%
+Teleport  | 01 | n/a    | End any non-boss battle, or return to dungeon exit
+Fire      | 08 | single | Fire damage = caster Magic +8
+Thunder   | 08 | single | Thunder damage = caster Magic +8
+Blizzard  | 08 | single | Ice damage = caster Magic +12
+Scourge   | 10 | enemy  | Non-elemental damage = caster Magic/2 +8
+          |    |        | Inflict Poison
+Sleep     | 08 | enemy  | Inflict Sleep
+Doom      | 12 | single | Inflict KO
+Flare     | 16 | enemy  | Fire damage = caster Magic/1.5 +16
+Storm     | 16 | enemy  | Thunder damage = caster Magic/1.5 +16
+Freeze    | 16 | enemy  | Ice damage = caster Magic/1.5 +24
+Gravity   | 24 | enemy  | Reduce to 1 HP unless Resist Gravity flag
+Faze      | 08 | single | Burn 255 MP (*)
+Dispel    | 20 | single | Reverse all buffs (e.g. Attack and Defense boosts)
+          |    |        | Reduce target Magic power -20
+Quake     | 32 | enemy  | Inflict KO
+Holy      | 40 | enemy  | Holy damage = caster Magic +48
+Meteor    | 60 | enemy  | Non-elemental damage = Magic +32, ignore Defense
+          |    |        | (**) Successively strike all enemies up to 4 times
+
+* Faze will have no effect on enemies specified to have infinite MP.
+(or if it does damage their MP, the effect is essentially pointless)
+
+** Meteor is a multi-hit spell. After the first strike, the spell can
+ successively inflict up to three additional hits with diminishing
+ probabilities: 50%, 25% and finally 10%.
+
+
+OTHER     | MP | TARGET | EFFECT
+——————————+————+————————+—————————————————————————————————————————————————————
+Blaze (*) | 00 | single | Non-elemental damage = caster Magic/1.75
+Shock (*) | 00 | single | Non-elemental damage = caster Magic/1.75
+Repair    | 08 | self   | Restore HP = 32..64
+Array     | 16 | enemy  | Non-elemental damage = 160
+Graviton  | 16 | single | Reduce to 1 HP unless Resist Gravity flag
+Destruct  | 01 | single | Identical to enemy magic "Explode"
+
+
+* Both of these spells are unleashed by weapons. They're functionally similar
+ to spells such as Flare and Storm, but their efficiency is toned down to
+ avoid making these weapons overpowered. Technically, these spells don't cost
+ any MP to use since they're tied to the weapons themselves.
+
+
+ ———— What about magic cast outside of battle? ————
+
+Every spell can be cast in battle, but only the following spells can be cast
+in *or* out of battle: Cure, Esuna, Heal, Life and Teleport
+
+Teleport is the only spell that has a different effect when cast outside of
+battle. When cast during a battle, it prompts the party's immediate escape,
+regardless of whether or not the party has sufficient Agility to flee the
+encounter. (Of course, the spell will have no effect during boss battles)
+
+Outside of battle, the spell will place the party just outside the entrance of
+the current map they're on. The spell will have no effect on the following
+maps: The Arcanian Trials, Asnoth Castle, the Dreadnought, Feywood, Memoria
+Forest and the Ravaged Village
+
+It's important to note that teleporting out of the Arcanian Summit or
+Celestial Spire will place the player at the beginning of the summit map,
+directly on the airship deck. This is because the only way to enter these maps
+is via airship.
+
+
+ ———— What about enemy magic? ————
+
+Enemies can cast spells just like player characters. Some enemies can have
+unlimited MP, though. If an enemy doesn't have unlimited MP and runs out of MP
+during the course of the battle, then the enemy would simply select the next
+useable command from its list.
+
+In addition to the standard spells listed above, some enemies have unique
+spells of their own. These function similarly to standard spells, so they can
+probably be stored in the same routine.
+
+
+ENEMY SPELL | TARGET | MP | Effect
+————————————+————————+————+———————————————————————————————————————————————————
+Stinger     | single | 00 | Attack pow. = 10, ignore Defense, Inflict Poison
+Skewer      | single | 00 | Attack power = 8, ignore Defense
+Ultrasonic  | single | 00 | Inflict Sleep
+Explode     | single | 00 | Attack pow. = current / max HP diff., ignore Def.
+            |        |    | KO self (cannot be resisted)
+Megasplode  | enemy  | 00 | Attack pow. = current / max HP diff., ignore Def.
+            |        |    | KO self (cannot be resisted)
+Deluge      | enemy  | 00 | Ice damage = Magic
+Strict      | single | 00 | 200 damage, ignore Defense
+Breath      | enemy  | 00 | Fire damage = Attack + Magic
+Acid        | enemy  | 00 | Attack pow. = Attack + Magic, inflict Poison
+Maelstrom   | enemy  | 00 | Attack pow. = Magic +40
+            |        |    | Inflict KO
+
+
+Note that we need to work out verbose strings for these abilities. The name
+strings I've used as more or less just placeholders. When an enemy uses an
+enemy spell, the action string would be something more elaborate than just
+"Enemy uses Ultrasonic!" for instance.
+
+
+ ___________,————————————————————————————————————————————————————,___________
+\           |           Enemies, Formations and Zones     .[zn5] |           /
+/___________,————————————————————————————————————————————————————,___________\
+
+
+Aside from the overworld and the final dungeon, each map consists of one
+encounter zone, with each map / zone having four formation slots. These slots
+correspond to specific IDs of enemy formations.
+
+ ———————————
+|00|01|02|03|	   The zoned maps are separated into 16 encounter zones
+|——+——+——+——|	   represented in the left diagram.
+|04|05|06|07|
+|——+——+——+——|	   When the party is traveling in a (sea) ship,
+|08|09|0A|0B|	   the overworld becomes one large encounter zone
+|——+——+——+——|	   with an entirely different set of enemies.
+|0C|0D|0E|0F|
+ ———————————       No enemies are encounterd while in the airship.
+
+
+ Slot    Probability
+—————————————————————	     Each zone has four formation slots, and each slot
+   1       96/256	     has a probability of summoning that enemy
+   2       72/256	     formation each time a battle is initiated.
+   3       56/256
+   4       32/256
+
+The probability of any slot does not vary per map - only formation IDs vary.
+
+
+ ———— Overworld zones ————
+
+Below is an outline of all the formations found per encounter zone on the
+OVERWORLD map. The first value corresponds to the zone ID, while the 1. - 4.
+values correspond to each formation slot, followed by formation ID.
+
+00 - 1.20 2.02 3.21 4.0B	 08 - 1.05 2.06 3.04 4.11
+01 - 1.20 2.02 3.21 4.0B	 09 - 1.00 2.01 3.03 4.04
+02 - 1.13 2.02 3.0B 4.0A	 0A - 1.00 2.01 3.03 4.04
+03 - 1.02 2.0A 3.13 4.0B	 0B - 1.05 2.06 3.04 4.11
+04 - 1.06 2.05 3.11 4.12	 0C - 1.05 2.01 3.06 4.04
+05 - 1.00 2.01 3.03 4.04	 0D - 1.05 2.01 3.06 4.04
+06 - 1.00 2.01 3.03 4.04	 0E - 1.13 2.02 3.0B 4.0A
+07 - 1.06 2.05 3.11 4.12	 0F - 1.13 2.02 3.0B 4.0A
+
+
+All zoned areas use a moderate encounter rate, which is to say the
+encounter rate does *not* differ per zone.
+
+
+ ———— Celestial Spire (final dungeon) zones ————
+
+Like the overworld map, the Celestial Spire is separated into 16 zones, which
+likewise consist of 16x16-tile sections. The area has a low encounter rate.
+
+Entrance:			  Second half:
+
+00 - 1.24 2.2D 3.2F 4.27          02 - 1.24 2.26 3.2A 4.31
+01 - 1.18 2.28 3.24 4.2E	  06 - 1.27 2.28 3.2F 4.31
+04 - 1.24 2.2D 3.2F 4.27          0A - 1.26 2.26 3.25 4.31
+05 - 1.26 2.28 3.18 4.2F	  0E - 1.27 2.26 3.19 4.30
+
+Lower section w/ trees:		  Climb to the Shadow Lord:
+
+08 - 1.2D 2.26 3.28 4.25 	  03 -   (no encounters)
+09 - 1.18 2.27 3.24 4.2F 	  07 - 1.18 2.30 3.19 4.31
+0C - 1.2D 2.24 3.28 4.25 	  0B - 1.2F 2.19 3.31 4.30
+0D - 1.18 2.27 3.2A 4.2F          0F - 1.19 2.30 3.18 4.31
+
+
+ ———— Non-individually-zoned maps ————
+
+As stated earlier, all other maps are treated as one large encounter zone.
+Their data is as follows:
+
+Overworld (via ship)	 Ragnoth Castle Ruins     Trade Route
+1.0D 2.0F 3.0E 4.10	 1.1A 2.1D 3.1C 4.17      1.07 2.09 3.08 4.06
+Low enc. rate	         Heavy enc. rate	  Low enc. rate
+
+Badlands		 Halls of Valhallan	  Arcanian T. (Badlands)
+1.0A 2.05 3.04 4.0B	 1.1A 2.1D 3.1F 4.1B	  1.1C 2.27 3.2A 4.28
+Heavy enc. rate		 Heavy enc. rate	  Heavy enc. rate
+
+Undersea Cave		 Undersea Cave (p2)	  Undersea Cave (p3)
+1.10 2.07 3.0D 4.08	 1.10 2.08 3.07 4.0A	  1.0D 2.0E 3.09 4.0F
+Moderate enc. rate	 Moderate enc. rate	  Moderate enc. rate
+
+Fey Wood		 Arcanian T. (Overworld)  Flooded Village
+1.07 2.11 3.12 4.13	 1.0B 2.16 3.0C 4.1E	  1.10 2.11 3.13 4.18
+Moderate enc. rate	 Moderate enc. rate	  Moderate enc. rate
+
+Asnoth Cave		 Asnoth Castle (p2)	  Memoria Forest
+1.24 2.28 3.26 4.19	 1.0C 2.1A 3.21 4.1D	  1.17 2.13 3.1B 4.1D
+Heavy enc. rate		 Moderate enc. rate	  Moderate enc. rate
+
+Dreadnought		 Celestial Spire (p2)     The Underdeep
+1.20 2.16 3.21 4.1F	 1.2A 2.18 3.2B 4.30	  1.29 2.2B 3.2C 4.32
+Moderate enc. rate	 Low enc. rate		  Lowest enc. rate
+
+Broken Bows		 Undead Dwarves		  Twilight Hollows
+1.29 2.2A 3.2C 4.2A	 1.07 2.09 3.08 4.06	  1.3F 2.3E 3.30 4.2A
+Moderate enc. rate	 Low enc. rate		  Moderate enc. rate
+
+
+ ———— Formation IDs ————
+
+Below is a table of all formation IDs. Some maps can reference IDs that other
+maps use. Some IDs are referenced by events (bosses) or treasure chests.
+
+
+00: Gremlin, Giant Wasp	               10: Bloodsucker, Piranha
+01: Gremlin x3		               11: Ogre, Bloodsucker
+02: Land Ray x2		               12: Skulldier, Bloodsucker x2
+03: Giant Wasp x2	               13: Ogre Mage, Bloodsucker
+04: Ogre, Giant Wasp	               14: Zombie x2
+05: Skulldier		               15: Zombie x3
+06: Skulldier x2		       16: Red Soul
+07: Vampire Bat, Viper	               17: Zombie, Red Soul
+08: Vampire Bat x3	               18: White Soul x2
+09: Viper, Vampire Bat x2              19: Red Soul, Wh. Soul, Yel. Soul
+0A: Bomb			       1A: Revenant, Red Soul
+0B: Bomb, Bomb		               1B: Revenant x2
+0C: Bomb x2, Salamander	               1C: Revenant x3
+0D: Piranha, Manta Ray	               1D: Revenant, Bloodbones
+0E: Piranha x2		               1E: Bloodbones x2
+0F: Bomb, Piranha	               1F: Bomb, Red Soul
+
+20: Royal Guard			       30: Ambush Viper x2
+21: Royal Guard x2		       31: Dragon
+22: Chimera			       32: Great Dragon
+23: Chimera, Bomb		       33: Leviathan (1)
+24: Grenade, Li'l Murderer	       34: Leviathan (2)
+25: Li'l Murderer x3		       35: Ouroboros
+26: Grenade x2			       36: Lars' Soul
+27: Grenade x3			       37: Guardian (A)
+28: Revenant, Damned x2		       38: Guardian (B)
+29: Drowned Corpse, Damned x2	       39: Guardian (C)
+2A: Lightning Ray x2		       3A: Labolas
+2B: Frost Bat x2, Lightning Ray        3B: Shadow Lord, Arcanian Sphere
+2C: Blood Piranha, x2 Frost Bat        3C: Terrible Dragon
+2D: Rhyos			       3D: Gorgimera
+2E: Rhyos, Grenade		       3E: Ogre Berserker, Cazador
+2F: Death Knight x2		       3F: Cazador x3
+
+
+ ———— Which enemies use which bitmaps? ————
+
+Gremlin [gremlin.png]			Ouroboros [leviathan.png]
+Li'l Murderer [gremlin.png]		Guardian (A) [guardian.png]
+Giant Wasp [stinger.png]		Guardian (B) [guardian.png]
+Bloodsucker [stinger.png]		Guardian (C) [guardian.png]
+Vampire Bat [bat.png]			Royal Guard [soldier.png]
+Frost Bat [bat.png]			Death Knight [soldier.png]
+Land Ray [ray.png]			Lars' Soul [soldier.png]
+Manta Ray [ray.png]			Red Soul [soul.png]
+Lightning Ray [ray.png]			White Soul [soul.png]
+Viper [salamander.png]			Yellow Soul [soul.png]
+Salamander [salamander.png]		Damned [soul.png]
+Ambush Viper [salamander.png]		Zombie [zombie.png]
+Skuldier [skuldier.png]			Revenant [zombie.png]
+Bloodbones [skuldier.png]		Drowned Corpse [zombie.png]
+Bomb [bomb.png]				Chimera [chimera.png]
+Grenade [grenade.png]			Rhyos [chimera.png]
+Ogre [ogre.png]                 	Dragon [dragon.png]
+Ogre Mage [ogre.png]	                Great Dragon [dragon.png]
+Piranha [piranha.png]			Labolas [labolas.png]
+Blood Piranha [piranha.png]		Shadow Lord [shadow_lord.png]
+Leviathan (1) [leviathan.png]           Arcanian Sphere [sphere.png]
+Leviathan (2) [leviathan.png]           Gorgimera [chimera.png]
+Cazador [stinger.png]                   Ogre Berserker [ogre.png]
+
+
+ ———— Foreword and notes about enemy data ————
+
+Below are several frames outlining enemy statistics, drops, commands, and
+other relevant information. As discussed earlier in the documentation, each
+enemy has a "rank" value for purposes of determining whether or not characters
+are eligible for gaining experience points from that enemy.
+
+Enemies choose which commands to execute simply by going down a list of eight
+possible commands in deterministic order. If the next command is a spell, and
+the enemy doesn't have sufficient MP, then the enemy will simply skip it and
+select the next possible (non-spell) command it can use.
+
+Before using an ability that inflicts a status element, an enemy will check to
+see if any characters are already inflicted with status effects. If so, then
+the enemy will skip that command and move on to the next command instead. This
+check needs to be performed in the middle of combat rounds, to prevent groups
+of similar enemies from spamming status effects.
+
+Each enemy can drop only a single item, although it's possible for the party
+to receive multiple items from multiple enemies. In either case, a selection
+menu will appear after battle, allowing the player to swap the contents of
+their inventory with any items dropped by enemies, if they so desire.
+
+All enemies are assumed to have a 100% physical Hit Rate, but some enemies
+have a higher chance of evading incoming attacks than other enemies. This is
+noted as "Evade." This value is deducated from a character's Hit Rate
+when they issue a physical attack.
+
+
+ ———— How do some of the enemy properties work? ————
+
+Elemental properties mean that enemy's physical attacks are of that element -
+i.e. they can be resisted if the character is wearing something like Flame or
+Ice armor. Ditto for status properties. The entries marked O and X indicate a
+strength or weakness to that respective element. (i.e. X indicates a weakness)
+Status effects aren't marked with X - if they're left blank, it simply means
+the enemy is able to be afflicted with that effect.
+
+Undead enemies are flagged in case a character uses a Blood sword, which will
+have a reverse effect against these foes.
+
+Enemies with the "Drain" ability drain HP from their targets, just as if they
+were equipped with Blood swords.
+
+Enemies with "HP regen" recover 16% of their maximum HP at the end of each
+round. This is functionally similar to the regeneration effect found on the
+Gaia armor, which is mentioned earlier in this document.
+
+If an enemy has "Double attack," then there's a 50% chance that, when that
+enemy uses a physical attack, it will attack twice. The formula for
+determining the enemy's target is generated twice, so the enemy may in fact
+attack two different characters in the same turn.
+
+
+——————————————————————————————————————————————————————————————————————————————
+Gremlin                RANK 1     GP 00040     DROP: Tonic           [ 16/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP    32
+ [ ] Fire	    [ ] Fire	         1.) Attack		      MP    16
+ [ ] Ice	    [ ] Ice	         2.) Skewer		     ATK    12
+ [ ] Poison	    [ ] Lightning        3.) Sleep		     DEF     4
+ [ ] Sleep	    [ ] Gravity	         4.) Attack		     MAG     8
+ [ ] Undead	    [ ] Poison	         5.) Fire		     AGI    20
+ [ ] Drain	    [ ] Sleep	         6.) Skewer
+ [ ] HP regen       [ ] KO	         7.) Attack            Evade   8
+ [ ] Double attack  [ ] Holy             8.) Attack            CRIT.  12/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+L'il Murderer          RANK 4     GP 00220     DROP: Agility potion  [ 16/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP   300
+ [ ] Fire	    [ ] Fire	         1.) Sleep		      MP    68
+ [ ] Ice	    [ ] Ice	         2.) Quake		     ATK    60
+ [ ] Poison	    [ ] Lightning        3.) Attack		     DEF    30
+ [ ] Sleep	    [ ] Gravity	         4.) Attack		     MAG    60
+ [ ] Undead	    [ ] Poison	         5.) Scourge		     AGI   255
+ [ ] Drain	    [O] Sleep	         6.) Attack
+ [ ] HP regen       [ ] KO	         7.) Attack	       Evade  32
+ [O] Double attack  [ ] Holy             8.) Megasplode        CRIT.  96/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Giant Wasp             RANK 1     GP 00020     DROP: Antidote        [ 16/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP    28
+ [ ] Fire	    [ ] Fire	         1.) Attack		      MP     0
+ [ ] Ice	    [ ] Ice	         2.) Stinger    	     ATK    10
+ [ ] Poison	    [X] Lightning        3.) Attack		     DEF     2
+ [ ] Sleep	    [ ] Gravity	         4.) Attack		     MAG     0
+ [ ] Undead	    [O] Poison	         5.) Stinger		     AGI    28
+ [ ] Drain	    [ ] Sleep	         6.) Attack
+ [ ] HP regen       [ ] KO	         7.) Attack	       Evade  16
+ [ ] Double attack  [ ] Holy             8.) Stinger           CRIT.  20/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Bloodsucker            RANK 2     GP 00040     DROP: Antidote        [ 16/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP    66
+ [ ] Fire	    [ ] Fire	         1.) Attack		      MP     0
+ [ ] Ice	    [ ] Ice	         2.) Stinger		     ATK    28
+ [ ] Poison	    [X] Lightning        3.) Attack		     DEF     8
+ [ ] Sleep	    [ ] Gravity	         4.) Stinger		     MAG     0
+ [ ] Undead	    [O] Poison	         5.) Stinger		     AGI    40
+ [O] Drain	    [ ] Sleep	         6.) Attack
+ [ ] HP regen       [ ] KO	         7.) Attack	       Evade  16
+ [ ] Double attack  [ ] Holy             8.) Stinger           CRIT.  20/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Cazador                RANK 4     GP 00260     DROP: Bacchus item    [ 16/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP   200
+ [ ] Fire	    [ ] Fire	         1.) Attack		      MP     0
+ [ ] Ice	    [ ] Ice	         2.) Acid		     ATK    80
+ [O] Poison	    [X] Lightning        3.) Attack		     DEF    40
+ [ ] Sleep	    [ ] Gravity	         4.) Attack		     MAG    40
+ [ ] Undead	    [O] Poison	         5.) Acid		     AGI   120
+ [ ] Drain	    [ ] Sleep	         6.) Attack
+ [ ] HP regen       [ ] KO	         7.) Attack	       Evade  32
+ [O] Double attack  [ ] Holy             8.) Acid              CRIT.  32/256
+
+* NOTE: Although I haven't indicated a property field that would allow enemy
+attacks to possess an instant KO property, this enemy is one of two excep-
+tions. All of its basic attacks will inflict instant KO, similar to the
+Vorpal sword. Of course, the effect can be resisted.
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Vampire Bat            RANK 1     GP 00020     DROP: Thanatos item   [  1/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——        HP    56
+ [ ] Fire	    [X] Fire	         1.) Ultrasonic		      MP     0
+ [ ] Ice	    [ ] Ice	         2.) Attack		     ATK    10
+ [ ] Poison	    [X] Lightning        3.) Attack		     DEF    10
+ [ ] Sleep	    [ ] Gravity	         4.) Attack		     MAG    10
+ [O] Undead	    [O] Poison	         5.) Ultrasonic		     AGI    30
+ [O] Drain	    [O] Sleep	         6.) Attack
+ [O] HP regen       [O] KO	         7.) Attack	       Evade  16
+ [ ] Double attack  [X] Holy             8.) Attack            CRIT.  20/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Frost Bat              RANK 4     GP 00200     DROP: Thanatos item   [  8/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP   200
+ [ ] Fire	    [X] Fire	         1.) Attack		      MP    40
+ [O] Ice	    [O] Ice	         2.) Blizzard		     ATK    50
+ [ ] Poison	    [X] Lightning        3.) Sleep		     DEF   120
+ [ ] Sleep	    [ ] Gravity	         4.) Attack		     MAG    60
+ [ ] Undead	    [ ] Poison	         5.) Blizzard		     AGI    80
+ [ ] Drain	    [O] Sleep	         6.) Attack
+ [ ] HP regen       [ ] KO	         7.) Blizzard	       Evade  24
+ [ ] Double attack  [ ] Holy             8.) Attack            CRIT.  32/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Viper                  RANK 1     GP 00020     DROP: Hellfire item   [  8/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP    66
+ [ ] Fire	    [O] Fire	         1.) Attack		      MP     0
+ [ ] Ice	    [ ] Ice	         2.) Attack		     ATK    20
+ [O] Poison	    [ ] Lightning        3.) Attack		     DEF    14
+ [ ] Sleep	    [ ] Gravity	         4.) Attack		     MAG     0
+ [ ] Undead	    [O] Poison	         5.) Attack		     AGI    30
+ [ ] Drain	    [ ] Sleep	         6.) Attack
+ [ ] HP regen       [ ] KO	         7.) Attack	       Evade   8
+ [ ] Double attack  [ ] Holy             8.) Attack            CRIT.  24/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Salamander             RANK 2     GP 00040     DROP: Serpent staff   [  8/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP    72
+ [O] Fire	    [O] Fire	         1.) Blitz		      MP     0
+ [ ] Ice	    [X] Ice	         2.) Attack		     ATK    36
+ [O] Poison	    [ ] Lightning        3.) Breath		     DEF    18
+ [ ] Sleep	    [ ] Gravity	         4.) Attack		     MAG     0
+ [ ] Undead	    [O] Poison	         5.) Blitz		     AGI    30
+ [ ] Drain	    [ ] Sleep	         6.) Attack
+ [ ] HP regen       [ ] KO	         7.) Breath	       Evade  16
+ [ ] Double attack  [ ] Holy             8.) Attack            CRIT.  24/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Ambush Viper           RANK 4     GP 00180     DROP: Bacchus item    [  8/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP    90
+ [ ] Fire	    [O] Fire	         1.) Blitz		      MP     0
+ [ ] Ice	    [ ] Ice	         2.) Attack		     ATK    80
+ [O] Poison	    [ ] Lightning        3.) Attack		     DEF    40
+ [ ] Sleep	    [ ] Gravity	         4.) Blitz		     MAG     0
+ [ ] Undead	    [O] Poison	         5.) Sweep		     AGI   255
+ [ ] Drain	    [O] Sleep	         6.) Attack
+ [ ] HP regen       [ ] KO	         7.) Attack	       Evade  32
+ [O] Double attack  [ ] Holy             8.) Strict            CRIT.  64/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Land Ray               RANK 2     GP 00060     DROP: --------------- [256/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP   120
+ [ ] Fire	    [ ] Fire	         1.) Attack		      MP    10
+ [ ] Ice	    [ ] Ice	         2.) Attack		     ATK    44
+ [O] Poison	    [X] Lightning        3.) Attack		     DEF    36
+ [ ] Sleep	    [O] Gravity	         4.) Attack		     MAG     0
+ [ ] Undead	    [O] Poison	         5.) Scourge		     AGI    60
+ [ ] Drain	    [ ] Sleep	         6.) Attack
+ [ ] HP regen       [ ] KO	         7.) Attack	       Evade  16
+ [ ] Double attack  [ ] Holy             8.) Attack            CRIT.  32/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Manta Ray              RANK 1     GP 00030     DROP: --------------- [256/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP    56
+ [ ] Fire	    [ ] Fire	         1.) Attack		      MP     0
+ [ ] Ice	    [ ] Ice	         2.) Attack		     ATK    20
+ [O] Poison	    [X] Lightning        3.) Attack		     DEF    16
+ [ ] Sleep	    [O] Gravity	         4.) Attack		     MAG     0
+ [ ] Undead	    [O] Poison	         5.) Attack		     AGI    32
+ [ ] Drain	    [ ] Sleep	         6.) Attack
+ [ ] HP regen       [ ] KO	         7.) Attack	       Evade  12
+ [ ] Double attack  [ ] Holy             8.) Attack            CRIT.  32/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Lightning Ray          RANK 3     GP 00120     DROP: --------------- [256/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP   200
+ [ ] Fire	    [ ] Fire	         1.) Attack		      MP    64
+ [ ] Ice	    [ ] Ice	         2.) Thunder		     ATK    66
+ [O] Poison	    [O] Lightning        3.) Sleep		     DEF    48
+ [ ] Sleep	    [O] Gravity	         4.) Attack		     MAG    56
+ [ ] Undead	    [O] Poison	         5.) Thunder		     AGI    80
+ [ ] Drain	    [O] Sleep	         6.) Attack
+ [ ] HP regen       [ ] KO	         7.) Storm	       Evade  20
+ [ ] Double attack  [ ] Holy             8.) Attack            CRIT.  48/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Skuldier               RANK 1     GP 00060     DROP: Broad sword     [  8/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP    60
+ [ ] Fire	    [X] Fire	         1.) Attack		      MP    10
+ [ ] Ice	    [ ] Ice	         2.) Attack		     ATK    22
+ [ ] Poison	    [ ] Lightning        3.) Sweep		     DEF    60
+ [ ] Sleep	    [ ] Gravity	         4.) Attack		     MAG     0
+ [O] Undead	    [O] Poison	         5.) Parry		     AGI    24
+ [O] Drain	    [O] Sleep	         6.) Sleep
+ [O] HP regen       [O] KO	         7.) Attack	       Evade   8
+ [ ] Double attack  [X] Holy             8.) Attack            CRIT.  12/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Bloodbones             RANK 2     GP 00180     DROP: Blood sword     [  1/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP    90
+ [ ] Fire	    [X] Fire	         1.) Attack		      MP    20
+ [ ] Ice	    [ ] Ice	         2.) Berserk		     ATK    32
+ [ ] Poison	    [ ] Lightning        3.) Sweep		     DEF    80
+ [ ] Sleep	    [ ] Gravity	         4.) Protect		     MAG     0
+ [O] Undead	    [O] Poison	         5.) Attack		     AGI    36
+ [O] Drain	    [O] Sleep	         6.) Parry
+ [O] HP regen       [O] KO	         7.) Sweep	       Evade   8
+ [ ] Double attack  [X] Holy             8.) Attack            CRIT.  12/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Bomb                   RANK 2     GP 00060     DROP: Hellfire item   [  8/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP    60
+ [O] Fire	    [O] Fire	         1.) Attack		      MP    16
+ [ ] Ice	    [X] Ice	         2.) Fire		     ATK    34
+ [ ] Poison	    [ ] Lightning        3.) Attack		     DEF    90
+ [ ] Sleep	    [ ] Gravity	         4.) Attack		     MAG    12
+ [ ] Undead	    [O] Poison	         5.) Fire		     AGI    40
+ [ ] Drain	    [ ] Sleep	         6.) Attack
+ [ ] HP regen       [ ] KO	         7.) Attack	       Evade  16
+ [ ] Double attack  [ ] Holy             8.) Explode           CRIT.  12/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Grenade                RANK 3     GP 00400     DROP: Hellfire item   [  8/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP   140
+ [O] Fire	    [O] Fire	         1.) Attack		      MP    32
+ [ ] Ice	    [X] Ice	         2.) Flare		     ATK    56
+ [ ] Poison	    [ ] Lightning        3.) Attack		     DEF    90
+ [ ] Sleep	    [ ] Gravity	         4.) Attack		     MAG    34
+ [ ] Undead	    [O] Poison	         5.) Flare		     AGI    66
+ [ ] Drain	    [ ] Sleep	         6.) Attack
+ [ ] HP regen       [ ] KO	         7.) Attack	       Evade  16
+ [ ] Double attack  [ ] Holy             8.) Megasplode        CRIT.  12/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Ogre                   RANK 2     GP 00160     DROP: Titan armlet    [  8/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP   120
+ [ ] Fire	    [ ] Fire	         1.) Attack		      MP     0
+ [ ] Ice	    [ ] Ice	         2.) Attack		     ATK    36
+ [ ] Poison	    [ ] Lightning        3.) Blitz		     DEF    20
+ [ ] Sleep	    [ ] Gravity	         4.) Attack		     MAG     0
+ [ ] Undead	    [ ] Poison	         5.) Parry		     AGI    28
+ [ ] Drain	    [ ] Sleep	         6.) Attack
+ [ ] HP regen       [ ] KO	         7.) Blitz	       Evade   8
+ [O] Double attack  [ ] Holy             8.) Attack            CRIT.  20/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Ogre Mage              RANK 3     GP 00200     DROP: Hades staff     [  8/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP   240
+ [ ] Fire	    [ ] Fire	         1.) Protect		      MP    60
+ [ ] Ice	    [ ] Ice	         2.) Attack		     ATK    40
+ [ ] Poison	    [ ] Lightning        3.) Freeze		     DEF    32
+ [O] Sleep	    [ ] Gravity	         4.) Scourge		     MAG    50
+ [ ] Undead	    [ ] Poison	         5.) Attack		     AGI    40
+ [ ] Drain	    [ ] Sleep	         6.) Heal
+ [ ] HP regen       [ ] KO	         7.) Freeze	       Evade   8
+ [ ] Double attack  [ ] Holy             8.) Attack            CRIT.  12/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Ogre Berserker         RANK 4     GP 00600     DROP: Colossus claw   [  8/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP   400
+ [ ] Fire	    [ ] Fire	         1.) Attack		      MP    24
+ [ ] Ice	    [ ] Ice	         2.) Berserk		     ATK   160
+ [ ] Poison	    [ ] Lightning        3.) Sweep		     DEF    60
+ [ ] Sleep	    [ ] Gravity	         4.) Attack		     MAG     0
+ [ ] Undead	    [ ] Poison	         5.) Parry		     AGI    60
+ [ ] Drain	    [ ] Sleep	         6.) Sweep
+ [ ] HP regen       [ ] KO	         7.) Attack	       Evade  12
+ [O] Double attack  [ ] Holy             8.) Attack            CRIT.  32/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Piranha                RANK 1     GP 00030     DROP: --------------- [256/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP    36
+ [ ] Fire	    [ ] Fire	         1.) Attack		      MP     0
+ [ ] Ice	    [ ] Ice	         2.) Attack		     ATK    34
+ [ ] Poison	    [X] Lightning        3.) Attack		     DEF    20
+ [ ] Sleep	    [ ] Gravity	         4.) Attack		     MAG     0
+ [ ] Undead	    [ ] Poison	         5.) Attack		     AGI    40
+ [ ] Drain	    [ ] Sleep	         6.) Attack
+ [ ] HP regen       [ ] KO	         7.) Attack	       Evade  16
+ [ ] Double attack  [ ] Holy             8.) Attack            CRIT.  20/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Blood Piranha          RANK 3     GP 00080     DROP: --------------- [256/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP    72
+ [ ] Fire	    [ ] Fire	         1.) Attack		      MP     0
+ [ ] Ice	    [ ] Ice	         2.) Attack		     ATK    56
+ [O] Poison	    [X] Lightning        3.) Attack		     DEF    40
+ [ ] Sleep	    [ ] Gravity	         4.) Attack		     MAG    60
+ [ ] Undead	    [O] Poison	         5.) Attack		     AGI    80
+ [O] Drain	    [ ] Sleep	         6.) Deluge
+ [ ] HP regen       [ ] KO	         7.) Attack	       Evade  24
+ [ ] Double attack  [ ] Holy             8.) Attack            CRIT.  32/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Leviathan (1)          RANK S     GP 02200     DROP: Mithril armlet  [ 32/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP   240
+ [ ] Fire	    [ ] Fire	         1.) Deluge		      MP     0
+ [ ] Ice	    [O] Ice	         2.) Attack		     ATK    40
+ [ ] Poison	    [X] Lightning        3.) Attack		     DEF    90
+ [ ] Sleep	    [ ] Gravity	         4.) Sweep		     MAG    32
+ [ ] Undead	    [O] Poison	         5.) Deluge		     AGI    40
+ [ ] Drain	    [O] Sleep	         6.) Attack
+ [ ] HP regen       [O] KO	         7.) Attack	       Evade  16
+ [ ] Double attack  [ ] Holy             8.) Attack            CRIT.  16/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Leviathan (2)          RANK S     GP 60000     DROP: --------------- [256/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP  8000
+ [ ] Fire	    [ ] Fire	         1.) Deluge		      MP   ***
+ [ ] Ice	    [O] Ice	         2.) Attack		     ATK   200
+ [ ] Poison	    [X] Lightning        3.) Strict		     DEF    90
+ [ ] Sleep	    [O] Gravity	         4.) Quake		     MAG   180
+ [ ] Undead	    [O] Poison	         5.) Attack		     AGI   255
+ [ ] Drain	    [O] Sleep	         6.) Strict
+ [ ] HP regen       [O] KO	         7.) Sweep	       Evade  32
+ [O] Double attack  [ ] Holy             8.) Dispel            CRIT.  32/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Ouroboros              RANK S     GP 08000     DROP: Nostrum item    [ 32/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP  2600
+ [ ] Fire	    [ ] Fire	         1.) Deluge		      MP   ***
+ [O] Ice	    [O] Ice	         2.) Attack		     ATK    90
+ [ ] Poison	    [X] Lightning        3.) Attack		     DEF    60
+ [ ] Sleep	    [O] Gravity	         4.) Deluge		     MAG    80
+ [ ] Undead	    [ ] Poison	         5.) Berserk		     AGI    80
+ [ ] Drain	    [O] Sleep	         6.) Attack
+ [ ] HP regen       [ ] KO	         7.) Sweep	       Evade  24
+ [O] Double attack  [ ] Holy             8.) Attack            CRIT.  20/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Royal Guard            RANK 2     GP 00240     DROP: Potion          [ 16/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP   120
+ [ ] Fire	    [ ] Fire	         1.) Attack		      MP    34
+ [ ] Ice	    [ ] Ice	         2.) Protect		     ATK    30
+ [ ] Poison	    [ ] Lightning        3.) Attack		     DEF    20
+ [ ] Sleep	    [ ] Gravity	         4.) Attack		     MAG    36
+ [ ] Undead	    [ ] Poison	         5.) Parry		     AGI    28
+ [ ] Drain	    [ ] Sleep	         6.) Heal
+ [ ] HP regen       [ ] KO	         7.) Berserk	       Evade  16
+ [ ] Double attack  [ ] Holy             8.) Attack            CRIT.  12/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Death Knight           RANK 4     GP 01100     DROP: Vorpal sword    [  8/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP   300
+ [ ] Fire	    [X] Fire	         1.) Attack		      MP    40
+ [ ] Ice	    [ ] Ice	         2.) Scourge		     ATK    70
+ [O] Poison	    [ ] Lightning        3.) Sweep		     DEF    48
+ [ ] Sleep	    [ ] Gravity	         4.) Berserk		     MAG    80
+ [O] Undead	    [O] Poison	         5.) Attack		     AGI    48
+ [O] Drain	    [O] Sleep	         6.) Attack
+ [O] HP regen       [O] KO	         7.) Doom	       Evade  24
+ [O] Double attack  [X] Holy             8.) Faze              CRIT.  20/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Lars' Soul             RANK S     GP 01200     DROP: Revenge sword   [256/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP   300
+ [ ] Fire	    [X] Fire	         1.) Attack		      MP    28
+ [ ] Ice	    [O] Ice	         2.) Attack		     ATK    72
+ [ ] Poison	    [ ] Lightning        3.) Scourge		     DEF    22
+ [ ] Sleep	    [ ] Gravity	         4.) Attack		     MAG    56
+ [O] Undead	    [O] Poison	         5.) Attack		     AGI    30
+ [ ] Drain	    [O] Sleep	         6.) Blizzard
+ [ ] HP regen       [O] KO	         7.) Parry	       Evade  16
+ [ ] Double attack  [X] Holy             8.) Attack            CRIT.  12/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Red Soul               RANK 2     GP 00120     DROP: Ether           [ 16/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP    60
+ [O] Fire	    [O] Fire	         1.) Flare		      MP   250
+ [ ] Ice	    [X] Ice	         2.) Fire		     ATK    60
+ [ ] Poison	    [ ] Lightning        3.) Fire		     DEF   120
+ [ ] Sleep	    [ ] Gravity	         4.) Flare		     MAG    80
+ [O] Undead	    [O] Poison	         5.) Fire		     AGI    10
+ [ ] Drain	    [O] Sleep	         6.) Fire
+ [ ] HP regen       [O] KO	         7.) Faze	       Evade  16
+ [ ] Double attack  [X] Holy             8.) Attack            CRIT.  32/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+White Soul             RANK 2     GP 00120     DROP: Ether           [ 16/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP    60
+ [ ] Fire	    [X] Fire	         1.) Freeze		      MP   250
+ [O] Ice	    [O] Ice	         2.) Blizzard		     ATK    60
+ [ ] Poison	    [ ] Lightning        3.) Blizzard		     DEF   120
+ [ ] Sleep	    [ ] Gravity	         4.) Freeze		     MAG    80
+ [O] Undead	    [O] Poison	         5.) Blizzard		     AGI    10
+ [ ] Drain	    [O] Sleep	         6.) Heal
+ [ ] HP regen       [O] KO	         7.) Faze 	       Evade  16
+ [ ] Double attack  [X] Holy             8.) Attack            CRIT.  32/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Yellow Soul            RANK 3     GP 00180     DROP: Mana potion     [ 16/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP    60
+ [ ] Fire	    [ ] Fire	         1.) Storm		      MP   250
+ [ ] Ice	    [ ] Ice	         2.) Thunder		     ATK    60
+ [ ] Poison	    [O] Lightning        3.) Thunder		     DEF   120
+ [ ] Sleep	    [O] Gravity	         4.) Gravity		     MAG    80
+ [O] Undead	    [O] Poison	         5.) Thunder		     AGI    10
+ [ ] Drain	    [O] Sleep	         6.) Thunder
+ [ ] HP regen       [O] KO	         7.) Faze	       Evade  16
+ [ ] Double attack  [X] Holy             8.) Attack            CRIT.  32/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Damned                 RANK 4     GP 00280     DROP: Wisdom potion   [ 16/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP    80
+ [ ] Fire	    [X] Fire	         1.) Doom		      MP   250
+ [ ] Ice	    [ ] Ice	         2.) Aura		     ATK    60
+ [ ] Poison	    [ ] Lightning        3.) Scourge		     DEF   120
+ [ ] Sleep	    [ ] Gravity	         4.) Doom		     MAG    90
+ [O] Undead	    [O] Poison	         5.) Scourge		     AGI    10
+ [ ] Drain	    [O] Sleep	         6.) Dispel
+ [ ] HP regen       [O] KO	         7.) Doom	       Evade  24
+ [ ] Double attack  [X] Holy             8.) Attack            CRIT.  40/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Zombie                 RANK 2     GP 00060     DROP: Cursed armlet   [  1/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP    60
+ [ ] Fire	    [X] Fire	         1.) Attack		      MP     8
+ [ ] Ice	    [ ] Ice	         2.) Sleep		     ATK    38
+ [ ] Poison	    [ ] Lightning        3.) Attack		     DEF    20
+ [ ] Sleep	    [ ] Gravity	         4.) Attack		     MAG     0
+ [O] Undead	    [O] Poison	         5.) Attack		     AGI    40
+ [O] Drain	    [O] Sleep	         6.) Sleep
+ [O] HP regen       [O] KO	         7.) Attack	       Evade   8
+ [ ] Double attack  [X] Holy             8.) Attack            CRIT.  12/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Revenant               RANK 3     GP 00160     DROP: Cursed armlet   [  1/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP   160
+ [ ] Fire	    [X] Fire	         1.) Attack		      MP    38
+ [ ] Ice	    [ ] Ice	         2.) Attack		     ATK    72
+ [ ] Poison	    [ ] Lightning        3.) Sleep		     DEF    40
+ [ ] Sleep	    [ ] Gravity	         4.) Attack		     MAG    52
+ [O] Undead	    [O] Poison	         5.) Scourge		     AGI    80
+ [O] Drain	    [O] Sleep	         6.) Attack
+ [O] HP regen       [O] KO	         7.) Aura	       Evade   8
+ [O] Double attack  [X] Holy             8.) Attack            CRIT.  20/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Drowned Corpse         RANK 4     GP 00400     DROP: Vitality potion [  8/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP   280
+ [ ] Fire	    [X] Fire	         1.) Attack		      MP     8
+ [ ] Ice	    [ ] Ice	         2.) Attack		     ATK    90
+ [ ] Poison	    [X] Lightning        3.) Attack		     DEF    70
+ [O] Sleep	    [ ] Gravity	         4.) Attack		     MAG     0
+ [O] Undead	    [O] Poison	         5.) Sleep		     AGI    90
+ [O] Drain	    [O] Sleep	         6.) Attack
+ [O] HP regen       [O] KO	         7.) Attack	       Evade  16
+ [O] Double attack  [X] Holy             8.) Attack            CRIT.  32/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Chimera                RANK 3     GP 00380     DROP: --------------- [256/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP   160
+ [ ] Fire	    [O] Fire	         1.) Breath		      MP     0
+ [ ] Ice	    [X] Ice	         2.) Attack		     ATK    40
+ [O] Poison	    [ ] Lightning        3.) Attack		     DEF    40
+ [ ] Sleep	    [ ] Gravity	         4.) Breath		     MAG    12
+ [ ] Undead	    [O] Poison	         5.) Attack		     AGI    30
+ [ ] Drain	    [ ] Sleep	         6.) Attack
+ [ ] HP regen       [ ] KO	         7.) Breath	       Evade  16
+ [O] Double attack  [ ] Holy             8.) Attack            CRIT.  12/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Rhyos                  RANK 4     GP 00800     DROP: Health potion   [  8/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP   240
+ [ ] Fire	    [O] Fire	         1.) Breath		      MP     0
+ [ ] Ice	    [X] Ice	         2.) Attack		     ATK    66
+ [ ] Poison	    [ ] Lightning        3.) Blaze		     DEF    50
+ [ ] Sleep	    [ ] Gravity	         4.) Attack		     MAG    60
+ [ ] Undead	    [O] Poison	         5.) Breath		     AGI    60
+ [ ] Drain	    [ ] Sleep	         6.) Attack
+ [ ] HP regen       [ ] KO	         7.) Blaze	       Evade  24
+ [O] Double attack  [ ] Holy             8.) Attack            CRIT.  12/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Gorgimera              RANK S     GP 20000     DROP: Blood sword     [ 32/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP  2000
+ [ ] Fire	    [O] Fire	         1.) Blaze		      MP    10
+ [ ] Ice	    [O] Ice	         2.) Attack		     ATK   120
+ [O] Poison	    [O] Lightning        3.) Acid		     DEF    66
+ [ ] Sleep	    [O] Gravity	         4.) Attack		     MAG   160
+ [O] Undead	    [O] Poison	         5.) Blaze		     AGI    80
+ [O] Drain	    [O] Sleep	         6.) Attack
+ [ ] HP regen       [O] KO	         7.) Scourge	       Evade  24
+ [O] Double attack  [X] Holy             8.) Attack            CRIT.  20/256
+
+* NOTE: Although I haven't indicated a property field that would allow enemy
+attacks to possess an instant KO property, this enemy is one of two excep-
+tions. All of its basic attacks will inflict instant KO, similar to the
+Vorpal sword. Of course, the effect can be resisted.
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Dragon                 RANK 4     GP 00900     DROP: Strength potion [ 16/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP   600
+ [O] Fire	    [O] Fire	         1.) Breath		      MP     0
+ [ ] Ice	    [X] Ice	         2.) Attack		     ATK    80
+ [ ] Poison	    [ ] Lightning        3.) Sweep		     DEF    60
+ [ ] Sleep	    [ ] Gravity	         4.) Breath		     MAG    30
+ [ ] Undead	    [O] Poison	         5.) Attack		     AGI    60
+ [ ] Drain	    [O] Sleep	         6.) Attack
+ [ ] HP regen       [O] KO	         7.) Sweep	       Evade  24
+ [O] Double attack  [ ] Holy             8.) Attack            CRIT.  20/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Great Dragon           RANK S     GP 02200     DROP: Dragon armor    [ 16/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP  1400
+ [ ] Fire	    [O] Fire	         1.) Gravity		      MP    24
+ [ ] Ice	    [X] Ice	         2.) Attack		     ATK    90
+ [O] Poison	    [O] Lightning        3.) Breath		     DEF    66
+ [ ] Sleep	    [O] Gravity	         4.) Attack		     MAG    30
+ [ ] Undead	    [O] Poison	         5.) Scourge		     AGI    80
+ [ ] Drain	    [O] Sleep	         6.) Sweep
+ [ ] HP regen       [O] KO	         7.) Breath	       Evade  32
+ [O] Double attack  [ ] Holy             8.) Attack            CRIT.  20/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Terrible Dragon        RANK S     GP 60000     DROP: Sacri shield    [256/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP  4800
+ [ ] Fire	    [O] Fire	         1.) Acid		      MP   ***
+ [ ] Ice	    [O] Ice	         2.) Sweep		     ATK   160
+ [O] Poison	    [O] Lightning        3.) Acid		     DEF    90
+ [ ] Sleep	    [O] Gravity	         4.) Quake		     MAG    40
+ [ ] Undead	    [O] Poison	         5.) Meteor		     AGI    90
+ [ ] Drain	    [O] Sleep	         6.) Attack
+ [O] HP regen       [O] KO	         7.) Acid	       Evade  32
+ [O] Double attack  [X] Holy             8.) Dispel            CRIT.  20/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Labolas                RANK S     GP 02000     DROP: Hades staff     [256/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP   900
+ [ ] Fire	    [X] Fire	         1.) Sleep		      MP   120
+ [ ] Ice	    [O] Ice	         2.) Attack		     ATK    40
+ [O] Poison	    [O] Lightning        3.) Protect		     DEF    40
+ [ ] Sleep	    [O] Gravity	         4.) Berserk		     MAG    60
+ [O] Undead	    [O] Poison	         5.) Attack		     AGI    30
+ [O] Drain	    [O] Sleep	         6.) Storm
+ [O] HP regen       [O] KO	         7.) Faze	       Evade   8
+ [ ] Double attack  [ ] Holy             8.) Doom	       CRIT.  20/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Guardian (A)           RANK S     GP 04000     DROP: --------------- [256/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP  1600
+ [O] Fire	    [O] Fire	         1.) Flare		      MP   ***
+ [ ] Ice	    [X] Ice	         2.) Attack		     ATK   120
+ [ ] Poison	    [O] Lightning        3.) Fire		     DEF    70
+ [ ] Sleep	    [O] Gravity	         4.) Protect		     MAG   120
+ [O] Undead	    [O] Poison	         5.) Flare		     AGI    70
+ [ ] Drain	    [O] Sleep	         6.) Attack
+ [ ] HP regen       [O] KO	         7.) Dispel	       Evade  24
+ [ ] Double attack  [ ] Holy             8.) Fire	       CRIT.  20/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Guardian (B)           RANK S     GP 04000     DROP: --------------- [256/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP  1600
+ [ ] Fire	    [X] Fire	         1.) Freeze		      MP   ***
+ [O] Ice	    [O] Ice	         2.) Attack		     ATK   120
+ [ ] Poison	    [O] Lightning        3.) Blizzard		     DEF    70
+ [ ] Sleep	    [O] Gravity	         4.) Protect		     MAG   120
+ [O] Undead	    [O] Poison	         5.) Freeze		     AGI    70
+ [ ] Drain	    [O] Sleep	         6.) Attack
+ [ ] HP regen       [O] KO	         7.) Dispel	       Evade  24
+ [ ] Double attack  [ ] Holy             8.) Blizzard          CRIT.  20/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Guardian (C)           RANK S     GP 06000     DROP: --------------- [256/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP  2200
+ [ ] Fire	    [O] Fire	         1.) Flare		      MP   ***
+ [ ] Ice	    [O] Ice	         2.) Attack	             ATK   160
+ [ ] Poison	    [O] Lightning        3.) Freeze		     DEF    60
+ [ ] Sleep	    [O] Gravity	         4.) Attack		     MAG   160
+ [O] Undead	    [O] Poison	         5.) Storm		     AGI    70
+ [ ] Drain	    [O] Sleep	         6.) Attack
+ [ ] HP regen       [O] KO	         7.) Gravity	       Evade  24
+ [ ] Double attack  [X] Holy             8.) Attack	       CRIT.  20/256
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Shadow Lord            RANK 0     GP 00000     DROP: --------------- [256/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——        HP  6000
+ [ ] Fire	    [ ] Fire	         1.) Maelstrom	              MP   ***
+ [ ] Ice	    [ ] Ice	         2.) Attack	             ATK   180
+ [ ] Poison	    [ ] Lightning        3.) Scourge	             DEF    70
+ [ ] Sleep	    [O] Gravity	         4.) Attack	             MAG   120
+ [ ] Undead	    [ ] Poison	         5.) Attack	             AGI    80
+ [O] Drain	    [O] Sleep	         6.) Flare
+ [ ] HP regen       [O] KO	         7.) Meteor	       Evade  24
+ [O] Double attack  [X] Holy             8.) Gravity	       CRIT.  40/256
+
+* Although the enemy "Arcanian Sphere" is part of the battle formation,
+ the battle ends when the Shadow Lord is defeated.
+——————————————————————————————————————————————————————————————————————————————
+——————————————————————————————————————————————————————————————————————————————
+Arcanian Sphere        RANK 0     GP 00000     DROP: --------------- [256/256]
+
+ —— PROPERTIES ——   —— RESISTANCES ——   —— COMMAND SEQUENCE ——	      HP   ***
+ [ ] Fire	    [O] Fire	         1.) Flare		      MP   ***
+ [ ] Ice	    [O] Ice	         2.) Freeze		     ATK     0
+ [ ] Poison	    [O] Lightning        3.) Storm		     DEF   255
+ [ ] Sleep	    [O] Gravity	         4.) Dispel		     MAG   180
+ [ ] Undead	    [O] Poison	         5.) Heal		     AGI    60
+ [ ] Drain	    [O] Sleep	         6.) Flare
+ [ ] HP regen       [O] KO	         7.) Aura	       Evade  32
+ [ ] Double attack  [O] Holy             8.) Faze	       CRIT.   0/256
+——————————————————————————————————————————————————————————————————————————————
+
+End of document.

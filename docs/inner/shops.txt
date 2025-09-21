@@ -1,0 +1,265 @@
+Aasnoth 24,36 - Standard shop dialog
+-Flame sword
+-Ice sword
+-Flame armor
+-Ice armor
+
+
+Asnoth 35,19 - Standard magic shop dialog
+-Heal
+-Life
+-Haste
+-Aura
+
+
+Asnoth 33,3 - Standard magic shop dialog
+-Flare
+-Freeze
+-Tornado
+-Doom
+
+
+Asnoth 37,27 - Standard shop dialog
+-Venom claw
+-Blaze clothes
+-Thief armlet
+
+
+Asnoth 38,36 - Standard inn dialog
+-inn rate: 200 GP
+
+
+Asnoth towers (asnoth2.gsm) 15,11
+######################
+"Good, evil - money
+doesn't discriminate!"
+######################
+-Ether
+-Remedy
+-Life
+-Hellfire
+
+
+Guilden_interior 6,11 - Sspecial shop dialog:
+######################
+"Ay, have a look at
+ mah fine goods!"
+######################
+-Coral sword
+-Tonic
+-Antidote
+-Life
+
+
+Guilden Interior 8,3 - Standard inn dialog
+-inn rate: 120 GP
+
+
+Hidden Shop 6,12 - Special shop dialog:
+######################
+"It's a secret
+ to everybody!"
+######################
+-Defense sword
+-Catclaw
+-Dragon armor
+-Rune armlet
+
+
+Ragnoth Village 9,22 - Standard inn dialog
+-inn rate: 100 GP
+
+
+Ragnoth Village 25,23 - Standard magic shop dialog
+-Cure
+-Fire
+-Thunder
+-Blizzard
+
+
+Ragnoth Vilage 36,23 - Standard shop dialog
+-Staff
+-Clothes
+-Fairy armlet
+
+
+Ragnoth Village 14,23 - Standard shop dialog
+-Tonic
+-Ether
+-Antidote
+-Life
+
+
+Ragnoth Village 40,44
+######################
+"Don't worry - I sell
+only to the resistance!"
+######################
+-Broad sword
+-Large shield
+-Plate armor
+-Bracer
+
+
+Ragnoth Village 39,34
+######################
+"These are spells forbid-
+den by the occupation."
+######################
+-Sleep
+-Detox
+-Shield
+-Blink
+
+
+Tristran 11,24 - Standard inn dialog
+-inn rate: 200 GP
+
+
+Tristran 22,24 - Standard shop dialog
+-Serpent staff
+-Steel claw
+-Wizard clothes
+-Potion
+
+
+Tristran 33,25 - Standard magic shop dialog
+-Esuna
+-Scourge
+-Berserk
+-Teleport
+
+
+Rosencrantz 9,20 - Standard inn dialog
+-inn rate: 100 GP
+
+
+Rosencrantz 27,29 - Standard shop dialog
+-Healing staff
+-Diamond armor
+-Protect armlet
+-Ether
+
+
+Rosencrantz 7,29 - Standard magic shop dialog
+-Faze
+-Aura
+-Dispel
+-Holy
+
+
+Rosencrantz 17,29 - Standard magic shop dialog
+-Flare
+-Quake
+-Gravity
+-Meteor
+
+
+Ravaged Village 8,18 - Special inn dialog:
+######################
+"It's 200 GP for our...
+'accomodations.' Hehe."
+######################
+-inn rate: 200 GP
+
+
+Ravaged village 18,19 - Special shop dialog:
+######################
+"Gold is gold, even from
+your bloodstained hands."
+######################
+-Mythril sword
+-Mythril armor
+-Potion
+-Life
+
+
+Selkie Village 23,23 - Special inn dialog:
+######################
+"Feel free to take a
+load off. It's on us!"
+######################
+-no charge
+
+
+Selkie Village 7,26 - Special shop dialog:
+######################
+"I sell various items
+that've washed ashore."
+######################
+-Fairy armlet
+-Ether
+-Remedy
+-Life
+
+
+Mnemosyne 28,10 - Special shop dialog:
+######################
+"Hurry up! I don't
+ want to be eaten!"
+######################
+-Diamond armor
+-Aegis shield
+-Rune armlet
+-Life potion
+
+
+Mnemosyne 22,2 - Special inn dialog:
+######################
+"You can rest here,
+ but make it quick!"
+######################
+-no charge
+
+
+Ancient Library 17,22 - Standard magic shop dialog
+-Cure
+-Esuna
+-Life
+-Sleep
+
+
+Ancient Library 18,11 - Standard magic shop dialog
+-Heal
+-Flare
+-Aura
+-Shield
+
+
+Ancient Library 28,10 - Standard magic shop dialog
+-Quake
+-Dispel
+-Holy
+-Meteor
+
+
+Ancient Library 8,19 or 21,4 (randomized)
+#######################
+"We alchemists thrive on
+pursuit of the unknown."
+#######################
+-Ether
+-Remedy
+-Life
+-Elixir
+
+
+Ancient Library 16,15 or 23,9 (randomized)
+#######################
+"Say, can I interest you
+in some magic artifacts?"
+#######################
+-Hellfire
+-Nostrum
+-Bacchus
+-Thanatos
+
+
+Ancient Library 24,14
+#######################
+"Magic weapons, you say?"
+#######################
+-Hades staff
+-Lilith staff
+-Zeus staff
+-Magic shield

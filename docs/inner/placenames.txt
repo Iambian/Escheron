@@ -1,0 +1,38 @@
+This is a list of names for each map, as indicated on the save / load screen. These are also the names used to announce the location when the player enters the map.
+
+If a map is unlisted here, then it's not accessible by normal means or it's a cutscene map, so it doesn't matter how the map gets labeled.
+
+airship - "Asnoth Castle - Towers"
+arcanian_overworld - "Arcanian Ruins"
+arcanian_summit - "Arcanian Ruins"
+arcanian_trials - "Arcanian Trials"
+arcanian_underground - "Arcanian Ruins"
+asnoth - "Asnoth Castle"
+asnoth_cave - "Asnoth Cave"
+badlands - "The Badlands"
+barius_cutscene - "????"
+celestial_spire - "Celestial Spire"
+debug_room - "Debug Room"
+dragons_pass - "Dragon's Pass"
+dreadnought - "The Dreadnought"
+feywood - "The Feywood"
+floodedvillage - "A Flooded Village"
+guilden - "Guilden"
+guilden_interior - "Guilden"
+hidden_shop - "????"
+lighthouse - "Tristran Lighthouse"
+memoria_forest - "Memoria Forest"
+ragnoth_ruins - "Ragnoth Castle Ruins"
+ragnoth - "Ragnoth Village"
+ravaged_village - "A Ravaged Village"
+rosencrantz - "Rosencrantz"
+shipyard - "Morai's Shipyard"
+trade_route - "Dwarven Trade Route"
+tristran - "Tristran Village"
+valhallan - "Halls of Valhallan"
+
+Ideally, the overworld should be separated into zones, such as:
+"Overworld - Ragnoth region"
+"Overworld - Asnoth region"
+"Overworld - Tristran region"
+"Overworld - Rosencrantz region"

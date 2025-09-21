@@ -1,0 +1,15 @@
+The Game Over screen will be hashed-out like a non-standard ending.
+
+The player will see the ruined castle and the silhouette of the Shadow Lord
+from the title screen, with the following text superimposed up top:
+
+######################
+With Ragnoth's resist-
+ance crushed, the
+>>>>>>>>>>>>>>>>>>>>>>
+Shadow Lord's ambitions
+were finally realized.
+######################
+So began an age of
+desolation and chaos...
+######################
