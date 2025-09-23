@@ -1,22 +1,65 @@
-#include "src/inc/app.inc"
+;-------------------------------------------------------------------------------
+; Non-executable includes (macro definitions and label defines/imports)
+;
 #include "src/inc/macros.inc"
 #include "src/inc/osdefs.inc"
+#include "src/inc/gamedefs.inc"
 
-
+;-------------------------------------------------------------------------------
+; Initialize app header structure and page handling macros.
+;
 .initapp
     jr programStart
-.echo "Branch current location: ",$, ", predicted address binding: ",$&$0FFF
+;.echo "Branch current location: ",$, ", predicted address binding: ",$&$0FFF
+;-------------------------------------------------------------------------------
+;Application basecall vector table.
+;
 .branch(printString)
 
+;-------------------------------------------------------------------------------
+;Program execution begins.
+;
 programStart:
+    ; Init low level system variables.
+    ld  hl,saveSScreen
+    ld  de,saveSScreen + 1
+    ld  bc,767
+    ld  (hl),0
+    ldir
+
+    in  a,(6)
+    ld  (basepage),a
+    ld  (stackbase),sp
+
+    call installInterrupt
+
     ld  hl,testString
     bcall(_printString)
     ei
     bcall(_GetKey)
+forceAppClose:
+    di
+    im 1
+    ei
     bjump(_JForceCmdNoChar)
 
 otherTestString:
 .db "This is another string.",0
+
+;.varloc("32")
+;mylabel1 .var(1)
+;mylabel2 .var(2)
+;mylabel3 .var(3)
+;.varvalidate(10)
+;.echo "Test vardef ",mylabel1,", ",mylabel2,", ",mylabel3
+
+
+#include "src/base.z80"
+#include "src/text.z80"
+
+
+
+
 
 .nextpage
 printString:
@@ -34,7 +77,7 @@ testString:
 .db "Hello, world!",0
 
 
-.echo "Hello, world. This is call: ",_printString," located at ",printString
+;.echo "Hello, world. This is call: ",_printString," located at ",printString
 
 .endapp
 ;TODO: FIND WABBITEMU AND TEST THIS GOODAMNED APP TO SEE IF IT'S COMPILING RIGHT

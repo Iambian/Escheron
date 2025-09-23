@@ -17,7 +17,8 @@ MyLabel:
     nop
     NOP
     RET
-    
+
+
 MyString .equ $+2
 ;Note: StringStart should be a label too. Or a constant? idk.
 StringStart .db $00,$00,"Hello, world\n",0,$22,$FF \ .db 3324 \.dw $3324
@@ -34,6 +35,3 @@ macroroutine:
     ret
 .end
 .end    ;EOF Comment
-
-
-;TODO: FIX THE COMMENT BIT WITH THE WEIRD EDGE CASE IN SINGLEQUOTES.

@@ -1,0 +1,423 @@
+; Basic i/o and math.
+
+;-------------------------------------------------------------------------------
+;-------------------------------------------------------------------------------
+; Copied from ION library, modified.
+; This routine copies contents of screen buffer to the LCD.
+; Preserves all registers.
+fastCopy:
+	di
+    push hl \ push de \ push af \ push bc
+;    call debug.always_display
+	ld	a,$80				; 7
+	out	($10),a				; 11
+	ld	hl,plotSScreen-12-(-(12*64)+1)		; 10
+	ld	a,$20				; 7
+	ld	c,a				; 4
+	inc	hl				; 6 waste
+	dec	hl				; 6 waste
+fastCopyAgain:
+	ld	b,64				; 7
+	inc	c				; 4
+	ld	de,-(12*64)+1			; 10
+	out	($10),a				; 11
+	add	hl,de				; 11
+	ld	de,10				; 10
+fastCopyLoop:
+	add	hl,de				; 11
+	inc	hl				; 6 waste
+	inc	hl				; 6 waste
+	inc	de				; 6
+	ld	a,(hl)				; 7
+	out	($11),a				; 11
+	dec	de				; 6
+	djnz	fastCopyLoop			; 13/8
+	ld	a,c				; 4
+	cp	$2B+1				; 7
+	jr	nz,fastCopyAgain		; 10/1
+    ei
+    pop bc  \ pop af  \ pop de  \ pop hl
+	ret					; 10
+
+
+;-------------------------------------------------------------------------------
+;-------------------------------------------------------------------------------
+;Interrupt installer and handler.
+;Destroys all registers.
+;
+installInterrupt:
+    di
+    ;Configure interrupt mode, install vector table, and install interrupt
+    ld  hl,saveSScreen_vector
+    ld  a,h
+    ld  i,a
+    im  2
+    ld  de,saveSScreen_vector + 1
+    ld  bc,256
+    ld  (hl), hi(saveSScreen_int)
+    ldir
+    ld  hl,interrupt_start
+    ld  de,saveSScreen_int
+    ld  bc,interrupt_end - interrupt_start
+    ldir
+    ;Finish interrupt port configuration by executing first interrupt
+    jp  saveSScreen_int
+
+interrupt_start:
+.relocate(saveSScreen_int)
+    di
+    push af
+    in  a,(4)
+    bit 3,a
+    jr  z,_
+    ld  a,(basepage)
+    out (6),a
+    jp  forceAppClose           ;Must be located on first page of app.
+_:  ld  a,%00001000 \ out (3),a ;acknowledge and disable
+    ld  a,%00001011 \ out (3),a ;enable 1st timer and ON key
+    ld  a,%00000110 \ out (4),a ;interrup speed ~108Hz
+    push hl
+    ld  hl,intcounter
+    inc (hl)
+    inc hl  ;waittimer
+    dec (hl)
+    inc hl  ;keytimer
+    dec (hl)
+    in  a,(1)
+    inc a
+    jr  nz,+_
+    ld  (hl),KEY_LONG_INTERVAL
+_:  pop hl
+    pop af
+    ret     ;
+.endrelocate
+interrupt_end:
+.assert((interrupt_end-interrupt_start) < (saveSScreen_int_end-saveSScreen_int), "Interrupt allocation insufficient. You must modify saveSScreen_int_end.")
+
+;-------------------------------------------------------------------------------
+;-------------------------------------------------------------------------------
+; Math routines and convenience defines
+;
+;
+
+#define addAtoHL_inline(nn) call addAtoHL_inline_routine \ .db nn
+addAtoHL_inline_routine:
+    ex  (sp),hl
+    ld  a,(hl)
+    ex  (sp),hl
+addAtoHL:
+    add a,L
+    ld  L,a
+    ret nc
+    inc h
+    ret
+
+;from http://map.grauw.nl/sources/external/z80bits.html
+;in:   E=multiplier H=multiplicand
+;out:  HL=product
+;dstr: DE
+multEandH:
+    push bc
+        ld L,0
+        ld d,0
+        sla h
+        jr nc,$+3
+        ld L,e
+        ld b,7
+multEandH_loop:
+        add hl,hl
+        jr nc,$+3
+        add hl,de
+    djnz multEandH_loop
+    pop bc
+    ret
+
+;from http://map.grauw.nl/sources/external/z80bits.html
+;Input: HL = Dividend, C = Divisor, A = 0
+;Output: HL = Quotient, A = Remainder
+divHLandC:
+    ld b,16
+divHLandC_loop:
+    add  hl,hl ; unroll 16 times
+    rla        ; ...
+    cp c       ; ...
+    jr c,$+4   ; ...
+    sub  c     ; ...
+    inc  l     ; ...
+    djnz divHLandC_loop
+    ret
+
+;------LFSR------
+;James Montelongo
+;optimized by Spencer Putt
+;modified by Rodger Weisman for uppper bounding.
+;in:
+; b = upper bound for 8 bit number (exclusive. B=0=256)
+;out:
+; a = 8 bit random number
+; b = 0
+randLFSR:
+    push hl
+        push de
+            push bc
+                ld hl,seed+4
+                ld e,(hl)
+                inc hl
+                ld d,(hl)
+                inc hl
+                ld c,(hl)
+                inc hl
+                ld a,(hl)
+                ld b,a
+                rl e \ rl d
+                rl c \ rla
+                rl e \ rl d
+                rl c \ rla
+                rl e \ rl d
+                rl c \ rla
+                ld h,a
+                rl e \ rl d
+                rl c \ rla
+                xor b
+                rl e \ rl d
+                xor h
+                xor c
+                xor d
+                ld hl,seed+6
+                ld de,seed+7
+                ld bc,7
+                lddr
+                ld (de),a
+            pop bc
+            ld e,a
+            ld d,0
+            ld h,d
+            ld L,d
+            add hl,de   
+            djnz $-1
+            ld a,h
+        pop de
+    pop hl
+    ret
+
+; Form initial seed for LFSR
+;
+initRandLFSR:
+    ld b,8
+    ld hl,seed
+initRandLFSR_loop:
+    ld a,r
+    ld (hl),a
+    inc hl
+    djnz initRandLFSR_loop
+    ret
+
+;Random Number Generator
+;Ion Library Routine by Joe Wingbermuehle
+;Slightly modified.
+random:
+    push hl
+    push de
+    push bc
+    ld  hl,(randData)
+    ld  a,r
+    ld  d,a
+    ld  e,(hl)
+    add hl,de
+    add a,l
+    xor h
+    ld  (randData),hl
+    sbc hl,hl
+    ld  e,a
+    ld  d,h
+random_loop:
+    add hl,de
+    djnz random_loop
+    ld  a,h
+    pop bc
+    pop de
+    pop hl
+    ret
+
+;-------------------------------------------------------------------------------
+;-------------------------------------------------------------------------------
+; File I/O
+;
+
+; Opens the save file. If successful, filepointer will be a nonzero value
+;
+openSaveFile:
+    ld  hl,0
+    ld  (filepointer),hl
+openSaveFile_retry:
+    call findFile
+    jr  nc,openSaveFile_skipcreate
+    ld  hl,savefile_size
+    push hl
+        bcall(_CreateAppVar)
+    pop hl
+    inc de
+    inc de
+    push de
+        ld  L,e
+        ld  H,d
+        inc de
+        dec bc
+        ld  (hl),0
+        ldir
+    pop de
+    ld  hl,saveFileHeader
+    ld  bc,saveFileHeader_end - saveFileHeader
+    ldir
+    jr  openSaveFile_retry
+openSaveFile_skipcreate:
+    ld  a,b
+    or  a
+    jr  z,openSaveFile_skipUnarchive
+    bcall(_Arc_Unarc)
+    jr  openSaveFile_retry
+openSaveFile_skipUnarchive:
+    ex  de,hl   ;HL is now pointer to the file.
+    ld  e,(hl)
+    inc hl
+    ld  d,(hl)
+    inc hl
+    ex  de,hl   ;HL is filesize, DE is start of data stream
+    ld  bc,savefile_size
+    sbc hl,bc
+    jr  nz,openSaveFile_fileCorruptedHandler
+    ld  hl,saveFileHeader
+    ld  b,saveFileHeader_end - saveFileHeader
+    push de
+        call strcmp
+    pop hl
+    jr  nz,openSaveFile_fileCorruptedHandler
+    ld  (filepointer),hl
+    ret
+
+; Default action on detecting something wrong is to delete the bad file
+; then start over again. You'll want to do something else later. Someday.
+openSaveFile_fileCorruptedHandler:
+    call findFile
+    bcall(_DelVarArc)
+    jr  openSaveFile_retry
+
+; Attempts to put away the save file by archiving it.
+;
+closeSaveFile:
+    ld  hl,(filepointer)
+    ld  a,L
+    or  h
+    ret z   ;do not attempt to close a file that did not open.
+    sbc hl,hl
+    ld  (filepointer),hl
+    call findFile
+    ret c   ;no file to close
+    ld  a,b
+    or  a
+    ret nz  ;file already closed (archived)
+    bcall(_Arc_Unarc)
+    ret
+
+findFile:
+    ld  hl,saveFileName
+    rst 20h
+    bcall(_ChkFindSym)
+    ret
+
+saveFileHeader:
+.db "ETS1"
+saveFileHeader_end:
+saveFileName:
+.db $15,"EToRSave",0
+
+;-------------------------------------------------------------------------------
+;-------------------------------------------------------------------------------
+; Keyboard I/O
+;
+
+;Returns: A = immediate key read
+directKeyread:
+    di
+    ld  a,$FF
+    out (1),a
+    ex  (sp),hl
+    ex  (sp),hl
+    ld  a,$FE & $BF  ;top rows and dpad groups.
+    out (1),a
+    ex  (sp),hl
+    ex  (sp),hl
+    in  a,(1)
+    ei
+    ret
+
+;Returns: A = key read ($FF if no key pressed, or not repeat yet)
+debouncedKeyread:
+    push hl
+    call directKeyread
+    ld  hl,curkey
+    ld  (hl),a
+    dec hl      ;prevkey
+    cp  $FF
+    jr  z,debouncedKeyread_resetkey         ;reset prevkey and emit empty.
+    cp  (hl)    ;A=curkey, (HL)=prevkey
+    dec hl      ;keydelay
+    jr  nz,debouncedKeyread_commitnewkey    ;commit new key if key mismatch.
+    bit 7,(hl)  ;check if delay counter has gone negative.
+    jr  z,debouncedKeyread_emitemptykey     ;timer not expire. Emit empty.
+    ld  (hl),KEY_SHORT_INTERVAL ;held key. Quicker repeat, emit key.
+    pop hl
+    ret
+debouncedKeyread_commitnewkey:
+    ld  (hl),KEY_LONG_INTERVAL  ;New key. Set timer to long initial wait.
+    inc hl      ;prevkey
+    ld  (hl),a  ;set prevkey to new key to prevent immediate repeat.
+    pop hl
+    ret
+debouncedKeyread_resetkey:
+    ld  (hl),a              ;If key released, prevkey should also reset.
+debouncedKeyread_emitemptykey:
+    ld  a,$FF
+    pop hl
+    ret
+
+;Blocks until key is released.
+keyRelease:
+    call directKeyread
+    inc a
+    jr  nz,keyRelease
+    ret
+
+;Blocks until key is released, then pressed.
+;Returns: A= key pressed
+keyReleaseThenWait:
+    call keyRelease
+keyWait:
+    call debouncedKeyread
+    inc a
+    jr  z,keyWait
+    dec a
+    ret
+
+
+;-------------------------------------------------------------------------------
+;-------------------------------------------------------------------------------
+; Data utilities
+;
+;
+
+;Compares values in (HL) and (DE) by B bytes, stopping if a mismatch is found.
+;Flags: NZ=mismatch, Z=match
+strcmp:
+    ld  a,(de)
+    cp  (hl)
+    inc de
+    inc hl
+    ret nz
+    djnz strcmp
+    ret
+
+
+
+
+

@@ -1,12 +1,27 @@
 ;Tools used to consolidate functionality and make source easier to read
 ;TODO: figure out a way to do use count for optimiztion purposes later
+;NOTE: Things I learned:
+;1. If you do something like mymacro("label"), you have freedom.
+;   - #define STRINGDEF eval(name)
+;   - #define LABELDEF concat(name)
+;   - STRINGDEF shows as a string in cases of .echo
+;   - LABELDEF converts that to a label. It still has to evaluate to something,
+;       which you may do inside the macro.
+;   - Using concat() in this way lets you construct your own labels. 
+;   - concat() can also be used in other ways. Need to figure more on this.
+;   - So far, I've got .varloc and .branch, each of which do something different
+;
 
 #define getpage(adr) ((adr>>16)&$FF)+0
 #define lo(adr) (adr&$FF)+0
-#define hi(adr) ((adr>>8))&$FF)+0
+#define hi(adr) ((adr>>8)&$FF)+0
 
-;Use this right before the first code (executable) line in your app.
-;Execution of the 
+;Use this right before the first executable line in your app.
+;This macro initis pagination for multipage apps, sets origin to $4000, and
+;pastes a minimal application header. Code begins execution immediately
+;following this macro's invocation.
+;NOTE: The app name is hard-coded into this header. Be aware of that if you
+;       need to use these macros for your own use!
 #macro initapp()
     #ifdef APP_PAGE
         .error "You may not init an app more than once."
@@ -45,13 +60,14 @@
         .error "Page ",APP_PAGE," ran out of space, overran by ",$-$8000," bytes."
     #endif
     #define APP_PAGE eval(APP_PAGE+1)
-    .echo "Page ",APP_PAGE," started. Previous page had ",APP_PAGE_FREE_SPACE," bytes leftover."
+    .echo "Page ",APP_PAGE," started. Previous page size ",($&$0000FFFF)-$4000 ," with ",APP_PAGE_FREE_SPACE," bytes leftover."
     .block APP_PAGE_FREE_SPACE
     .org $4000 + ($10000 * APP_PAGE)
 #endmacro
 
 ;It's not necessary to end the app with this, but it does provide final page
-;validation
+;validation and warns you in case you run into that edge case where you
+;can't sign the app due to insufficient space on the final page.
 #macro endapp()
     #ifndef APP_PAGE
         .error "You must first initialize the app via initapp()"
@@ -62,7 +78,7 @@
     #if APP_PAGE_FREE_SPACE < 0
         .error "Page ",APP_PAGE," ran out of space, overran by ",$-$8000," bytes."
     #endif
-    .echo "Page ",APP_PAGE," finalized. This page had ",APP_PAGE_FREE_SPACE," bytes leftover."
+    .echo "Page ",APP_PAGE," finalized. This page size ",($&$0000FFFF)-$4000, " with ",APP_PAGE_FREE_SPACE," bytes leftover."
     .echo "App has ",APP_PAGE+1," page(s). Total leftover space: ",APP_TOTAL_FREE_SPACE," bytes."
     #if APP_PAGE_FREE_SPACE < 70
         .warn "Possibly insufficient space remaining for app signature."
@@ -92,17 +108,39 @@
     ldir
 #endmacro
 
-#macro setvarbase(name)
-    #define VAR_CURBASE eval(name + 0)
+#macro varloc(name)
+    #define VAR_STARTLABEL eval(name)
+    ;.echo "Name: ",VAR_STARTLABEL
+    #define VAR_STARTNAME concat(name)
+    #define VAR_STARTBASE eval(VAR_STARTNAME + 0)
+    #define VAR_CURBASE eval(VAR_STARTNAME + 0)
 #endmacro
 
-#macro var(name,size)
+#macro var(size)
     #ifndef VAR_CURBASE
-        .error "Error: Variable declared with no base location. Use setvarbase()"
+        .error "Variable declared with no base location. Use varloc()"
     #endif
-    name    .equ    VAR_CURBASE
+    .equ    VAR_CURBASE
     #define VAR_CURBASE eval(VAR_CURBASE + size)
 #endmacro
+
+#macro varvalidate(size_limit)
+    #ifndef VAR_CURBASE
+        .error "Attempted validation with no base location. Use varloc()"
+    #endif
+    #define VAR_ENDSIZE eval(size_limit-(VAR_CURBASE-VAR_STARTBASE))
+    #if VAR_ENDSIZE < 0
+        .error "Overran ", VAR_STARTLABEL ," by ", -VAR_ENDSIZE ," bytes."
+    #endif
+    .echo "Validated ", VAR_STARTLABEL ,", leftover bytes: ", VAR_ENDSIZE
+    #undef VAR_STARTLABEL
+    #undef VAR_STARTNAME
+    #undef VAR_STARTBASE
+    #undef VAR_CURBASE
+    #undef VAR_ENDSIZE
+#endmacro
+
+
 
 #macro show_stats()
     .echo "--- Displaying macro use statistics block ---"
@@ -113,7 +151,25 @@
     #endif
 #endmacro
 
-;Relocate macros transcribed from relocate.inc
+;Relocate macros transcribed from relocate.inc.
+;These form relocatable blocks; their purpose being that any code or macro
+;within that relies on $ for evaluation will have a new origin. The actual
+;location is still within the app, so you'll need to copy the relocatable
+;code at runtime. Make sure you have the appropriate labeling. Example:
+;
+;myRoutine_blockstart:
+;relocate(appbackupscreen)
+;myRoutine:
+;   relocatable code goes here
+;endrelocate()
+;myRoutine_blockend:
+;...
+;moveMyCodeRoutine:
+;   ld  hl,myRoutine_blockstart
+;   ld  de,appbackupscreen      ;(myRoutine is fine too since they match in this example)
+;   ld  bc,myRoutine_blockend-myRoutine_blockstart
+;   ldir
+;
 #macro relocate(newloc)
     #ifdef APP_RELOCATE_OLD
         .error "You may not nest relocate() blocks."
@@ -132,8 +188,6 @@
         #undef APP_RELOCATE_OLD
     #endif
 #endmacro
-
-
 
 
 ;Use this to create an offpage branch by specifying the destination.
@@ -163,8 +217,16 @@
 #define .branch(lbl) branch(lbl)
 #define .initapp initapp
 #define .nextpage nextpage
+#define .newpage .nextpage
 #define .endapp endapp
 #define .show_stats show_stats
-#define .var(label, size) var(label, size)
+#define .varloc(label) varloc(label)
+#define .var(size) var(size)
+#define .varvalidate(size_limit) varvalidate(size_limit)
 #define .setvarbase(label) setvarbase(label)
 #define .assert(cond, errmsg) assert(cond, errmsg)
+#define .relocate(newloc) relocate(newloc)
+#define .endrelocate() endrelocate()
+
+
+#define MACROS_LOADED

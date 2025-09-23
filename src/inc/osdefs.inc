@@ -1,29 +1,6 @@
+#ifndef OSDEFSET
 ; Contains OS call/environment and hardware-specific defines.
 ;
-
-;---------------------------------------------------------
-; CLEAR EXISTING OSDEFSET
-#ifdef OSDEFSET
-#undef OSDEFSET
-#endif
-
-;---------------------------------------------------------
-; CONFIGURATION FOR BARE METAL INSTALLS
-#ifdef BAREMETAL
-    ;not quite ready for this.
-#define OSDEFSET "BAREMETAL"
-#endif
-
-;---------------------------------------------------------
-; CONFIGURATION FOR TI-83 PLUS CSE
-#ifdef 83PCSE
-    ;also not ready for this.
-#define OSDEFSET "83PCSE"
-#endif
-
-;---------------------------------------------------------
-; If no special configuration, then default to TI-83 Plus.
-#ifndef OSDEFSET
 #define equ .equ
 #define EQU .equ
 
@@ -52,14 +29,15 @@ userMem              EQU  9D95h  ;83/84+SE (non-CSE) start of usermem
 
 ramStart             EQU  8000h  ;256 bytes  ;used by boot code for scratch
 ramCode              EQU  8100h  ;304 bytes  ;used as temp exec for flashwrite
+tempSwapArea         EQU  82A5h  ;323 bytes  ;avoid archiving, etc
 saveSScreen          EQU  86ECh  ;786 bytes
-plotSScreen          EQU  9340h  ;768 bytes
 statVars             EQU  8A3Ah  ;531 bytes  ;use _DelRes to clear/invalidate
 textShadow           EQU  8508h  ;128 bytes
-cmdShadow            EQU  966Eh  ;128 bytes
-tempSwapArea         EQU  82A5h  ;323 bytes  ;avoid archiving, etc
-
 flags                EQU  89F0h
+plotSScreen          EQU  9340h  ;768 bytes
+cmdShadow            EQU  966Eh  ;128 bytes
+appBackUpScreen      EQU  9872h  ;768 bytes
+
 
 OP1                  EQU  8478h  ;11 bytes
 OP2                  EQU  8483h
@@ -97,3 +75,12 @@ dsk_yequ  .equ $EF  ;// 7
 
 #define OSDEFSET "83P"
 #endif
+
+;
+;If you want to have different configurations, set OSDEFSET to a value you want
+;to compare and act against **BEFORE** you #include this file. That way, you can
+;have such configurations as 83+CSE, or an 83+ custom minimal OS setup.
+;
+
+
+
