@@ -12,6 +12,7 @@
 
 
 #define TEMPDATA_SIZE 16
+#define NEWLINE_HEIGHT 7
 
 ;NOTE: Below is a bit of memory wrangling. If this location is altered, you
 ;   must account for the fact that an interrupt vector table and its routine
@@ -41,6 +42,7 @@ filepointer     .var(2)
 tempdata        .var(TEMPDATA_SIZE)  ;Short-lived data goes here. Used in-place.
 textx           .var(1)
 texty           .var(1)
+textxstart      .var(1)
 
 ; -- variables go here
 .varvalidate(saveSScreen_int-saveSScreen_mid)

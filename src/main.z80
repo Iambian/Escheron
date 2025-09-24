@@ -26,10 +26,12 @@ programStart:
     ld  (hl),$FF
     ldir
     call fastCopy
-    ld  hl,$0100
+    ld  hl,$0102
     ld  (textx),hl
-    ld  hl,otherTestString
-    call printString
+;    ld  hl,otherTestString
+;    call printString
+    ld hl,fontTestString
+    call printStringF
     call fastCopy
 
 
@@ -58,7 +60,17 @@ forceAppClose:
     bjump(_JForceCmdNoChar)
 
 otherTestString:
-.db "This is another string.",0
+.db "This is another string..",0
+
+fontTestString:
+.db "\rthe quick brown fox\n"
+.db "jumped over the slow,\n"
+.db "lazy dog.\n"
+.db "SPHINX OF BLACK QUARTZ,\n"
+.db "JUDGE MY VOW.\n"
+.db "1234567890!\n@#$%^&*()-=+",0
+
+
 
 ;.varloc("32")
 ;mylabel1 .var(1)

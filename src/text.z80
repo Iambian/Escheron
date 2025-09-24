@@ -8,6 +8,33 @@ textImageBuffer   .var(8)
 .varvalidate(TEMPDATA_SIZE)
 
 
+printStringF:
+	ld  a,(textx)
+	ld	(textxstart),a
+printStringF_loop:
+	ld	a,(hl)
+	inc hl
+	or	a
+	ret z
+	cp  '\n'
+	jr	nz,+_
+	ld  a,(textxstart)
+	ld	(textx),a
+	ld	a,(texty)
+	add a,NEWLINE_HEIGHT
+	ld	(texty),a
+	jr printStringF_loop
+_:  cp  '\r'
+	jr  nz,+_
+	ld  a,(textx)
+	ld	(textxstart),a
+	jr 	printStringF_loop
+_:	push hl
+		call printChar
+	pop hl
+	jr	printStringF_loop
+
+
 printString:
 	ld	a,(hl)
 	inc hl
@@ -42,6 +69,7 @@ printChar:
 	xor a
 	ld	(de),a
 	inc de
+	res 7,c
 printChar_thinVertSkip:
 	ld	a,c
 	rlca
@@ -102,6 +130,8 @@ printChar_wideDoNotFixWidth:
 		ld  bc,5
 		ldir
 printChar_render:
+		xor a
+		ld	(de),a
 .assert(texty == (textx+1), "Var texty must be immediately after textx")
 		ld	hl,(textx)
 	pop af		;**
@@ -109,7 +139,7 @@ printChar_render:
 	ld  (textx),a
 	ld  a,L
 	ld  L,h
-	ld  b,5
+	ld  b,6
 	ld  ix,textImageBuffer
 	jr  iPutSprite
 
@@ -325,299 +355,143 @@ fontInv:
 	.db %11111111
 
 ;Sourced from the DoorCS software (by Kerm "Martian") and used with permission.
-fontData:
-fontData_start:
-	.db $40,$EE,$E0				;square
-	.db $f6 \ .dw DCSF_GS_ItalN		;$06,$00,$B0,$48,$48,$90	;italN
-	.db $40,$AA,$AE				;u
-	.db $40,$AA,$44				;v
-	.db $40,$AA,$EA				;w
-	.db $48,$CE,$C8				;>
-	.db $40,$00,$00				;3-space
-	.db $f6 \ .dw DCSF_GS_DownArrow	;$06,$00,$70,$F8,$70,$20	;downarrow
-	.db $42,$44,$48				;integral
-	.db $40,$A4,$A0				;passX
-	.db $40,$0E,$AE				;square
-	.db $40,$04,$E4				;cross
-	.db $40,$00,$40				;dot
-	.db $40,$0E,$44				;littleT
-	.db $4E,$42,$C0				;cubed
-	.db $5F,$CE,$CC				;boldF
-	
-	.db $46,$44,$C4				;sqrt
-	.db $f5 \ .dw DCSF_GS_Inv			;$05,$30,$10,$D0,$10,$00	;^-1
-	.db $4C,$24,$E0				;^2
-	.db $40,$24,$8E				;anglesign
-	.db $f5 \ .dw DCSF_GS_Deg			;$05,$60,$90,$90,$60,$00	;degreemark
-	.db $f5 \ .dw DCSF_GS_Rad			;$05,$B0,$C0,$80,$80,$00	;radianmark
-	.db $4E,$44,$00				;upT
-	.db $53,$C3,$0F				;lessthanequal
-	.db $f6 \ .dw DCSF_GS_Equ			;$06,$10,$F8,$20,$F8,$40	;equalsign
-	.db $f5 \ .dw DCSF_GS_Gte			;$05,$C0,$30,$C0,$00,$F0	;greaterthanequal
-	.db $40,$60,$00				;upMinus
-	.db $4E,$8C,$8E				;bigE
-	.db $54,$2F,$24				;rightArrow
-	.db $f6 \ .dw DCSF_GS_L10			;$06,$00,$B8,$C8,$C8,$B8	;little10
-	.db $44,$E4,$44				;uparrow
-	.db $44,$44,$E4				;downarrow
-	
-	.db $20,$00,$00				;spacebar
-	.db $28,$88,$08				;exclMark
-	.db $4A,$AA,$00				;double-quote
-	.db $f6 \ .dw DCSF_GS_nsg			;$06,$50,$F8,$50,$F8,$50	;numberSign
-	.db $f6 \ .dw DCSF_GS_dsg			;$06,$78,$A0,$70,$28,$F0	;dollarsign
-	.db $4A,$24,$8A				;percentSign
-	.db $f5 \ .dw DCSF_GS_amp			;$05,$40,$A0,$40,$A0,$50	;ampersand
-	.db $28,$88,$00				;single-quote
-	.db $34,$88,$84				;openParen
-	.db $38,$44,$48				;closeParen
-	.db $f6 \ .dw DCSF_GS_ast			;asterisk
-	.db $40,$4E,$40				;plusSign
-	.db $30,$04,$48				;comma
-	.db $40,$0E,$00				;minusSign
-	.db $20,$00,$08				;period
-	.db $42,$24,$88				;forwardSlash
-	
-	.db $44,$AA,$A4				;zero
-	.db $44,$C4,$4E				;one
-	.db $4C,$24,$8E				;two
-	.db $4C,$24,$2C				;three
-	.db $48,$AE,$22				;four
-	.db $4E,$8C,$2C				;five
-	.db $46,$8E,$AE				;six
-	.db $4E,$24,$88				;seven
-	.db $4E,$AE,$AE				;eight
-	.db $4E,$AE,$2C				;nine
-	.db $20,$80,$80				;colon
-	.db $30,$40,$48				;semicolon
-	.db $42,$48,$42				;lessthan
-	.db $40,$E0,$E0				;equalto
-	.db $48,$42,$48				;greaterthan
-	.db $4C,$24,$04				;qmark
-	
-	.db $f6 \ .dw DCSF_GS_asg			;$06,$70,$08,$68,$A8,$70	;@sign
-	.db $44,$AE,$AA				;A
-	.db $4C,$AC,$AC				;B
-	.db $46,$88,$86				;C
-	.db $4C,$AA,$AC				;D
-	.db $4E,$8C,$8E				;E
-	.db $4E,$8C,$88				;F
-	.db $46,$8A,$A6				;G
-	.db $4A,$AE,$AA				;H
-	.db $4E,$44,$4E				;I
-	.db $42,$22,$AE				;J
-	.db $4A,$AC,$AA				;K
-	.db $48,$88,$8E				;L
-	.db $4A,$EE,$AA				;M
-	.db $4C,$AA,$AA				;N
-	.db $4E,$AA,$AE				;O
-	
-	.db $4C,$AC,$88				;P
-	.db $4E,$AA,$E6				;Q
-	.db $4C,$AC,$AA				;R
-	.db $46,$84,$2C				;S
-	.db $4E,$44,$44				;T
-	.db $4A,$AA,$AE				;U
-	.db $4A,$AA,$44				;V
-	.db $4A,$AE,$EA				;W
-	.db $4A,$A4,$AA				;X
-	.db $4A,$A4,$44				;Y
-	.db $4E,$24,$8E				;Z
-	.db $44,$AE,$A4				;theta
-	.db $48,$84,$22				;backslash
-	.db $3C,$44,$4C				;closeBracket
-	.db $44,$A0,$00				;tothePower
-	.db $40,$00,$0E				;underscore
-	
-	.db $38,$40,$00				;backquote
-	.db $40,$6A,$A6				;a
-	.db $48,$CA,$AC				;b
-	.db $40,$68,$86				;c
-	.db $42,$6A,$A6				;d
-	.db $40,$4A,$C6				;e
-	.db $34,$8C,$88				;f
-	.db $46,$A6,$2C				;g
-	.db $48,$CA,$AA				;h
-	.db $28,$08,$88				;i
-	.db $34,$04,$4C				;j
-	.db $48,$8A,$CA				;k
-	.db $38,$88,$84				;l
-	.db $f6 \ .dw DCSF_GS_m			;$06,$00,$D0,$A8,$A8,$88	;m
-	.db $40,$CA,$AA				;n
-	.db $40,$4A,$A4				;o
-	
-	.db $40,$CA,$C8				;p
-	.db $40,$6A,$62				;q
-	.db $40,$AC,$88				;r
-	.db $30,$C8,$4C				;s
-	.db $38,$C8,$84				;t
-	.db $40,$AA,$AE				;u
-	.db $40,$AA,$44				;v
-	.db $f6 \ .dw DCSF_GS_wl			;$06,$00,$88,$A8,$A8,$50	;w
-	.db $40,$A4,$4A				;x
-	.db $40,$AA,$48				;y
-	.db $f5 \ .dw DCSF_GS_zl			;$05,$00,$F0,$20,$40,$F0	;z
-	.db $46,$48,$46				;{
-	.db $28,$88,$88				;|
-	.db $4C,$42,$4C				;}
-	.db $f5 \ .dw DCSF_GS_tilde		;$05,$00,$50,$A0,$00,$00	;~
-	.db 30,$0E,$0E				;-= 
+fontData .equ $-(' '*3)
+fontData_start .equ fontData
+ ; .db $00,$00,$00				;CHR_0 0 0
+ ; .db $00,$00,$00				;CHR_1 0 0
+ ; .db $00,$00,$00				;CHR_2 0 0
+ ; .db $00,$00,$00				;CHR_3 0 0
+ ; .db $00,$00,$00				;CHR_4 0 0
+ ; .db $00,$00,$00				;CHR_5 0 0
+ ; .db $00,$00,$00				;CHR_6 0 0
+ ; .db $00,$00,$00				;CHR_7 0 0
+ ; .db $00,$00,$00				;CHR_8 0 0
+ ; .db $00,$00,$00				;CHR_9 0 0
+ ; .db $00,$00,$00				;CHR_10 0 0
+ ; .db $00,$00,$00				;CHR_11 0 0
+ ; .db $00,$00,$00				;CHR_12 0 0
+ ; .db $00,$00,$00				;CHR_13 0 0
+ ; .db $00,$00,$00				;CHR_14 0 0
+ ; .db $00,$00,$00				;CHR_15 0 0
+ ; .db $00,$00,$00				;CHR_16 0 0
+ ; .db $00,$00,$00				;CHR_17 0 0
+ ; .db $00,$00,$00				;CHR_18 0 0
+ ; .db $00,$00,$00				;CHR_19 0 0
+ ; .db $00,$00,$00				;CHR_20 0 0
+ ; .db $00,$00,$00				;CHR_21 0 0
+ ; .db $00,$00,$00				;CHR_22 0 0
+ ; .db $00,$00,$00				;CHR_23 0 0
+ ; .db $00,$00,$00				;CHR_24 0 0
+ ; .db $00,$00,$00				;CHR_25 0 0
+ ; .db $00,$00,$00				;CHR_26 0 0
+ ; .db $00,$00,$00				;CHR_27 0 0
+ ; .db $00,$00,$00				;CHR_28 0 0
+ ; .db $00,$00,$00				;CHR_29 0 0
+ ; .db $00,$00,$00				;CHR_30 0 0
+ ; .db $00,$00,$00				;CHR_31 0 0
+ .db $20,$00,$00				;spacebar 0 0
+ .db $42,$64,$08				;exclMark 0 0
+ .db $4a,$a0,$00				;doublequote 0 0
+ .db $F6 \ .dw DCSF_GS_nsg	;DCSF_GS_nsg 0 0
+ .db $F6 \ .dw DCSF_GS_dsg	;DCSF_GS_dsg 0 0
+ .db $4a,$24,$8a				;percentSign 0 0
+ .db $54,$a4,$a5				;DCSF_GS_amp 0 0
+ .db $28,$80,$00				;singlequote 0 0
+ .db $34,$88,$84				;openParen 0 0
+ .db $38,$44,$48				;closeParen 0 0
+ .db $F6 \ .dw DCSF_GS_ast	;DCSF_GS_ast 0 0
+ .db $40,$4e,$40				;plusSign 0 0
+ .db $30,$04,$48				;comma 0 0
+ .db $40,$0e,$00				;minusSign 0 0
+ .db $20,$00,$08				;period 0 0
+ .db $42,$24,$88				;forwardSlash 0 0
+ .db $44,$aa,$a4				;zero 0 0
+ .db $44,$c4,$4e				;one 0 0
+ .db $44,$a2,$4e				;two 0 0
+ .db $4c,$26,$2c				;three 0 0
+ .db $42,$ae,$22				;four 0 0
+ .db $4e,$86,$2e				;five 0 0
+ .db $46,$8e,$ae				;six 0 0
+ .db $4e,$24,$88				;seven 0 0
+ .db $46,$a4,$ae				;eight 0 0
+ .db $46,$ae,$2c				;nine 0 0
+ .db $20,$80,$80				;colon 0 0
+ .db $30,$40,$48				;semicolon 0 0
+ .db $42,$48,$42				;lessthan 0 0
+ .db $40,$e0,$e0				;equalto 0 0
+ .db $48,$42,$48				;greaterthan 0 0
+ .db $46,$a4,$04				;qmark 0 0
+ .db $F6 \ .dw DCSF_GS_asg	;DCSF_GS_asg 0 0
+ .db $44,$ae,$aa				;A 0 0
+ .db $4c,$ae,$ae				;B 0 0
+ .db $46,$88,$86				;C 0 0
+ .db $4c,$aa,$ac				;D 0 0
+ .db $4e,$8c,$8e				;E 0 0
+ .db $4e,$8c,$88				;F 0 0
+ .db $46,$8a,$a6				;G 0 0
+ .db $4a,$ae,$aa				;H 0 0
+ .db $4e,$44,$4e				;I 0 0
+ .db $46,$22,$ac				;J 0 0
+ .db $4a,$ac,$ca				;K 0 0
+ .db $48,$88,$ae				;L 0 0
+ .db $4a,$ee,$aa				;M 0 0
+ .db $4c,$aa,$aa				;N 0 0
+ .db $44,$aa,$a4				;O 0 0
+ .db $4c,$aa,$c8				;P 0 0
+ .db $44,$aa,$e6				;Q 0 0
+ .db $4c,$ac,$aa				;R 0 0
+ .db $46,$86,$2c				;S 0 0
+ .db $4e,$44,$44				;T 0 0
+ .db $4a,$aa,$a6				;U 0 0
+ .db $4a,$aa,$a4				;V 0 0
+ .db $4a,$ae,$ea				;W 0 0
+ .db $4a,$c4,$6a				;X 0 0
+ .db $4a,$a6,$44				;Y 0 0
+ .db $4e,$24,$8e				;Z 0 0
+ .db $44,$ae,$a4				;theta 0 0
+ .db $48,$84,$22				;backslash 0 0
+ .db $3c,$44,$4c				;closeBracket 0 0
+ .db $44,$a0,$00				;tothePower 0 0
+ .db $40,$00,$0e				;underscore 0 0
+ .db $3c,$48,$00				;backquote 0 0
+ .db $40,$c6,$ae				;a 0 0
+ .db $48,$8c,$ae				;b 0 0
+ .db $40,$68,$86				;c 0 0
+ .db $42,$26,$ae				;d 0 0
+ .db $40,$4a,$ce				;e 0 0
+ .db $34,$8c,$88				;f 0 0
+ .db $c6,$ae,$2c				;g 1 0
+ .db $48,$8c,$aa				;h 0 0
+ .db $28,$08,$88				;i 0 0
+ .db $b4,$04,$48				;j 1 0
+ .db $48,$ac,$ca				;k 0 0
+ .db $28,$88,$88				;l 0 0
+ .db $40,$ae,$aa				;DCSF_GS_m 0 0
+ .db $40,$ca,$aa				;n 0 0
+ .db $40,$6a,$ac				;o 0 0
+ .db $cc,$ae,$88				;p 1 0
+ .db $c6,$ae,$22				;q 1 0
+ .db $40,$ac,$88				;r 0 0
+ .db $40,$68,$6e				;s 0 0
+ .db $38,$c8,$84				;t 0 0
+ .db $40,$aa,$a6				;u 0 0
+ .db $40,$aa,$a4				;v 0 0
+ .db $40,$aa,$ea				;DCSF_GS_wl 0 0
+ .db $40,$a4,$4a				;x 0 0
+ .db $ca,$a6,$24				;y 1 0
+ .db $40,$e2,$4e				;DCSF_GS_zl 0 0
+ .db $46,$48,$46				;CHR_123 0 0
+ .db $28,$88,$88				;CHR_124 0 0
+ .db $4c,$42,$4c				;CHR_125 0 0
+ .db $50,$5a,$00				;DCSF_GS_tilde 0 0
+ .db $1e,$0e,$0e				;CHR_127 0 0
+ .db $34,$e0,$00				;upArrow 0 0
+ .db $30,$00,$e4				;downArrow 0 0
+DCSF_GS_nsg			.db $50,$f8,$50,$f8,$50	;
+DCSF_GS_dsg			.db $78,$a0,$70,$28,$f0	;
+DCSF_GS_ast			.db $20,$a8,$70,$a8,$20	;
+DCSF_GS_asg			.db $70,$08,$68,$a8,$70	;
 
-	.db $4E,$AA,$AE				;zero
-	.db $44,$C4,$4E				;one
-	.db $4C,$24,$8E				;two
-	.db $4C,$24,$2C				;three
-	.db $48,$AE,$22				;four
-	.db $4E,$8C,$2C				;five
-	.db $45,$8E,$AE				;six
-	.db $4E,$24,$88				;seven
-	.db $4E,$AE,$AE				;eight
-	.db $4E,$AE,$2C				;nine
-	.db $f5 \ .dw DCSF_GS_Aprime		;$05,$20,$60,$90,$F0,$90	;A'
-	.db $f5 \ .dw DCSF_GS_Aacute		;$05,$40,$60,$90,$F0,$90	;A`
-	.db $f5 \ .dw DCSF_GS_Astar		;$05,$60,$60,$90,$F0,$90	;A*
-	.db $f5 \ .dw DCSF_GS_Aumlaut		;$05,$90,$60,$90,$F0,$90	;A:
-	.db $f5 \ .dw DCSF_GS_alprime		;$05,$20,$00,$60,$A0,$50	;a'
-	.db $f5 \ .dw DCSF_GS_alacute		;$05,$40,$00,$60,$A0,$50	;a`
-	
-	.db $f5 \ .dw DCSF_GS_alhat		;$05,$40,$A0,$60,$A0,$50	;a^
-	.db $f5 \ .dw DCSF_GS_alumlaut		;$05,$A0,$00,$60,$A0,$50	;a:
-	.db $f5 \ .dw DCSF_GS_Eprime		;$05,$80,$70,$60,$40,$70	;E'
-	.db $f5 \ .dw DCSF_GS_Eacute		;$05,$10,$E0,$C0,$80,$E0	;E`
-	.db $44,$0E,$CE   ;E^
-	.db $f5 \ .dw DCSF_GS_Eumlaut		;$05,$A0,$E0,$C0,$80,$E0	;E:
-	.db $42,$4C,$A6   ;e'
-	.db $48,$4C,$A6   ;e`
-	.db $44,$4C,$A6   ;e^
-	.db $4A,$4C,$A6   ;e:
-	.db $42,$E4,$4E   ;I'
-	.db $48,$E4,$4E   ;I`
-	.db $44,$E4,$4E   ;I^
-	.db $4A,$E4,$4E   ;I:
-	.db $42,$0C,$4E   ;i'
-	.db $48,$0C,$4E   ;i`
- 	
-	.db $44,$0C,$4E				;i^
-	.db $4A,$0C,$4E				;i:
-	.db $f6 \ .dw DCSF_GS_Oprime		;$06,$10,$70,$88,$88,$70	;O'
-	.db $f6 \ .dw DCSF_GS_Oacute		;$06,$40,$70,$88,$88,$70	;O`
-	.db $f6 \ .dw DCSF_GS_Ohat		;$06,$20,$70,$88,$88,$70	;O^
-	.db $f6 \ .dw DCSF_GS_Oumlaut		;$06,$50,$70,$88,$88,$70	;O:
-	.db $f6 \ .dw DCSF_GS_olprime		;$06,$10,$00,$70,$88,$70	;o'
-	.db $f6 \ .dw DCSF_GS_olacute		;$06,$40,$00,$70,$88,$70	;o`
-	.db $f6 \ .dw DCSF_GS_olhat		;$06,$20,$00,$70,$88,$70	;o^
-	.db $f6 \ .dw DCSF_GS_olumlaut	;$06,$50,$00,$70,$88,$70	;o:
-	.db $42,$4A,$AA				;U'
-	.db $48,$4A,$AA				;U`
-	.db $44,$A0,$AA				;U^
-	.db $4A,$0A,$AA				;U:
-	.db $f5 \ .dw DCSF_GS_ulprime		;$05,$20,$00,$A0,$A0,$50	;u'
-	.db $f5 \ .dw DCSF_GS_ulacute		;$05,$80,$00,$A0,$A0,$50	;u`
-
-	.db $f5 \ .dw DCSF_GS_ulhat		;$05,$40,$00,$A0,$A0,$50	;u^
-	.db $f5 \ .dw DCSF_GS_ulumlaut		;$05,$A0,$00,$A0,$A0,$50	;u:
-	.db $46,$88,$6C				;C5
-	.db $40,$68,$6C				;c5
-	.db $f5 \ .dw DCSF_GS_5blank		;$05,$00,$00,$00,$00,$00	;N~
-	.db $f5 \ .dw DCSF_GS_5blank		;$05,$00,$00,$00,$00,$00	;n~
-	.db $34,$80,$00				;'
-	.db $38,$40,$00				;`
-	.db $4A,$00,$00				;^:
-	.db $44,$04,$86				;^?
-	.db $28,$08,$88				;^!
-	.db $f5 \ .dw DCSF_GS_alpha		;$05,$00,$50,$A0,$A0,$50	;alpha
-	.db $44,$AC,$AC				;beta
-	.db $f5 \ .dw DCSF_GS_gamma		;$05,$10,$50,$A0,$20,$20	;gamma
-	.db $f6 \ .dw DCSF_GS_delta		;$06,$00,$20,$50,$88,$F8	;delta
-	.db $44,$84,$A4   			;?? 
-	
-	.db $46,$8F,$86				;epsilon
-	.db $3C,$88,$8C				;[
-	.db $48,$44,$AA				;sigma
-	.db $f5 \ .dw DCSF_GS_lmicro		;$05,$00,$A0,$A0,$F0,$80	;micro
-	.db $f6 \ .dw DCSF_GS_lpi			;$06,$00,$F8,$50,$50,$50	;lpi
-	.db $52,$56,$48				;psi
-	.db $5F,$42,$4F				;Sigma
-	.db $f5 \ .dw DCSF_GS_lhmmm		;$05,$00,$70,$A0,$A0,$40	;hmmm
-	.db $f5 \ .dw DCSF_GS_ltau		;$05,$00,$E0,$40,$50,$20	;tau
-	.db $f6 \ .dw DCSF_GS_Psi			;$06,$20,$70,$A8,$70,$20	;Psi
-	.db $f6 \ .dw DCSF_GS_Omega		;$06,$70,$88,$88,$50,$D8	;Omega
-	.db $4E,$0A,$4A				;x-bar
-	.db $4E,$0A,$48				;y-bar
-	.db $4A,$4A,$00				;^x
-	.db $40,$00,$0E				;underscore
-	.db $42,$6E,$62				;<| 
-	
-	.db $30,$CC,$00
-	.db $42,$24,88
-	.db $30,$0C,$00
-	.db $4C,$24,$E0
-	.db $44,$A4,$00
-	.db $4E,$42,$C0
-	.db $f5 \ .dw DCSF_GS_5blank		;CR
-	.db $50,$00,$00
-	.db $48,$08,$AC
-	.db $44,$C8,$CA
-	.db $48,$A4,$A2             ;New Line!
-	.db $00,$00,$00             ;Mod
-	.db $40,$4A,$C6
-	.db $30,$88,$8E
-	.db $3C,$AA,$AA
-	.db $4A,$55,$55				;scriptcrampedN
-	.db $3C,$8C,$8C				;crampedE
-	
-	.db $34,$EE,$E4				;formulaDiamond
-
-DCSF_GS_ItalN:		.db $00,$B0,$48,$48,$90	;italN
-DCSF_GS_DownArrow:	.db $00,$70,$F8,$70,$20	;downarrow
-DCSF_GS_Inv			.db $30,$10,$D0,$10,$00	;^-1
-DCSF_GS_Deg			.db $60,$90,$90,$60,$00	;degreemark
-DCSF_GS_Rad			.db $B0,$C0,$80,$80,$00	;radianmark
-DCSF_GS_Equ			.db $10,$F8,$20,$F8,$40	;equalsign
-DCSF_GS_Gte			.db $C0,$30,$C0,$00,$F0	;greaterthanequal
-DCSF_GS_L10			.db $00,$B8,$C8,$C8,$B8	;little10
-DCSF_GS_nsg			.db $50,$F8,$50,$F8,$50	;numberSign
-DCSF_GS_dsg			.db $78,$A0,$70,$28,$F0	;dollarsign
-DCSF_GS_amp			.db $40,$A0,$40,$A0,$50	;ampersand
-DCSF_GS_ast			.db $20,$A8,$70,$A8,$20	;asterisk
-DCSF_GS_asg			.db $70,$08,$68,$A8,$70	;@sign
-DCSF_GS_m			.db $00,$D0,$A8,$A8,$88	;m
-DCSF_GS_wl			.db $00,$88,$A8,$A8,$50	;w
-DCSF_GS_zl			.db $00,$F0,$20,$40,$F0	;z
-DCSF_GS_tilde		.db $00,$50,$A0,$00,$00	;~
-DCSF_GS_Aprime		.db $20,$60,$90,$F0,$90	;A'
-DCSF_GS_Aacute		.db $40,$60,$90,$F0,$90	;A`
-DCSF_GS_Astar		.db $60,$60,$90,$F0,$90	;A*
-DCSF_GS_Aumlaut		.db $90,$60,$90,$F0,$90	;A:
-DCSF_GS_alprime		.db $20,$00,$60,$A0,$50	;a'
-DCSF_GS_alacute		.db $40,$00,$60,$A0,$50	;a`
-DCSF_GS_alhat		.db $40,$A0,$60,$A0,$50	;a^
-DCSF_GS_alumlaut		.db $A0,$00,$60,$A0,$50	;a:
-DCSF_GS_Eprime		.db $80,$70,$60,$40,$70	;E'
-DCSF_GS_Eacute		.db $10,$E0,$C0,$80,$E0	;E`
-DCSF_GS_Eumlaut		.db $A0,$E0,$C0,$80,$E0	;E:
-DCSF_GS_Oprime		.db $10,$70,$88,$88,$70	;O'
-DCSF_GS_Oacute		.db $40,$70,$88,$88,$70	;O`
-DCSF_GS_Ohat		.db $20,$70,$88,$88,$70	;O^
-DCSF_GS_Oumlaut		.db $50,$70,$88,$88,$70	;O:
-DCSF_GS_olprime		.db $10,$00,$70,$88,$70	;o'
-DCSF_GS_olacute		.db $40,$00,$70,$88,$70	;o`
-DCSF_GS_olhat		.db $20,$00,$70,$88,$70	;o^
-DCSF_GS_olumlaut	.db $50,$00,$70,$88,$70	;o:
-DCSF_GS_ulprime		.db $20,$00,$A0,$A0,$50	;u'
-DCSF_GS_ulacute		.db $80,$00,$A0,$A0,$50	;u`
-DCSF_GS_ulhat		.db $40,$00,$A0,$A0,$50	;u^
-DCSF_GS_ulumlaut	.db $A0,$00,$A0,$A0,$50	;u:
-DCSF_GS_5blank		.db $00,$00,$00,$00,$00	;N~
-DCSF_GS_alpha		.db $00,$50,$A0,$A0,$50	;alpha
-DCSF_GS_gamma		.db $10,$50,$A0,$20,$20	;gamma
-DCSF_GS_delta		.db $00,$20,$50,$88,$F8	;delta
-DCSF_GS_lmicro		.db $00,$A0,$A0,$F0,$80	;micro
-DCSF_GS_lpi			.db $00,$F8,$50,$50,$50	;lpi
-DCSF_GS_lhmmm		.db $00,$70,$A0,$A0,$40	;hmmm
-DCSF_GS_ltau		.db $00,$E0,$40,$50,$20	;tau
-DCSF_GS_Psi			.db $20,$70,$A8,$70,$20	;Psi
-DCSF_GS_Omega		.db $70,$88,$88,$50,$D8	;Omega
 fontData_end:
 
 
