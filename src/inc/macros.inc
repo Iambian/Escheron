@@ -122,6 +122,7 @@
     #endif
     .equ    VAR_CURBASE
     #define VAR_CURBASE eval(VAR_CURBASE + size)
+    #define VAR_CURSIZE eval(size)
 #endmacro
 
 #macro varvalidate(size_limit)
@@ -138,6 +139,7 @@
     #undef VAR_STARTBASE
     #undef VAR_CURBASE
     #undef VAR_ENDSIZE
+    #define VAR_VALIDATION_SIZE eval(size_limit)
 #endmacro
 
 

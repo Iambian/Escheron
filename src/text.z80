@@ -3,44 +3,122 @@
 ;
 
 
+.varloc("tempdata")
+textImageBuffer   .var(8)
+.varvalidate(TEMPDATA_SIZE)
 
 
+printString:
+	ld	a,(hl)
+	inc hl
+	or  a
+	ret z
+	push hl
+		call printChar
+	pop hl
+	jr  printString
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+printChar:
+	ld  de,textImageBuffer
+    ld  L,a
+    ld  h,0
+    ld  c,L
+    ld  b,h
+    add hl,hl
+    add hl,bc   ;multiply by 3 to arrive at fixed-width font offset.
+    ld  bc,fontData
+    add hl,bc
+    ld  c,(hl)  ;Retrieve first byte of font data.
+    ld  a,$F0 
+    and c
+    cp  $F0
+	jr	z,printChar_wide
+	;Size is in high nibble of C (and A). First byte of stream in low nibble.
+	;Size for thin character cannot be higher than 4, so testing bit 7 for
+	;vertical shift is safe. Size still needs to be preserved.
+	add a,a
+	jr	nc,printChar_thinVertSkip
+	xor a
+	ld	(de),a
+	inc de
+printChar_thinVertSkip:
+	ld	a,c
+	rlca
+	rlca
+	rlca
+	rlca
+	ld  c,a
+	and $F0
+	ld	(de),a
+	inc de
+	;Preserving size before it is destroyed
+	ld	a,c
+	and $0F
+	push af		;**
+		ld  b,2
+printChar_thinLoop:
+		inc hl
+		ld	c,(hl)
+		ld  a,$F0
+		and c
+		ld	(de),a
+		inc de
+		ld  a,c
+		rlca
+		rlca
+		rlca
+		rlca
+		and $F0
+		ld  (de),a
+		inc de
+		djnz printChar_thinLoop
+		jr  printChar_render
+printChar_wide:
+	;Size is in low nibble of C. It is technically possible for a wide char to
+	;be 8 wide, but bit 3 is repurposed for vertical split. None of the
+	;original characters are that wide, but just in case, treat a width of
+	;zero (0) after AND 7 as a width of 8 since wide characters cannot
+	;be zero-width (if they were, they'd be thin characters, not wide. A
+	;deviation from this is considered a formatting error.)
+	bit 3,c
+	jr	nz,printChar_wideVertSkip
+	res 3,c
+	xor a
+	ld  (de),a
+	inc de
+printChar_wideVertSkip:
+	ld  a,c
+	and 7
+	jr	nz,printChar_wideDoNotFixWidth
+	ld	a,8
+printChar_wideDoNotFixWidth:
+	push af		;**
+		inc hl
+		ld  a,(hl)
+		inc hl
+		ld  h,(hl)
+		ld  L,a
+		ld  bc,5
+		ldir
+printChar_render:
+.assert(texty == (textx+1), "Var texty must be immediately after textx")
+		ld	hl,(textx)
+	pop af		;**
+	add a,L
+	ld  (textx),a
+	ld  a,L
+	ld  L,h
+	ld  b,5
+	ld  ix,textImageBuffer
+	jr  iPutSprite
 
 
 
 ; Copied from somewhere but I can't recall where. Probably from the ION library.
 ; Graphical routine. Places 8x8 sprite object onto screen using XOR logic.
 ; B=height L=y A=x IX=sprPtr
-iPutSprite:   
+iPutSprite:
 	ld	e,l
 	ld	h,$00
 	ld	d,h
@@ -222,12 +300,6 @@ getCharWidthAndLoc_islarge:
 ;NOTE: If you [AND 7] to strip out vertical shift bit and the result is zero,
 ;      then this is to be treated as a width of 8.
 
-
-
-
-.varloc("tempdata")
-textImageBuffer   .var(8)
-.varvalidate(16)
 
 
 

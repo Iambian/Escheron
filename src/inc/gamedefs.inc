@@ -9,6 +9,10 @@
     .error "You cannot include this file more than once."
 #endif
 
+
+
+#define TEMPDATA_SIZE 16
+
 ;NOTE: Below is a bit of memory wrangling. If this location is altered, you
 ;   must account for the fact that an interrupt vector table and its routine
 ;   is located in this space. The interrupt itself is small, though.
@@ -34,7 +38,10 @@ filepointer     .var(2)
 .varvalidate(saveSScreen_vector-saveSScreen_low)
 
 .varloc("saveSScreen_mid")
-tempdata        .var(16)  ;Very short-lived data goes here. Used in-place.
+tempdata        .var(TEMPDATA_SIZE)  ;Short-lived data goes here. Used in-place.
+textx           .var(1)
+texty           .var(1)
+
 ; -- variables go here
 .varvalidate(saveSScreen_int-saveSScreen_mid)
 

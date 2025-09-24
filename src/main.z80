@@ -14,12 +14,27 @@
 ;-------------------------------------------------------------------------------
 ;Application basecall vector table.
 ;
-.branch(printString)
+.branch(printStringOS)
 
 ;-------------------------------------------------------------------------------
 ;Program execution begins.
 ;
 programStart:
+    ld  hl,plotSScreen
+    ld  de,plotSScreen+1
+    ld  bc,767
+    ld  (hl),$FF
+    ldir
+    call fastCopy
+    ld  hl,$0100
+    ld  (textx),hl
+    ld  hl,otherTestString
+    call printString
+    call fastCopy
+
+
+    ;ld  hl,testString
+    ;bcall(_printString)
     ; Init low level system variables.
     ld  hl,saveSScreen
     ld  de,saveSScreen + 1
@@ -33,10 +48,9 @@ programStart:
 
     call installInterrupt
 
-    ld  hl,testString
-    bcall(_printString)
     ei
-    bcall(_GetKey)
+    call keyReleaseThenWait
+    call keyRelease
 forceAppClose:
     di
     im 1
@@ -62,7 +76,7 @@ otherTestString:
 
 
 .nextpage
-printString:
+printStringOS:
     ld  a,(hl)
     inc hl
     or  a
@@ -70,7 +84,7 @@ printString:
     push hl
         bcall(_PutC)
     pop hl
-    jp  printString
+    jr  printStringOS
 
 
 testString:

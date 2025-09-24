@@ -69,7 +69,7 @@ interrupt_start:
     push af
     in  a,(4)
     bit 3,a
-    jr  z,_
+    jr  nz,_
     ld  a,(basepage)
     out (6),a
     jp  forceAppClose           ;Must be located on first page of app.
