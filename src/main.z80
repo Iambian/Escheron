@@ -20,23 +20,8 @@
 ;Program execution begins.
 ;
 programStart:
-    ld  hl,plotSScreen
-    ld  de,plotSScreen+1
-    ld  bc,767
-    ld  (hl),$FF
-    ldir
-    call fastCopy
-    ld  hl,$0102
-    ld  (textx),hl
-;    ld  hl,otherTestString
-;    call printString
-    ld hl,fontTestString
-    call printStringF
-    call fastCopy
-
-
-    ;ld  hl,testString
-    ;bcall(_printString)
+    di
+    ;----------------------------------------------------------------
     ; Init low level system variables.
     ld  hl,saveSScreen
     ld  de,saveSScreen + 1
@@ -49,11 +34,35 @@ programStart:
     ld  (stackbase),sp
 
     call installInterrupt
+    ;----------------------------------------------------------------
+    ; Begin setting up the game subsystems.
+    ; File handling and memory arrangements goes here.
+    ; Basically, anything that calls OS routines while IY is flags.
 
-    ei
+    ;----------------------------------------------------------------
+    ; Begin the game itself. Game-mode testing also goes after this.
+    ;----------------------------------------------------------------
+
+    ld  iy,gameflags
+    ld  hl,plotSScreen
+    ld  de,plotSScreen+1
+    ld  bc,767
+    ld  (hl),$FF
+    ldir
+    call fastCopy
+    ld  hl,$0102
+    ld  (textx),hl
+;    ld  hl,otherTestString
+;    call printString
+    ld hl,fontTestString
+    call printF
+    call fastCopy
+
     call keyReleaseThenWait
     call keyRelease
 forceAppClose:
+    ld  iy,flags
+    ;You should put away the game's save file and clean up memory here.
     di
     im 1
     ei

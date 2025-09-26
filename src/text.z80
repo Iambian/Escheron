@@ -8,44 +8,326 @@ textImageBuffer   .var(8)
 .varvalidate(TEMPDATA_SIZE)
 
 
-printStringF:
-	ld  a,(textx)
-	ld	(textxstart),a
-printStringF_loop:
-	ld	a,(hl)
+;HL = string address
+printF:
+	ex de,hl	;puts string into DE
+printF_loop:
+	ex de,hl	;At start of loop, put string into HL
+	ld bc,printF_loop
+	push bc		;Loop construct stored on stack. Allows ret to jp back here.
+	ld	a,(hl)	;retrieve value from there
+	ex  de,hl   ;And store string in DE. We need HL to do calculations.
+	inc de
+	cp  $20
+	jr	c,+_
+	push de
+		call printChar
+	pop de
+	ret
+_:	ld  b,a
+	inc b
+	djnz printF_skipeof
+	;0 - EOF
+	pop af		;remove jumpback and expose true return address
+	ret
+printF_skipeof:
+	djnz printF_skipsetxy
+	;1 - setxy
+	ld	hl,textx
+	ld	a,(de)
+    inc de
+	inc a
+	jr	z,+_
+	dec a
+	ld  (hl),a
+_:	inc hl
+	ld  a,(de)
+    inc de
+	inc a
+	jr  z,+_
+	dec a
+	ld  (hl),a
+_:	ret	;19
+printF_skipsetxy:
+	djnz printF_skipaddxy
+	;2 - addxy
+	ld  hl,textx
+	ld  b,2
+_:	ld  a,(de)
+	add a,(hl)
+	ld	(hl),a
 	inc hl
-	or	a
+	inc de
+	djnz -_
+	ret
+printF_skipaddxy:
+	djnz printF_skipcall
+	;3 - call (z80 subroutine)
+	call deindtobc
+	push de
+		ld  de,+_
+		push de
+			push bc
+			ret
+_:	pop de
+	ret
+printF_skipcall:
+	djnz printF_skipprint
+	;4 - print formatted text at address
+	call deindtohl
+	push de
+		call printF
+	pop de
+	ret
+printF_skipprint:
+	djnz printF_skipprintacc
+	;5 - print acc using supplied num flags
+	ld  a,(de)
+	inc de
+	push de
+		ld  hl,(textacc)
+		call dispHL
+	pop de
+	ret
+printF_skipprintacc:
+	djnz printF_skipjrfnz
+	;6 - move printf head to relative address if flag is set (not zero)
+	call printF_jrfsub
 	ret z
-	cp  '\n'
-	jr	nz,+_
-	ld  a,(textxstart)
-	ld	(textx),a
-	ld	a,(texty)
+	ex  de,hl
+	ret
+printF_skipjrfnz:
+	djnz printF_skipjrfz
+	;7 - move printf head to relative address if flag is reset (zero)
+	call printF_jrfsub
+	ret nz
+	ex  de,hl
+	ret
+printF_skipjrfz:
+	djnz printF_skipdrawbox
+	;8 - draws a box at the specified location
+	;I don't want to do this right now. Can we do this later? Please?
+	inc de
+	inc de
+	inc de
+	inc de
+	ret
+printF_skipdrawbox:
+	djnz printF_skipmenuopt
+	;9 - record menu option at current cursor location
+	ld	hl,menuoptions
+	ld	a,(hl)
+	add a,2
+	and menuoptionmask		;prevent overrun
+	ld	(hl),a
+	ld	bc,(textx)
+	ld	(hl),c
+	inc hl
+	ld	(hl),b
+	ret
+printF_skipmenuopt:
+	djnz printF_skipnewline
+	;10 - newline
+	ld	hl,texty
+	ld	a,(hl)
 	add a,NEWLINE_HEIGHT
-	ld	(texty),a
-	jr printStringF_loop
-_:  cp  '\r'
-	jr  nz,+_
-	ld  a,(textx)
-	ld	(textxstart),a
-	jr 	printStringF_loop
-_:	push hl
-		call printChar
-	pop hl
-	jr	printStringF_loop
-
-
-printString:
+	ld	(hl),a
+	inc hl
+	ld	a,(hl)	;textxstart
+	dec hl
+	dec hl
+	ld	(hl),a
+	ret
+printF_skipnewline:
+	djnz printF_skipsetflag
+	;11 - sets a game flag
+	ld 	a,(de)
+	inc de
+	call getgameflag
+	or  (hl)
+	ld  (hl),a
+	ret
+printF_skipsetflag:
+	djnz printF_skiptogflag
+	;12 - toggles a game flag
+	ld 	a,(de)
+	inc de
+	call getgameflag
+	xor (hl)
+	ld  (hl),a
+	ret
+printF_skiptogflag:
+	djnz printF_skipsetleftmargin
+	;13 - reused CR for: set current cursor position to be the left margin
+	ld	hl,textx
 	ld	a,(hl)
 	inc hl
-	or  a
+	inc hl
+	ld	(hl),a
+	ret
+printF_skipsetleftmargin:
+	djnz printF_skipclearacc
+	;14 - clear text accumulator
+	ld  hl,0
+	ld	(textacc),hl
+	ret
+printF_skipclearacc:
+	djnz printF_skipexacc
+	;15 - exchange text accumulator with shadow text accumulator
+	push de
+		ld	de,(textacc)
+		ld	hl,(textaccshadow)
+		ex  de,hl
+		ld	(textacc),de
+		ld	(textaccshadow),hl
+	pop de
+	ret
+printF_skipexacc:
+	djnz printF_skipsetacc1
+	;16 - set text accumulator with 1 byte value, leaving 2nd byte untouched.
+	ld	a,(de)
+	inc de
+	ld	(textacc),a
+	ret
+printF_skipsetacc1:
+	djnz printF_skipsetacc2
+	;17 - set text accumulator with a 2 byte value
+	ld	a,(de)
+	ld  L,a
+	inc de
+	ld  a,(de)
+	ld  H,a
+	inc de
+	ld  (textacc),hl
+	ret
+printF_skipsetacc2:
+	djnz printF_skipadrtoacc1
+	;18 - set text accumulator to a 1 byte value at given address. 2nd byte unaffected.
+	call deindtohl
+	ld  a,(hl)
+	ld	(textacc),a
+	ret
+printF_skipadrtoacc1:
+	djnz printF_skipadrtoacc2
+	;19 - set text accumulator to a 2 byte value at given address.
+	call deindtohl
+	ld  a,(hl)
+	inc hl
+	ld	h,(hl)
+	ld  L,a
+	ld	(textacc),hl
+	ret
+printF_skipadrtoacc2:
+	djnz printF_skipsetidx
+	;20 - set text index to a 2 byte value. This value is intended to be an address.
+	call deindtohl
+	ld	(textidx),hl
+	ret
+printF_skipsetidx:
+	djnz printF_skipsetindexed
+	;21 - add address in text index with offset and add the unsigned byte found
+	;     at that address with the 2 byte value in the text accumulator.
+	ld	hl,(textidx)
+	ld	a,(de)
+	call addAtoHL
+	ld	a,(hl)
+	ld	hl,(textacc)
+	call addAtoHL
+	ld	(textacc),hl
+	ret
+printF_skipsetindexed:
+	djnz printF_skipmltacc1
+	;22 - Multiply the value with the text accumulator, storing only the
+	;     first byte of the result
+	call printF_multaccsub
+	ld	a,L
+	ld	(textacc),a
+	ret
+printF_skipmltacc1:
+	djnz printF_skipmltacc2
+	;23 - Multiply the value with the text accumulator, storing only the high
+	;     byte of the result into the first text accumulator byte.
+	;     This variation exists to perform division via reciprocal multiplication
+	call printF_multaccsub
+	ld	a,H
+	ld	(textacc),a
+	ret
+printF_skipmltacc2:
+;	djnz printF_skip
+;	ret
+;printF_skip:
+;	djnz printF_skip
+;	ret
+;printF_skip:
+	ret
+
+
+
+printF_multaccsub:
+	ld  a,(de)
+	push de
+		ld 	e,a
+		ld	a,(textacc)
+		ld	h,a
+		call multEandH
+	pop de
+	ret
+
+printF_jrfsub:
+	ld  a,(de)
+	inc de
+	call getgameflag
+	and (hl)
+	push af
+		ld  a,(de)
+		inc de
+		ld  L,a
+		add a,a	;sign bit into carry
+		sbc a,a	;0 if no carry, $FF if carry
+		ld  h,a	;doing this to sign-extend HL since rel was a signed number
+		add hl,de
+	pop af
+	ret
+
+;in: A=flagid
+;out: HL=flagadr, A=mask(flag set, AND to isolate)
+;destroys: B
+getgameflag:
+	ld	b,a
+	rrca
+	rrca
+	rrca
+	and $1F
+	ld  hl,gameflags
+	call addAtoHL
+	ld  a,b
+	and 7
+	ld  b,a
+	ld  a,1
 	ret z
-	push hl
-		call printChar
-	pop hl
-	jr  printString
+_:	add a,a
+	djnz -_
+	ret
 
+deindtobc:
+	ld  a,(de)
+	inc de
+	ld  c,a
+	ld  a,(de)
+	inc de
+	ld  b,a
+	ret
 
+deindtohl:
+	ex  de,hl
+	ld	e,(hl)
+	inc hl
+	ld  d,(hl)
+	inc hl
+	ex  de,hl
+	ret
+
+;==============================================================================
 printChar:
 	ld  de,textImageBuffer
     ld  L,a
@@ -141,161 +423,7 @@ printChar_render:
 	ld  L,h
 	ld  b,6
 	ld  ix,textImageBuffer
-	jr  iPutSprite
-
-
-
-; Copied from somewhere but I can't recall where. Probably from the ION library.
-; Graphical routine. Places 8x8 sprite object onto screen using XOR logic.
-; B=height L=y A=x IX=sprPtr
-iPutSprite:
-	ld	e,l
-	ld	h,$00
-	ld	d,h
-	add	hl,de
-	add	hl,de
-	add	hl,hl
-	add	hl,hl
-	ld	e,a
-	and	$07
-	ld	c,a
-	srl	e
-	srl	e
-	srl	e
-	add	hl,de
-	ld	de,plotSScreen
-	add	hl,de
-imPutSpriteLoop1:
-	ld	d,(ix)
-	ld	e,$00
-	ld	a,c
-	or	a
-	jr	z,imPutSpriteSkip1
-imPutSpriteLoop2:
-	srl	d
-	rr	e
-	dec	a
-	jr	nz,imPutSpriteLoop2
-imPutSpriteSkip1:
-	ld	a,(hl)
-	xor	d
-	ld	(hl),a
-	inc	hl
-	ld	a,(hl)
-	xor	e
-	ld	(hl),a
-	ld	de,$0B
-	add	hl,de
-	inc	ix
-	djnz	imPutSpriteLoop1
-	ret
-
-; Based on the routine above, but renders the 8x8 sprite via OR logic.
-; B=height L=y A=x IX=sprPtr
-iPutSpriteOR:
-	ld	e,l
-	ld	h,$00
-	ld	d,h
-	add	hl,de
-	add	hl,de
-	add	hl,hl
-	add	hl,hl
-	ld	e,a
-	and	$07
-	ld	c,a
-	srl	e
-	srl	e
-	srl	e
-	add	hl,de
-	ld	de,plotSScreen
-	add	hl,de
-imPutSpriteLoopOR1:
-	ld	d,(ix)
-	ld	e,$00
-	ld	a,c
-	or	a
-	jr	z,imPutSpriteSkipOR1
-imPutSpriteLoopOR2:
-	srl	d
-	rr	e
-	dec	a
-	jr	nz,imPutSpriteLoopOR2
-imPutSpriteSkipOR1:
-	ld	a,(hl)
-	or	d
-	ld	(hl),a
-	inc	hl
-	ld	a,(hl)
-	or	e
-	ld	(hl),a
-	ld	de,$0B
-	add	hl,de
-	inc	ix
-	djnz	imPutSpriteLoopOR1
-	ret
-
-
-; Based on the iPutSprite two routines above, but inverts the sprite object
-; as it is being rendered. Rendering is done using XOR logic.
-; B=height L=y A=x IX=sprPtr
-iPutSpriteInv:
-	ld	e,l
-	ld	h,$00
-	ld	d,h
-	add	hl,de
-	add	hl,de
-	add	hl,hl
-	add	hl,hl
-	ld	e,a
-	and	$07
-	ld	c,a
-	srl	e
-	srl	e
-	srl	e
-	add	hl,de
-	ld	de,plotSScreen
-	add	hl,de
-imPutSpriteInvLoop1:
-	ld	a,(ix)
-    cpl
-    ld d,a
-	ld	e,$00
-	ld	a,c
-	or	a
-	jr	z,imPutSpriteInvSkip1
-imPutSpriteInvLoop2:
-    srl d
-	rr	e
-	dec	a
-	jr	nz,imPutSpriteInvLoop2
-imPutSpriteInvSkip1:
-	ld	a,(hl)
-	xor	d
-	ld	(hl),a
-	inc	hl
-	ld	a,(hl)
-	xor	e
-	ld	(hl),a
-	ld	de,$0B
-	add	hl,de
-	inc	ix
-	djnz	imPutSpriteInvLoop1
-	ret
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+	jp  iPutSprite
 
 ;input: A = character ID
 ;output: A = width, HL = chracter bitmap location, C = first byte at (HL)
@@ -330,15 +458,263 @@ getCharWidthAndLoc_islarge:
 ;NOTE: If you [AND 7] to strip out vertical shift bit and the result is zero,
 ;      then this is to be treated as a width of 8.
 
+;Convenience function that preserves all registers that would be
+;destroyed via printChar
+PutC:
+	push ix \ push af \ push bc \ push de \ push hl
+		call printChar
+	pop hl \ pop de \ pop bc \ pop af \ pop ix
+	ret
+
+;==============================================================================
+putBlankSpace:
+	push af
+		ld  a,(textx)
+		add a,4
+		ld  (textx),a
+	pop af
+	ret
+
+;same input/output as below. Calling routine must properly fidangle with IX
+dispIXInd:
+	ld	L,(ix+0)
+	ld	h,(ix+1)
+	ld	c,(ix+2)
+	push af
+		ld b,a
+		and 7
+		jr	nz,$+4
+		ld	a,8
+		bit dhl_fetch_long_values,a
+		jr	z,$+3
+		inc	a  ;if longvals defined, allow upper range of decimals to be reached
+		cp	2
+		jr	nc,dispIXInd_2bext ;if less than 3 digits, blank out H (2nd byte)
+		ld	h,$00
+		bit 7,L  ;check for that bit to see if sign extension is needed.
+		jr	z,dispIXInd_2bext
+		bit dhl_indic_neg_sign,a
+		jr	z,dispIXInd_2bext
+		dec h
+dispIXInd_2bext:
+		cp	4
+		jr	nc,dispIXInd_3bext ;if less than 5 digits, blank out C (3rd byte)
+		ld	c,$00
+		jr	z,dispIXInd_3bext
+		bit dhl_indic_neg_sign,a
+		jr	z,dispIXInd_3bext
+		dec c
+dispIXInd_3bext:
+	pop af
+	;runs into the following routine: dispHL
+
+;in: HL=number (treated as unsigned unless appropriate flag is set)
+;    A=flags  0pnrzddd :d=digits (1=1digit,5=5digit) : r=right-align number
+;             76543210  n=signed number. show neg sign if needed
+;                       p=signed number. show pos sign if needed
+;                       z=show leading zeroes
+;out: text.
+;dest: AF BC DE HL
+dispHL:
+	ld	(iy+numflags),$00
+	ld	(iy+tempfvar),a
+	and	7
+	jr	nz,$+4
+	ld	a,8  ;if zero, set count to 8
+	ld	b,a  ;B = number of digits to display
+	dec a
+	; Below is a compatibility layer because the numprint we have here
+	; is a 24-bit variant. I'd use a 16-bit variant, but I can't be arsed
+	; write or find one.
+	push af  ;to sign-extend C     
+		xor a
+		bit dhl_indic_neg_sign,(iy+tempfvar)
+		jr	z,+_
+		ld	a,h
+		add a,a
+		ld	a,$00
+		sbc a,a
+_:		ld	c,a
+	pop af
+ 	;End compatibility layer. Let's get to the meat and potatoes of it.
+	bit dhl_indic_neg_sign,(iy+tempfvar)
+	jr	z,dispHL_skipnegcheck
+	bit 7,c
+	jr	z,dispHL_skipnegcheck
+	ld	a,L ; A long way to NEGate C:HL
+	cpl     ;
+	add a,1 ;
+	ld	L,a ;
+	ld	a,h ;
+	cpl     ;
+	adc a,0 ;
+	ld	h,a ;
+	ld	a,c ;
+	cpl     ;
+	adc a,0 ;
+	ld	c,a ;
+	set is_negative,(iy+numflags)
+dispHL_skipnegcheck:
+	;B = number of digits to display
+	push hl
+		ld	hl,dispHL_limits
+		call dispHL_grabtableindex
+	pop de
+	;C:DE is where the number is now.
+ 	;cur-max. If no-carry at end, set cur to max
+	ld	a,e
+	sub (hl)
+	inc hl
+	ld	a,d
+	sbc a,(hl)
+	inc hl
+	ld	a,c
+	sbc a,(hl)
+	jr	c,dispHL_skipresetmax
+	ld	c,(hl)
+	dec hl
+	ld	d,(hl)
+	dec hl
+	ld	e,(hl)
+dispHL_skipresetmax:
+	ld	hl,dispHL_counts
+	call dispHL_grabtableindex
+dispHL_mainlooprestart:
+	ld	(iy+tempfvar2),'0'-1
+dispHL_mainloop:
+	;Algorithm: cur-table, saveback result. 
+	;Run main loop, incrementing tempfvar2 digit until result carries.
+	;Then undo the final subtraction, maybe-emit digit, then restart the
+	;main loop until no more digits are to be emitted.
+	inc (iy+tempfvar2)
+	ld	a,e
+	sub (hl)
+	ld	e,a
+	inc hl
+	ld	a,d
+	sbc a,(hl)
+	ld	d,a
+	inc hl
+	ld	a,c
+	sbc a,(hl)
+	ld	c,a
+	dec hl
+	dec hl
+	jr nc,dispHL_mainloop
+	ld	a,e
+	add a,(hl)
+	ld	e,a
+	inc hl
+	ld	a,d
+	adc a,(hl)
+	ld	d,a
+	inc hl
+	ld	a,c
+	adc a,(hl)
+	ld	c,a
+	push de
+		ld	de,-(2+3) ;to move pointer to start of previous item on the list
+		add hl,de
+	pop	de
+	ld	a,(iy+tempfvar2)
+	cp	'0'
 
 
+	jr	nz,disphl_skip_to_displaying_number
+;well. we encountered our zero. Is it a leading zero?
+	bit leading_nonzero_found,(iy+numflags)
+	jr	nz,disphl_skip_to_really_displaying_number
+ ;okay, so it is a leading zero. Do we actually display it?
+	bit dhl_show_lead_zeroes,(iy+tempfvar)
+	jr	nz,disphl_skip_to_disp_signed_decide
+;Okay. It's a leading zero and we're not displaying it. Check for
+;right-alignedness, which really means insert a space if so.
+	bit dhl_right_align_num,(iy+tempfvar)
+	jr	z,disphl_skip_all_and_return_to_main_loop
+	call PutBlankSpace
+	jr	disphl_skip_all_and_return_to_main_loop
+;this one is jumped to only on zero-check
+disphl_skip_to_displaying_number:
+;but first run check if a nonzero number has already been found. If so, then
+;check to see if you're going to apply pos or minus sign.
+	bit leading_nonzero_found,(iy+numflags)
+	jr	nz,disphl_skip_initial_leading_nonzero_actions
+disphl_skip_to_disp_signed_decide:
+;so this is the very first leading nonzero number? Great! Check to see if
+;this is a signed number. If not, then just skip forward to displaying num.
+	bit dhl_indic_neg_sign,(iy+tempfvar)
+	jr	z,disphl_skip_initial_leading_nonzero_actions
+;We've got to display a sign or something. Right. Let's check to see if the
+;number is negative. If not, skip to checking to see if we display a positive
+	bit is_negative,(iy+numflags)
+	jr	z,disphl_try_to_display_positive
+;okay, so what we have is definitely a negative number. We're not worried
+;about alignedness at this point. Either we display it or we don't. But do
+;we display that? We passed through all the necessary tests, so yeah. We do.
+	ld	a,'-'
+	call PutC
+	jr	disphl_skip_initial_leading_nonzero_actions
+;Now that we're trying to display a postive number, do we actually display it?
+;Now's a great time to check it. 
+disphl_try_to_display_positive:
+	bit dhl_show_pos_sign,(iy+tempfvar)
+	jr	z,disphl_skip_displaying_positive
+;So. We display the + sign since that's what's called for.
+	ld	a,'+'
+	call PutC
+	jr	disphl_skip_initial_leading_nonzero_actions
+disphl_skip_displaying_positive:
+;right. so we aren't displaying a positive sign but the number is still
+;signed. Do we insert spaces to do alignmentness? Check here.
+	bit dhl_right_align_num,(iy+tempfvar)
+	jr z,disphl_skip_initial_leading_nonzero_actions
+	call putBlankSpace
+disphl_skip_initial_leading_nonzero_actions:
+	set leading_nonzero_found,(iy+numflags)
+disphl_skip_to_really_displaying_number:
+	ld	a,(iy+tempfvar2)
+	call PutC
+disphl_skip_all_and_return_to_main_loop:
+	ld	a,b
+	cp	2
+	jr	nz,disphl_not_showing_last_number
+;force showing the last zero if the input number is, in fact, just zero.
+	set dhl_show_lead_zeroes,(iy+tempfvar)  
+disphl_not_showing_last_number:
+	dec b
+	jp	nz,dispHL_mainlooprestart
+	ret
 
+;B=index HL=table_address
+dispHL_grabtableindex:
+	ld a,b
+	dec a
+	push hl
+		ld L,a
+		add a,a
+		add a,L
+	pop hl
+	jp  addAtoHL
 
+#define displimsplit(x) .db x&$FF,(x>>8)&$FF,(x>>16)&$FF
+dispHL_limits: 	;3 bytes wide for each table entry
+displimsplit(9)
+displimsplit(99)
+displimsplit(999)
+displimsplit(9999)
+displimsplit(99999)
+displimsplit(999999)
+displimsplit(9999999)
 
-
-
-
-
+dispHL_counts: 	;3 bytes wide for each table entry
+displimsplit(1)
+displimsplit(10)
+displimsplit(100)
+displimsplit(1000)
+displimsplit(10000)
+displimsplit(100000)
+displimsplit(1000000)
+displimsplit(10000000)
 
 
 
@@ -494,5 +870,140 @@ DCSF_GS_asg			.db $70,$08,$68,$a8,$70	;
 
 fontData_end:
 
+; Copied from somewhere but I can't recall where. Probably from the ION library.
+; Graphical routine. Places 8x8 sprite object onto screen using XOR logic.
+; B=height L=y A=x IX=sprPtr
+iPutSprite:
+	ld	e,l
+	ld	h,$00
+	ld	d,h
+	add	hl,de
+	add	hl,de
+	add	hl,hl
+	add	hl,hl
+	ld	e,a
+	and	$07
+	ld	c,a
+	srl	e
+	srl	e
+	srl	e
+	add	hl,de
+	ld	de,plotSScreen
+	add	hl,de
+imPutSpriteLoop1:
+	ld	d,(ix)
+	ld	e,$00
+	ld	a,c
+	or	a
+	jr	z,imPutSpriteSkip1
+imPutSpriteLoop2:
+	srl	d
+	rr	e
+	dec	a
+	jr	nz,imPutSpriteLoop2
+imPutSpriteSkip1:
+	ld	a,(hl)
+	xor	d
+	ld	(hl),a
+	inc	hl
+	ld	a,(hl)
+	xor	e
+	ld	(hl),a
+	ld	de,$0B
+	add	hl,de
+	inc	ix
+	djnz	imPutSpriteLoop1
+	ret
 
+; Based on the routine above, but renders the 8x8 sprite via OR logic.
+; B=height L=y A=x IX=sprPtr
+iPutSpriteOR:
+	ld	e,l
+	ld	h,$00
+	ld	d,h
+	add	hl,de
+	add	hl,de
+	add	hl,hl
+	add	hl,hl
+	ld	e,a
+	and	$07
+	ld	c,a
+	srl	e
+	srl	e
+	srl	e
+	add	hl,de
+	ld	de,plotSScreen
+	add	hl,de
+imPutSpriteLoopOR1:
+	ld	d,(ix)
+	ld	e,$00
+	ld	a,c
+	or	a
+	jr	z,imPutSpriteSkipOR1
+imPutSpriteLoopOR2:
+	srl	d
+	rr	e
+	dec	a
+	jr	nz,imPutSpriteLoopOR2
+imPutSpriteSkipOR1:
+	ld	a,(hl)
+	or	d
+	ld	(hl),a
+	inc	hl
+	ld	a,(hl)
+	or	e
+	ld	(hl),a
+	ld	de,$0B
+	add	hl,de
+	inc	ix
+	djnz	imPutSpriteLoopOR1
+	ret
+
+
+; Based on the iPutSprite two routines above, but inverts the sprite object
+; as it is being rendered. Rendering is done using XOR logic.
+; B=height L=y A=x IX=sprPtr
+iPutSpriteInv:
+	ld	e,l
+	ld	h,$00
+	ld	d,h
+	add	hl,de
+	add	hl,de
+	add	hl,hl
+	add	hl,hl
+	ld	e,a
+	and	$07
+	ld	c,a
+	srl	e
+	srl	e
+	srl	e
+	add	hl,de
+	ld	de,plotSScreen
+	add	hl,de
+imPutSpriteInvLoop1:
+	ld	a,(ix)
+    cpl
+    ld d,a
+	ld	e,$00
+	ld	a,c
+	or	a
+	jr	z,imPutSpriteInvSkip1
+imPutSpriteInvLoop2:
+    srl d
+	rr	e
+	dec	a
+	jr	nz,imPutSpriteInvLoop2
+imPutSpriteInvSkip1:
+	ld	a,(hl)
+	xor	d
+	ld	(hl),a
+	inc	hl
+	ld	a,(hl)
+	xor	e
+	ld	(hl),a
+	ld	de,$0B
+	add	hl,de
+	inc	ix
+	djnz	imPutSpriteInvLoop1
+	ret
 

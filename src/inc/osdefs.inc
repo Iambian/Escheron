@@ -52,11 +52,11 @@ penCol               EQU  86D7h
 penRow               EQU  86D8h
 
 
-textFlags      	EQU    5	;Text output flags
-textEraseBelow 	EQU    1	; 1=erase line below small char
-textScrolled	   EQU    2	; 1=screen scrolled
-textInverse       EQU    3	; 1=display inverse bit-map
-textInsMode       EQU    4	; 0=overstrike, 1=insert mode
+textFlags       EQU 5	;Text output flags
+textEraseBelow 	EQU 1	; 1=erase line below small char
+textScrolled    EQU 2	; 1=screen scrolled
+textInverse     EQU 3	; 1=display inverse bit-map
+textInsMode     EQU 4	; 0=overstrike, 1=insert mode
 
 asm_Flag1       EQU  33          ;// ASM CODING
 asm_Flag2       EQU  34          ;// ASM CODING
