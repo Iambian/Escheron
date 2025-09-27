@@ -618,58 +618,63 @@ dispHL_mainloop:
 	pop	de
 	ld	a,(iy+tempfvar2)
 	cp	'0'
-
-
 	jr	nz,disphl_skip_to_displaying_number
-;well. we encountered our zero. Is it a leading zero?
+; We encountered a zero. We treat leading zeroes differently than other zeroes,
+; so have we encountered any nonzero numbers yet?
 	bit leading_nonzero_found,(iy+numflags)
 	jr	nz,disphl_skip_to_really_displaying_number
- ;okay, so it is a leading zero. Do we actually display it?
+ ; No? Ok. We're still in the leading zero section. Do we display them? If we
+ ; do, we have to prepend possible negative or plus signs first.
 	bit dhl_show_lead_zeroes,(iy+tempfvar)
 	jr	nz,disphl_skip_to_disp_signed_decide
-;Okay. It's a leading zero and we're not displaying it. Check for
-;right-alignedness, which really means insert a space if so.
+; Okay. It's a leading zero and we're not displaying it. Check to see
+; if we are right-aligning this number, which in practice means
+; replacing all the leading zeroes with spaces. We have to jump forward
+; to detect if we must draw at least one of these zeroes if the
+; full and actual number is, in fact, zero.
 	bit dhl_right_align_num,(iy+tempfvar)
-	jr	z,disphl_skip_all_and_return_to_main_loop
-	call PutBlankSpace
+	call nz,PutBlankSpace
 	jr	disphl_skip_all_and_return_to_main_loop
-;this one is jumped to only on zero-check
+; The number that we found was not zero. Run additional testing.
 disphl_skip_to_displaying_number:
-;but first run check if a nonzero number has already been found. If so, then
-;check to see if you're going to apply pos or minus sign.
+; Check to see if this is the *first* nonzero number that we've encountered.
+; If it is so, perform additional checks to see if we need to prepend signs.
 	bit leading_nonzero_found,(iy+numflags)
 	jr	nz,disphl_skip_initial_leading_nonzero_actions
 disphl_skip_to_disp_signed_decide:
-;so this is the very first leading nonzero number? Great! Check to see if
-;this is a signed number. If not, then just skip forward to displaying num.
+;Either this is the first nonzero number, or we're rendering leading zeroes.
+;Check to see if we're maybe going to prepend a negative sign.
 	bit dhl_indic_neg_sign,(iy+tempfvar)
 	jr	z,disphl_skip_initial_leading_nonzero_actions
 ;We've got to display a sign or something. Right. Let's check to see if the
 ;number is negative. If not, skip to checking to see if we display a positive
 	bit is_negative,(iy+numflags)
 	jr	z,disphl_try_to_display_positive
-;okay, so what we have is definitely a negative number. We're not worried
-;about alignedness at this point. Either we display it or we don't. But do
-;we display that? We passed through all the necessary tests, so yeah. We do.
+; It's confirmed. It's both a negative number and we are displaying that sign.
+; To reach here, we would've already needed to have finished right-aligning,
+; started displaying non-leading-zero numbers, or are displaying leading zeroes.
 	ld	a,'-'
 	call PutC
 	jr	disphl_skip_initial_leading_nonzero_actions
-;Now that we're trying to display a postive number, do we actually display it?
-;Now's a great time to check it. 
 disphl_try_to_display_positive:
+; This check doesn't happen unless we're also displaying negative numbers
+; since right-alignedness must account for the space a negative sign would take
+; up. So we check for displaying a '+' sign, or a space if right-aligned.
 	bit dhl_show_pos_sign,(iy+tempfvar)
 	jr	z,disphl_skip_displaying_positive
-;So. We display the + sign since that's what's called for.
+; We display the + sign since that's what's called for, then start drawing
+; numeric digits.
 	ld	a,'+'
 	call PutC
 	jr	disphl_skip_initial_leading_nonzero_actions
 disphl_skip_displaying_positive:
-;right. so we aren't displaying a positive sign but the number is still
-;signed. Do we insert spaces to do alignmentness? Check here.
+; The number is signed and not negative. Do we insert a space for alignment?
 	bit dhl_right_align_num,(iy+tempfvar)
 	jr z,disphl_skip_initial_leading_nonzero_actions
 	call putBlankSpace
 disphl_skip_initial_leading_nonzero_actions:
+; Finally begin to draw digits. (re)assert that leading_nonzero_found is set
+; even if all we're drawing is leading zeroes.
 	set leading_nonzero_found,(iy+numflags)
 disphl_skip_to_really_displaying_number:
 	ld	a,(iy+tempfvar2)

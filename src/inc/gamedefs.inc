@@ -20,7 +20,7 @@
 .assert(saveSScreen == 86ECh, "saveSScreen must be 86ECh for interrupts location.")
 saveSScreen_low     .equ saveSScreen
 saveSScreen_vector  .equ 8700h
-saveSScreen_mid     .equ 8702h
+saveSScreen_mid     .equ 8802h
 saveSScreen_int     .equ 8888h
 saveSScreen_int_end .equ 88B8h
 saveSScreen_end     .equ saveSScreen+768

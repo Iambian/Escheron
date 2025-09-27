@@ -12,9 +12,13 @@
     jr programStart
 ;.echo "Branch current location: ",$, ", predicted address binding: ",$&$0FFF
 ;-------------------------------------------------------------------------------
-;Application basecall vector table.
+; Application basecall vector table.
 ;
-.branch(printStringOS)
+.branch(fastCopy)
+.branch(addAtoHL)
+.branch(debouncedKeyread)
+.branch(keyRelease)
+.branch(keyReleaseThenWait)
 
 ;-------------------------------------------------------------------------------
 ;Program execution begins.
@@ -50,8 +54,8 @@ programStart:
     ld  (hl),$FF
     ldir
     call fastCopy
-    ld  hl,$0102
-    ld  (textx),hl
+;    ld  hl,$0102
+;    ld  (textx),hl
 ;    ld  hl,otherTestString
 ;    call printString
     ld hl,fontTestString
@@ -62,6 +66,7 @@ programStart:
     call keyRelease
 forceAppClose:
     ld  iy,flags
+    ld  sp,(stackbase)
     ;You should put away the game's save file and clean up memory here.
     di
     im 1
@@ -72,6 +77,18 @@ otherTestString:
 .db "This is another string..",0
 
 fontTestString:
+m_setxy(5,5)
+.db "Welcome \rto Americana.\nPlease make your\nselection, followed\nby the pound\nsign now.\n"
+m_setacc2(111)
+m_printacc(mf_2DIGIT|mf_RIGHT_ALIGN|mf_SIGNED_SHOW_NEG|mf_SIGNED_SHOW_POS)
+.db " Hello."
+.db 0
+
+
+
+
+
+
 .db "\rthe quick brown fox\n"
 .db "jumped over the slow,\n"
 .db "lazy dog.\n"
@@ -97,20 +114,17 @@ fontTestString:
 
 
 .nextpage
-printStringOS:
-    ld  a,(hl)
-    inc hl
-    or  a
-    ret z
-    push hl
-        bcall(_PutC)
-    pop hl
-    jr  printStringOS
+
+
 
 
 testString:
 .db "Hello, world!",0
 
+;NOTE: We've already tested the crosspage call mechanism, so there will be
+;      nothing on this page until we need to put stuff here.
+;
+;
 
 ;.echo "Hello, world. This is call: ",_printString," located at ",printString
 
