@@ -1,0 +1,77 @@
+;X-DEF file for spells.
+;If you include this without defining an X-macro, the default action will
+;be to register variable names with their accompanying extensions/alterations
+
+
+
+
+#ifndef X
+    #macro X(idx, cost, dispname, varname)
+        #define X_IDX eval(idx)
+        #define X_NAME concat(varname)
+        X_NAME  .equ X_IDX
+    #endmacro
+    #if X_IDX > 63
+        .error "Indices for spells may not be greater than 63"
+    #endif
+#endif
+
+;index, spell cost, displayname, varname
+
+X(01,06,"Cure    ","SPL_CURE")
+X(02,10,"Esuna   ","SPL_ESUNA")
+X(03,10,"Heal    ","SPL_HEAL")
+X(04,20,"Life    ","SPL_LIFE")
+X(05,08,"Blink   ","SPL_BLINK")
+X(06,12,"Shield  ","SPL_SHIELD")
+X(07,10,"Berserk ","SPL_BERSERK")
+X(08,12,"Haste   ","SPL_HASTE")
+X(09,16,"Aura    ","SPL_AURA")
+X(10,01,"Teleport","SPL_TELEPORT")
+X(11,40,"Holy    ","SPL_HOLY")
+X(12,08,"Fire    ","SPL_FIRE")
+X(13,08,"Blizzard","SPL_BLIZZARD")
+X(14,08,"Thunder ","SPL_THUNDER")
+X(15,10,"Scourge ","SPL_SCOURGE")
+X(16,08,"Sleep   ","SPL_SLEEP")
+X(17,12,"Doom    ","SPL_DOOM")
+X(18,16,"Flare   ","SPL_FLARE")
+X(19,16,"Freeze  ","SPL_FREEZE")
+X(20,16,"Tornado ","SPL_TORNADO")
+X(21,24,"Gravity ","SPL_GRAVITY")
+X(22,16,"Dispel  ","SPL_DISPEL")
+X(23,32,"Quake   ","SPL_QUAKE")
+X(24,56,"Meteor  ","SPL_METEOR")
+X(25,00,"Blaze   ","SPL_BLAZE")
+X(26,00,"Shock   ","SPL_SHOCK")
+X(27,08,"Repair  ","SPL_REPAIR")
+X(28,16,"Array   ","SPL_ARRAY")
+X(29,08,"Graviton","SPL_GRAVITON")
+X(30,01,"Destruct","SPL_DESTRUCT")
+X(31,00,"Spc'l FX","SPL_SPCL_FX")
+X(32,00,"Ultrason","SPL_ULTRASONIC")
+X(33,00,"Explode ","SPL_EXPLODE")
+X(34,00,"Megasplo","SPL_MEGASPLODE")
+X(35,00,"Deluge  ","SPL_DELUGE")
+X(36,00,"Tsunami ","SPL_TSUNAMI")
+X(37,00,"Strict  ","SPL_STRICT")
+X(38,00,"Breath  ","SPL_BREATH")
+X(39,00,"Acid    ","SPL_ACID")
+X(40,00,"Maelstro","SPL_MAELSTROM")
+X(41,00,"Faze    ","SPL_FAZE")
+X(42,00,"Attack  ","SPL_ATTACK")
+X(43,00,"Stinger ","SPL_STINGER")
+X(44,00,"Sweep   ","SPL_SWEEP")
+;Not to exceed index 63.
+;X(00,"        ",)
+;X(00,"        ",)
+;X(00,"        ",)
+;X(00,"        ",)
+;X(00,"        ",)
+;X(00,"        ",)
+;X(00,"        ",)
+;X(00,"        ",)
+;X(00,"        ",)
+;X(00,"        ",)
+
+#undef X

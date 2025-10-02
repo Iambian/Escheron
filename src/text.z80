@@ -8,8 +8,26 @@ textImageBuffer   .var(8)
 .varvalidate(TEMPDATA_SIZE)
 
 
+;TODO: Figure out how to get this routine to read offpage data while still
+;      being able to access its callables. (Presumably, this is what bcalls
+;	   are intended for. This printF routine should probably exist in RAM.)
+
+;B = page offset, HL = string address on that page
+;If HL points to RAM or HL is on the same page as its caller, you really should
+;just use printF to avoid needing to page.
+printFOffpage:
+	in  a,(6)
+	push af
+		ld	a,(basepage)
+		sub a,b
+		out (6),a
+		call printF
+	pop af
+	out (6),a
+	ret
 ;HL = string address
 printF:
+	in a,(6)	;Get return page
 	ex de,hl	;puts string into DE
 printF_loop:
 	ex de,hl	;At start of loop, put string into HL
@@ -261,7 +279,7 @@ printF_skipmltacc2:
 ;printF_skip:
 	ret
 
-
+.echo "Sizeof printF routine ",$-printFOffpage
 
 printF_multaccsub:
 	ld  a,(de)
@@ -386,11 +404,11 @@ printChar_thinLoop:
 		jr  printChar_render
 printChar_wide:
 	;Size is in low nibble of C. It is technically possible for a wide char to
-	;be 8 wide, but bit 3 is repurposed for vertical split. None of the
+	;be 8 wide, but bit 3 is repurposed for vertical shift. None of the
 	;original characters are that wide, but just in case, treat a width of
 	;zero (0) after AND 7 as a width of 8 since wide characters cannot
-	;be zero-width (if they were, they'd be thin characters, not wide. A
-	;deviation from this is considered a formatting error.)
+	;be zero-width (if they were, they'd be thin characters, not wide.
+	;A deviation from this is considered a data format error.)
 	bit 3,c
 	jr	nz,printChar_wideVertSkip
 	res 3,c
@@ -633,7 +651,7 @@ dispHL_mainloop:
 ; to detect if we must draw at least one of these zeroes if the
 ; full and actual number is, in fact, zero.
 	bit dhl_right_align_num,(iy+tempfvar)
-	call nz,PutBlankSpace
+	call nz,putBlankSpace
 	jr	disphl_skip_all_and_return_to_main_loop
 ; The number that we found was not zero. Run additional testing.
 disphl_skip_to_displaying_number:

@@ -10,18 +10,26 @@
 ;   - Using concat() in this way lets you construct your own labels. 
 ;   - concat() can also be used in other ways. Need to figure more on this.
 ;   - So far, I've got .varloc and .branch, each of which do something different
+;   - EDIT: Actually it's the same. Use concat() to form up a label from strings
+;       can be used in equates. To keep it as a string AND still be able to
+;       stitch label components together, use eval() in exactly the same way
+;       you'd concat(). Yes, eval("MY","_","STRING") results in "MY_STRING"
 ;
 
-#define getpage(adr) ((adr>>16)&$FF)+0
+#define VERBOSE_OUTPUT
+
+#define getpage(adr) ((adr&$00FF0000)>>16)+0
 #define lo(adr) (adr&$FF)+0
 #define hi(adr) ((adr>>8)&$FF)+0
+#define xy(x,y) (256*y)+x
+#define ml(m,l) (256*m)+l
 
 ;Use this right before the first executable line in your app.
-;This macro initis pagination for multipage apps, sets origin to $4000, and
-;pastes a minimal application header. Code begins execution immediately
+;This macro initializes pagination for multipage apps, sets origin to $4000,
+;and pastes a minimal application header. Code begins execution immediately
 ;following this macro's invocation.
 ;NOTE: The app name is hard-coded into this header. Be aware of that if you
-;       need to use these macros for your own use!
+;       need to use these macros for your own application!
 #macro initapp()
     #ifdef APP_PAGE
         .error "You may not init an app more than once."
@@ -114,6 +122,7 @@
     #define VAR_STARTNAME concat(name)
     #define VAR_STARTBASE eval(VAR_STARTNAME + 0)
     #define VAR_CURBASE eval(VAR_STARTNAME + 0)
+    #define VAR_DEFTYPE 1
 #endmacro
 
 #macro var(size)
@@ -122,24 +131,100 @@
     #endif
     .equ    VAR_CURBASE
     #define VAR_CURBASE eval(VAR_CURBASE + size)
-    #define VAR_CURSIZE eval(size)
+    ;#define VAR_CURSIZE eval(size)
 #endmacro
 
 #macro varvalidate(size_limit)
+    #ifdef VAR_UNIONSTART
+        .error "You must first close any open union blocks"
+    #endif
     #ifndef VAR_CURBASE
         .error "Attempted validation with no base location. Use varloc()"
+    #endif
+    #ifndef VAR_DEFTYPE
+        .error "Var block was not opened."
+    #endif
+    #if VAR_DEFTYPE != 1
+        .error "Var block did not open with varloc()"
     #endif
     #define VAR_ENDSIZE eval(size_limit-(VAR_CURBASE-VAR_STARTBASE))
     #if VAR_ENDSIZE < 0
         .error "Overran ", VAR_STARTLABEL ," by ", -VAR_ENDSIZE ," bytes."
     #endif
-    .echo "Validated ", VAR_STARTLABEL ,", leftover bytes: ", VAR_ENDSIZE
+    #ifdef VERBOSE_OUTPUT
+        .echo "Validated ", VAR_STARTLABEL ,", leftover bytes: ", VAR_ENDSIZE
+    #endif
     #undef VAR_STARTLABEL
     #undef VAR_STARTNAME
     #undef VAR_STARTBASE
     #undef VAR_CURBASE
     #undef VAR_ENDSIZE
+    #undef VAR_DEFTYPE
     #define VAR_VALIDATION_SIZE eval(size_limit)
+#endmacro
+
+#macro struct(name)
+    #define VAR_STARTLABEL eval(name)
+    #define VAR_STARTNAME concat(name)
+    #define VAR_STARTBASE 0
+    #define VAR_CURBASE 0
+    #define VAR_DEFTYPE 2
+#endmacro
+
+#macro endstruct()
+    #ifdef VAR_UNIONSTART
+        .error "You must first close any open union blocks"
+    #endif
+    #ifndef VAR_DEFTYPE
+        .error "Var block was not opened."
+    #endif
+    #if VAR_DEFTYPE != 2
+        .error "Var block did not open with struct()"
+    #endif
+    #define VAR_ENDSIZE eval(VAR_CURBASE)
+    #ifdef VERBOSE_OUTPUT
+        .echo "Struct [", VAR_STARTLABEL ,"] is ", VAR_ENDSIZE , " bytes wide."
+    #endif
+    VAR_STARTNAME .equ VAR_ENDSIZE
+    #undef VAR_STARTLABEL
+    #undef VAR_STARTNAME
+    #undef VAR_STARTBASE
+    #undef VAR_CURBASE
+    #undef VAR_ENDSIZE
+    #undef VAR_DEFTYPE
+#endmacro
+
+#macro union()
+    #ifndef VAR_DEFTYPE
+        .error "You may only use unions inside struct or varloc blocks."
+    #endif
+    #ifdef VAR_UNIONSTART
+        .error "You may not nest unions"
+    #endif
+    #define VAR_UNIONSTART eval(VAR_CURBASE)
+    #define VAR_UNIONBASE eval(VAR_UNIONSTART)
+    #define VAR_UNIONMAXLEN 0
+#endmacro
+
+#macro unionsplit()
+    #define VAR_UNIONBASE eval(VAR_CURBASE)
+    #define VAR_UNIONLEN eval(VAR_UNIONBASE - VAR_UNIONSTART)
+    #ifdef VERBOSE_OUTPUT
+        .echo "Union length at split: ",VAR_UNIONLEN
+    #endif
+    #if VAR_UNIONLEN > VAR_UNIONMAXLEN
+        #define VAR_UNIONMAXLEN eval(VAR_UNIONLEN)
+    #endif
+    #define VAR_UNIONBASE eval(VAR_UNIONSTART)
+    #define VAR_CURBASE eval(VAR_UNIONBASE)
+#endmacro
+
+#macro endunion()
+    unionsplit()
+    #define VAR_CURBASE eval(VAR_CURBASE+VAR_UNIONMAXLEN)
+    #undef VAR_UNIONSTART
+    #undef VAR_UNIONBASE
+    #undef VAR_UNIONMAXLEN
 #endmacro
 
 
@@ -229,6 +314,26 @@
 #define .assert(cond, errmsg) assert(cond, errmsg)
 #define .relocate(newloc) relocate(newloc)
 #define .endrelocate() endrelocate()
+#define .struct(name) struct(name)
+#define .endstruct() endstruct()
+#define .union() union()
+#define .unionsplit() unionsplit()
+#define .endunion() endunion()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 #define MACROS_LOADED

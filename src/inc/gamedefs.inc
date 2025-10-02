@@ -68,6 +68,143 @@ KEY_SHORT_INTERVAL  .equ 5      ;Delays key repeat after the first repeat.
 savefile_size       .equ 512
 
 
+
+;===============================================================================
+; Game data structures.
+; Labels defined by .var() are offsets (abs adr at 0 to simulate this)
+; Label defined in .struct() are set to the size of the struct block.
+; Since our assembler doesn't properly support member operators, this can
+; easily enough be simulated by adding a bunch of offsets together.
+;
+;
+
+.struct("playerobj")
+p_id        .var(1)
+p_status    .var(1)
+p_lvl       .var(1)
+p_exp       .var(1)
+p_hp        .var(2)
+p_maxhp     .var(2)
+p_mp        .var(1)
+p_maxmp     .var(1)
+p_atk       .var(1)
+p_def       .var(1)
+p_mgc       .var(1)
+p_agi       .var(1)
+p_wpn       .var(1)
+p_shl       .var(1)
+p_arm       .var(1)
+p_acc       .var(1)
+p_spells    .var(12)
+p_eof       .var(0)
+.endstruct()
+
+
+;NOTE: charslotid is the ID of the player in that character slot.
+;(e.g. charslotid1 being set to 5 means that the first character slot is
+;   now referencing player5).
+
+.struct("gamedata")
+charslotid1     .var(1) ;{ID of the player in that charslot. e.g. if 5 is here,
+charslotid2     .var(1) ; then charslotid1 references player5. The value -1
+charslotid3     .var(1) ; means a character slot is empty}
+gold_stash      .var(2)
+playerpos       .var(2)
+playermapid     .var(1)
+ship1pos        .var(3)
+ship2pos        .var(3)
+airshippos      .var(3)
+teleportreturn  .var(4) ;.dw xy \.db mapid, state_info
+stepsuntilnextencounter .var(1)
+encounterformation  .var(1)
+prngseed        .var(8)
+underdeepid     .var(1) ;current level in underdeep. -1 if not in it.
+underdeepseed   .var(8)
+player0         .var(playerobj)
+player1         .var(playerobj)
+player2         .var(playerobj)
+player3         .var(playerobj)
+player4         .var(playerobj)
+player5         .var(playerobj)
+nplayer         .var(playerobj)
+gameflagbank    .var(8)
+inventory       .var(32)
+flagbank0       .var(32)
+flagbank1       .var(32)
+flagbank2       .var(32)
+.endstruct()
+
+.struct("savefile")
+save_header     .var(4)
+saveslot1       .var(gamedata)
+saveslot2       .var(gamedata)
+.endstruct()
+
+.struct("battleobj")
+b_objid         .var(1) ;//enemy/charID. Set bit 7 to reference enemies
+b_status_1      .var(1) ;//Poisoned/KO/sleep/anything else
+b_status_2      .var(1) ;//probably not used
+b_properties    .var(1) ;//infinite HP/MP, double attack, etc
+b_eres          .var(1) ;//elemental resistance flags
+b_ewkn          .var(1) ;//elemental weakness flags
+b_eatk          .var(1) ;//elemental attack flags
+b_curhp         .var(2) ;//Current Health Points
+b_maxhp         .var(2) ;//Maximum Health Points
+b_curmp         .var(1) ;//Current Mana Points
+b_maxmp         .var(1) ;//Maximum Mana Points
+b_atktot        .var(2) ;//Precomputed ATTACK total
+b_deftot        .var(2) ;//Precomputed DEFENSE total
+b_magtot        .var(2) ;//Precomputed MAGIC total
+b_agitot        .var(2) ;//Precomputed AGILITY total
+b_hitrate       .var(1) ;//Precomputed HIT RATE percentage total
+b_crit          .var(1) ;//Precomputed CRITICAL RATE percentage total
+b_evasion       .var(1) ;//Precomputed EVADE RATE percentage total
+.union()
+b_wpn           .var(1)
+b_shl           .var(1)
+b_arm           .var(1)
+b_acc           .var(1)
+b_spellbook     .var(p_eof-p_spells)
+.unionsplit()
+b_sprloc        .var(2)
+b_sprdat        .var(2)
+b_rank          .var(1)
+b_gold          .var(2)
+b_droprate      .var(1)
+b_dropitem      .var(1)
+b_curskill      .var(1)
+b_skilltable    .var(8)
+.endunion()
+.endstruct()
+
+
+
+
+;//data structure offset by common data
+;structstart(battcom)
+;    defsvar(1,b_wpn)        ;//Player current weapon
+;    defsvar(1,b_shl)        ;//Player current shield
+;    defsvar(1,b_arm)        ;//Player current armor
+;    defsvar(1,b_acc)        ;//Player current accessory
+;    defsvar(p_spells_size,b_spellbook) ;//Player spellbook
+;structend(battplayer)
+
+;structstart(battcom)
+;    defsvar(2,b_sprloc)      ;//Enemy sprite offset to decompression buffer
+;    defsvar(2,b_sprdat)      ;//Enemy sprite data address copy in bat buf
+;    defsvar(1,b_rank)        ;//Enemy rank
+;    defsvar(2,b_gold)        ;//Amount of gold the enemy is carrying
+;    defsvar(1,b_droprate)    ;//Drop rate of item
+;    defsvar(1,b_dropitem)    ;//Item that drops from this enemy
+;    defsvar(1,b_curskill)    ;//Counter 0-7 of current skill enemy is using
+;    defsvar(8,b_skilltable)  ;//SkillID's of all 8 skills this enemy can use
+;structend(battenemy)
+
+
+
+
+
+
 ;===============================================================================
 ; Game engine flags
 ;
@@ -134,6 +271,167 @@ dhl_fetch_long_values 	.equ 7
 #define m_addindexed(offset) .db 21, offset
 #define m_mltacc(val) .db 22,val
 #define m_mltacc2(val) .db 23,val
+
+;==============================================================================
+; Higher level game equates. These pertain to constants and flags as used
+; by character state management, the menu system, and the battle system.
+
+;Some equipment is gender-locked. We'll have to define them here, but the
+;character data that uses them is defined elsewhere (likely in an X-DEF)
+#define GENDER_NONE 0
+#define GENDER_MALE 1
+#define GENDER_FEMALE 2
+#define GENDER_BOTH 3
+#define GENDER_UNKNOWN 4
+#define GENDER_ALL 255
+
+
+;Symbol extensions used by the text rendering system to draw icons
+;inline with relevant text data (e.g. item type symbols for equipment in menus)
+#define SYM_START 240
+SYM_FIRE      .equ SYM_START + 0
+SYM_LIT       .equ SYM_START + 1
+SYM_ICE       .equ SYM_START + 2
+SYM_POISON    .equ SYM_START + 3
+SYM_SLEEP     .equ SYM_START + 4
+SYM_SWORD     .equ SYM_START + 5
+SYM_STAFF     .equ SYM_START + 6
+SYM_SHIELD    .equ SYM_START + 7
+SYM_CLOTHING  .equ SYM_START + 8
+SYM_ARMOR     .equ SYM_START + 9
+SYM_ACCESSORY .equ SYM_START + 10
+SYM_POTION    .equ SYM_START + 11
+SYM_KEYITEM   .equ SYM_START + 12
+SYM_HP        .equ SYM_START + 13
+SYM_MP        .equ SYM_START + 14
+SYM_CLAW      .equ SYM_START + 15
+
+;TODO: Figure out what these equates are for. I suspect they're used
+;      by the battle system for stat offsets.
+EOFST_LENGTH  .EQU 9
+EOFST_ATK     .equ 0
+EOFST_DEF     .equ 1
+EOFST_WIS     .equ 2
+EOFST_AGI     .equ 3
+EOFST_HIT     .equ 4
+EOFST_CRIT    .equ 5
+EOFST_F1      .equ 6
+EOFST_F2      .equ 7
+EOFST_F3      .equ 8
+
+;Elemental identifiers for bitshift/masking purposes. These will not be
+;directly used anywhere else but here and equipment.
+ELM_FIRE     .equ 0
+ELM_LIT      .equ 1
+ELM_ICE      .equ 2
+ELM_POISON   .equ 3
+ELM_SLEEP    .equ 4 ;//First five elements correspond to symbol order
+ELM_HOLY     .equ 5
+ELM_KO       .equ 6
+ELM_GRAVITY  .equ 7
+
+;Property masks for use in the battle system.
+;May have overlap with other systems.
+ENF_FIRE     .equ 1<<ELM_FIRE   
+ENF_LIT      .equ 1<<ELM_LIT    
+ENF_ICE      .equ 1<<ELM_ICE    
+ENF_POISON   .equ 1<<ELM_POISON 
+ENF_SLEEP    .equ 1<<ELM_SLEEP  
+ENF_HOLY     .equ 1<<ELM_HOLY   
+ENF_KO       .equ 1<<ELM_KO     
+ENF_GRAVITY  .equ 1<<ELM_GRAVITY
+ENF_RESALL   .equ $FF
+
+ENF_UNDEAD   .equ 1<<0
+ENF_DRAIN    .equ 1<<1
+ENF_HP_REGEN .equ 1<<2
+ENF_DBL_ATK  .equ 1<<3
+ENF_INF_HP   .equ 1<<4
+ENF_INF_MP   .equ 1<<5
+ENF_NO_RAND  .equ 1<<6
+
+;//Status effects equates. Should match applicable elements.
+;STATUS_        .equ 0   ;//ELM_FIRE     .equ 0
+;STATUS_        .equ 1   ;//ELM_LIT      .equ 1
+;STATUS_        .equ 2   ;//ELM_ICE      .equ 2
+STATUS_POISON  .equ 3   ;//ELM_POISON   .equ 3
+STATUS_SLEEP   .equ 4   ;//ELM_SLEEP    .equ 4
+;STATUS_        .equ 5   ;//ELM_HOLY     .equ 5
+STATUS_KO      .equ 6   ;//ELM_KO       .equ 6
+;STATUS_        .equ 7   ;//ELM_GRAVITY  .equ 7
+
+;Equipment property bitmasks and identifiers. Follows the specific format:
+; %TTssDDDD, where TT:
+;   00 = Null object.
+;       ssDDDD = 0
+;   01 = Item-specific special effect
+;       ssDDDD = 6 bit item effect ID
+;   10 = If used as item in battle, unleashes a spell effect.
+;       ssDDDD = 6 bit spell ID
+;   11 = Equipment properties
+;       ss:00 = Equipment resistance identifier
+;       ss:01 = Equipment attack identifier
+;       ss:10 = Equipment weakness identifier
+;       ss:11 = Equipment resists all elements (dddd not used in this case)
+;       0ddd  = 3 bit element ID code.
+EQPR_H_MASK .equ 3<<6
+EQPR_H_NULL .equ 0<<6
+EQPR_H_CODE .equ 1<<6
+EQPR_H_ITEM .equ 2<<6
+EQPR_H_PROP .equ 3<<6
+
+EQPR_M_MASK .equ 3<<4
+EQPR_M_RESI .equ 0<<4
+EQPR_M_WEAK .equ 1<<4
+EQPR_M_ATTK .equ 2<<4
+EQPR_M_RALL .equ 3<<4
+
+EQPR_L_MASK .equ 7<<0  ;//could be 15<<0, but we use only 3 bits
+
+EQ_RES_FIRE     .equ EQPR_H_PROP | EQPR_M_RESI | ELM_FIRE    
+EQ_RES_LIT      .equ EQPR_H_PROP | EQPR_M_RESI | ELM_LIT     
+EQ_RES_ICE      .equ EQPR_H_PROP | EQPR_M_RESI | ELM_ICE     
+EQ_RES_POISON   .equ EQPR_H_PROP | EQPR_M_RESI | ELM_POISON  
+EQ_RES_SLEEP    .equ EQPR_H_PROP | EQPR_M_RESI | ELM_SLEEP   
+EQ_RES_HOLY     .equ EQPR_H_PROP | EQPR_M_RESI | ELM_HOLY    
+EQ_RES_KO       .equ EQPR_H_PROP | EQPR_M_RESI | ELM_KO      
+EQ_RES_GRAVITY  .equ EQPR_H_PROP | EQPR_M_RESI | ELM_GRAVITY
+EQ_RES_ALL      .equ EQPR_H_PROP | EQPR_M_RALL
+
+EQ_WKN_FIRE     .equ EQPR_H_PROP | EQPR_M_WEAK | ELM_FIRE    
+EQ_WKN_LIT      .equ EQPR_H_PROP | EQPR_M_WEAK | ELM_LIT     
+EQ_WKN_ICE      .equ EQPR_H_PROP | EQPR_M_WEAK | ELM_ICE     
+EQ_WKN_POISON   .equ EQPR_H_PROP | EQPR_M_WEAK | ELM_POISON  
+EQ_WKN_SLEEP    .equ EQPR_H_PROP | EQPR_M_WEAK | ELM_SLEEP   
+EQ_WKN_HOLY     .equ EQPR_H_PROP | EQPR_M_WEAK | ELM_HOLY    
+EQ_WKN_KO       .equ EQPR_H_PROP | EQPR_M_WEAK | ELM_KO      
+EQ_WKN_GRAVITY  .equ EQPR_H_PROP | EQPR_M_WEAK | ELM_GRAVITY 
+
+EQ_ATK_FIRE     .equ EQPR_H_PROP | EQPR_M_ATTK | ELM_FIRE    
+EQ_ATK_LIT      .equ EQPR_H_PROP | EQPR_M_ATTK | ELM_LIT     
+EQ_ATK_ICE      .equ EQPR_H_PROP | EQPR_M_ATTK | ELM_ICE     
+EQ_ATK_POISON   .equ EQPR_H_PROP | EQPR_M_ATTK | ELM_POISON  
+EQ_ATK_SLEEP    .equ EQPR_H_PROP | EQPR_M_ATTK | ELM_SLEEP   
+EQ_ATK_HOLY     .equ EQPR_H_PROP | EQPR_M_ATTK | ELM_HOLY    
+EQ_ATK_KO       .equ EQPR_H_PROP | EQPR_M_ATTK | ELM_KO      
+EQ_ATK_GRAVITY  .equ EQPR_H_PROP | EQPR_M_ATTK | ELM_GRAVITY 
+
+EQ_EFF_DEFENSE     .equ EQPR_H_CODE | 1
+EQ_EFF_RUNIC       .equ EQPR_H_CODE | 2
+EQ_EFF_REVENGE     .equ EQPR_H_CODE | 3
+EQ_EFF_DRAIN       .equ EQPR_H_CODE | 4
+EQ_EFF_CASTBLAZE   .equ EQPR_H_CODE | 5
+EQ_EFF_CASTSHOCK   .equ EQPR_H_CODE | 6
+EQ_EFF_HPREGEN     .equ EQPR_H_CODE | 7
+EQ_EFF_F_WEARABLE  .equ EQPR_H_CODE | 8
+EQ_EFF_M_WEARABLE  .equ EQPR_H_CODE | 9
+
+
+
+
+
+
+
 
 
 
