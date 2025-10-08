@@ -1,0 +1,12 @@
+#include "src/inc/osdefs.inc"
+#include "src/inc/macros.inc"
+#include "src/inc/gamedefs.inc"
+
+m_setxy(5,5)
+.db "Welcome \rto Americana.\nPlease make your\nselection, followed\nby the pound\nsign now.\n"
+m_setacc2(111)
+m_printacc(mf_2DIGIT|mf_RIGHT_ALIGN|mf_SIGNED_SHOW_NEG|mf_SIGNED_SHOW_POS)
+.db " Hello.",0
+.db 0
+.echo "This is a test. Address: ",saveSScreen,", here."
+

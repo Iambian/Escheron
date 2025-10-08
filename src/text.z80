@@ -15,6 +15,8 @@ textImageBuffer   .var(8)
 ;B = page offset, HL = string address on that page
 ;If HL points to RAM or HL is on the same page as its caller, you really should
 ;just use printF to avoid needing to page.
+
+
 printFOffpage:
 	in  a,(6)
 	push af
