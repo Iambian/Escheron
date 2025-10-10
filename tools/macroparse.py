@@ -3,13 +3,21 @@
 #
 #
 
-import string, re, sys
+import string, re, sys, random
 from typing import NamedTuple, Iterator
+
+class IncludeDepthExceeded(RecursionError):
+    pass
 
 class Token(NamedTuple):
     type: str
     value: str
     position: str
+
+class TokenLine(NamedTuple):
+    tokens: list[Token]
+    filename: str
+    lineno: int
 
 '''
 class TokenType(object):
@@ -24,6 +32,7 @@ class TokenType(object):
 
 
 class MacroAssembler(object):
+    MAX_RECURSION_DEPTH = 8
     LBLCHARSTART = string.ascii_letters + '_'
     LBLCHARS = LBLCHARSTART + string.digits
     TOKEN_SPEC = [
@@ -36,13 +45,14 @@ class MacroAssembler(object):
         # Function-like macro: identifier immediately followed by (
         ("MACRO_CALL",  r'[A-Za-z_][A-Za-z0-9_]*\('),
         # Directives (e.g., .define)
+        ("DIRECTIVE_CALL",r'\.[A-Za-z_][A-Za-z0-9_]*\('),
         ("DIRECTIVE",   r'\.[A-Za-z_][A-Za-z0-9_]*'),
         # Preprocessor (e.g., #define)
         ("PREOP",       r'\#[A-Za-z_][A-Za-z0-9_]*'),
         # Identifiers
         ("IDENTIFIER",  r'[A-Za-z_][A-Za-z0-9_]*'),
         # Operators and special characters
-        ("OPERATOR",    r'>>|<<|[+\-*/&|^~<>()=]'),
+        ("OPERATOR",    r'==|<=|>=|&&|!=|\|\||\$|>>|<<|[+\-*/&|^~<>()=\\]'),
         ("COMMA",       r','),
         # Whitespace (to be skipped)
         ("SKIP",        r'[ \t\r\n]+'),
@@ -54,10 +64,15 @@ class MacroAssembler(object):
     get_token = re.compile(TOK_REGEX).match
 
     def __init__(self, filepath):
-        self.symtable = dict()
-        self.macros = dict()
         self.filedata = self.openfile(filepath)
         self.filepath = filepath
+        self.reset()
+
+    def reset(self):
+        self.macros = dict()
+        self.symtable = dict()
+        self.result = bytearray()
+
 
     def openfile(self, filepath=None):
         if filepath is None:
@@ -73,6 +88,51 @@ class MacroAssembler(object):
             return
         return filedata
 
+
+
+
+    def preparse(self, filepath=None, inccount=1) -> list[TokenLine]:
+        ''' Tokenizes the file at <filepath>, recursively resolving all #include
+            directives, and returns a list of TokenLine objects.
+        '''
+        cls = self.__class__
+        if filepath is None:
+            filepath = self.filepath
+        if inccount > cls.MAX_RECURSION_DEPTH:
+            raise IncludeDepthExceeded(f"#INCLUDE depth exceeded on file: {filepath}")
+        tokenlines = []
+        filedata = self.openfile(filepath)
+        lines = filedata.splitlines()
+        for linenum, line in enumerate(lines, start=1):
+            if not line.strip():
+                continue
+            line = self.strip_comments(line)
+            if not line:
+                continue
+            try:
+                tokens = list(self.tokenize(line))
+            except Exception as e:
+                print(f"Error occurred at line {linenum} in file {filepath}.")
+                raise e
+            if not tokens:
+                continue
+            # Insert tokenized include file, or insert tokenized.
+            if tokens[0].value == "#include":
+                if len(tokens) < 2 or tokens[1].type != "STRING":
+                    raise ValueError(f"Malformed #INCLUDE at {filepath}:{linenum}.")
+                incpath = self.unescape_string(tokens[1].value) #Verified.
+                try:
+                    tokenlines.extend(self.preparse(incpath, inccount+1))
+                except IncludeDepthExceeded as e:
+                    print(f"[{inccount}] -- #INCLUDE stack unwinding from {filepath}:{linenum}")
+                    raise e
+            else:
+                tokenline = TokenLine(tokens, filepath, linenum)
+                tokenlines.append(tokenline)
+        return tokenlines
+        
+
+
     def parse(self, filedata=None):
         if filedata is None:
             filedata = self.filedata
@@ -82,6 +142,7 @@ class MacroAssembler(object):
                 # Skip empty lines or lines that are just whitespace
                 if not line.strip():
                     continue
+                line = self.strip_comments(line)
                 tokens = list(self.tokenize(line))
                 print(f"Line number {linenum}: {line}")
                 for token in tokens:
@@ -89,9 +150,41 @@ class MacroAssembler(object):
 
 
     def unescape_string(self, raw: str) -> str:
-        quote_char = raw[0]
+        if len(raw) < 2 or raw[0] != raw[-1] or raw[0] not in ('"', "'"):
+            raise ValueError(f"Invalid string literal {raw!r}")
         content = raw[1:-1]  # strip quotes
-        return bytes(content, "utf-8").decode("unicode_escape")
+        result = []
+        p = ''
+        for i,c in enumerate(content):
+            if c == '\\':
+                p = c
+                continue
+            if p == '\\':
+                tc = c.upper()
+                if tc == "N":
+                    result.append('\n')
+                elif tc == "R":
+                    result.append('\r')
+                elif tc == "T":
+                    result.append('\t')
+                elif tc == "0":
+                    result.append('\0')
+                elif tc == "\\":
+                    result.append('\\')
+                elif tc == "'":
+                    result.append('\"')
+                elif tc == "#":
+                    result.append(chr(random.randint(0,255)))
+                else:
+                    result.append(c)
+                p = ''
+            else:
+                result.append(c)
+        else:
+            if p == '\\':
+                result.append(p)
+        return ''.join(c for c in result)
+
 
     def tokenize(self, code:str) -> Iterator[Token]:
         cls = self.__class__
@@ -110,189 +203,34 @@ class MacroAssembler(object):
             mo = cls.get_token(code, pos)
         if pos != len(code):
             raise SyntaxError(f"Unexpected character {code[pos]!r} at position {pos}")
-
-    '''    
-    def token_ishexdigit(self, string):
-        for i in string:
-            if i not in "0123456789abcdefABCDEF":
-                return False
-        return True
-    
-    '''
-
-    #This has been obsoleted. For now. See: tokenize_old
-    #def token_verify(self, token:str) -> TokenType:
-    ''' This verifies if a number/label token is valid. This does not
-        check for the validity of operator tokens - that is the tokenizer's
-        job. For a number/label to be valid, it must adhere to
-        the following rules, which are tested in this order:
-        Numbers: All numeric are numbers. Prefix % or $ are binary/hex.
-            Suffix b/B H/h are binary/hex. Prefix and suffix cannot coexist.
-        Labels: Starts with nonnumeric word character. Rest are word chars.
-        Directives: Starts with a '.', letters following are valid label.
-        Preops: Starts with a '#', letters following are valid label.
-    '''
-    '''        
-        #Check number
-        if token[0] in "$%":
-            # If a token starts with $ or %, it MUST be a number token.
-            # If it is not, then an error should occur.
-            if token[-1] in "HhBb":
-                raise ValueError("Number token may not have both prefix and suffix.")
-            if token[0] == "$" and self.token_ishexdigit(token[1:]):
-                return TokenType.NUMBER
-            if token[0] == "%" and all([i in "01" for i in token[1:]]):
-                return TokenType.NUMBER
-            raise ValueError("Number-prefix indicates number token but contains invalid characters.")
-        if token[-1] in "HhBb":
-            # If the token ends in a suffix, it *could* be a number, but fall
-            # through if it isn't. It could be a label.
-            if self.token_ishexdigit(token[:-1]):
-                return TokenType.NUMBER
-        if token.isdecimal():
-            return TokenType.NUMBER
-        #
         
-    '''            
-
-    # This routine has been decommissioned. I asked ChatGPT about this scenario
-    # and it gave me a bunch of regexes and a routine to use. Let's try that
-    # first but keep this here just in case that doesn't work out.
-    def tokenize_old(self, linedata):
-        ''' Tokens are strings denoting the minimal parsing unit. Some of these
-            may be surprising since we are doing a bespoke operation. Each line
-            is iterated over one character at a time so the current character,
-            previous character, current token (colletion of characters), and
-            the string/escape flags are known at the time.
-
-            The following punctuation is always considered their own token:
-            ~-+=*/)^
-            The open parenthesis is NOT on that list. This is because labels
-            that are immediately adjacent to an open parenthesis MUST be placed
-            as part of the label to mark it as a function-like macro. This is
-            a special case and provisions should be in place to check that
-            appending the open paren to the token is done ONLY if it is a
-            valid (i.e. not a number) macro name.
-
-            The following punctuation are considered word characters for labels:
-            #.
-            These are for preops and directives, respectively. They must appear
-            at the start of a label.
-
-            The % and $ characters are used for binary and hexadecimal number
-            prefixes. $ also has its own meaning if not part of a number so if
-            that's the case, it must then be its own token.
-
-            >> and << are operators. You'll also see > and < in preop
-            conditionals so be able to correctly tokenize > vs >> and such.
-        
-        '''
-        cls = self.__class__
-        token = ""
-        tokens = list()
-        prev = ''
-        isstring = False    # Is either false, or holds opening quote character.
-        isescape = False    # For parsing backslashes inside strings
-        char:str
-        for char in linedata:
-            if token:
-                # If characters are buffered into token, see if we need to
-                # flush it or keep adding characters to it.
-                if isstring:
-                    if char in "\t ":
-                        if prev == "\\":
-                            token += "\\"+char
-                            prev = char
-                            continue
-                        token += char
-                        prev = char
-                        continue
-                    if char == "\\":
-                        if prev == char:
-                            token += "\\"
-                            continue
-                        prev = char
-                        continue
-                    if char == isstring:
-                        if prev == "\\":
-                            token += prev+isstring
-                        else:
-                            tokens.append(token)
-                            token = ""
-                            prev = char
-                            isstring = False
-                else:
-                    # Not parsing inside a string.
-                    if char in string.whitespace:
-                        # If now is a whitespace character, flush token.
-                        tokens.append(token)
-                        token = ""
-                        prev = char
-                        continue
-                    if char in "~-+=*/)^><%$.#":
-                        # The character is an unambiguous operator or a special 
-                        # operator that is known to not be allowed anywhere but 
-                        # at the start of a token. Flush token.
-                        tokens.append(token)
-                        token = ""
-                        prev = char
-                        continue
-                    if char in cls.LBLCHARS:
-                        # The next letter in a number or a label.
-                        token += char
-                        prev = char
-                        continue
-                    if char == '(':
-                        # Special case - If prevchar is a word character, this
-                        # needs to be attached to it and then the token closed
-                        # off. Else, flush the token THEN flush this char as
-                        # A separate token.
-                        if prev in cls.LBLCHARS:
-                            token += char
-                            tokens.append(token)
-                            token = ""
-                            prev = char
-                        else:
-                            tokens.append(token)
-                            tokens.append(char)
-                            token = ""
-                            prev = char
-                        continue
-                    if char in "\"'":
-                        raise ValueError("Quote characters must start on their own token.")
-            else:
-                # Token is empty. 
-                if char in string.whitespace and not tokens:
-                    # Special case - Some lines MUST start with a whitespace
-                    # We are recording whether or not this is true by storing
-                    # a space at the start if true.
-                    tokens.append(' ')
-                    prev = char
+    @staticmethod
+    def strip_comments(code: str) -> str:
+        def strip_line(line: str) -> str:
+            in_string = False
+            escape = False
+            quote_char = ''
+            for i, c in enumerate(line):
+                if escape:
+                    escape = False
                     continue
-                if char in string.whitespace:
-                    if prev in "><":
-                        tokens.append(prev)
-                        prev = char
-                if char in "/*-+~^&|":
-                    # Unconditional punctuation. Emit as own token.
-                    # Token stays empty.
-                    if prev in "><":
-                        raise ValueError("Illegal use of brackets ")
-                    tokens.append(char)
-                    prev = char
-                if char in "><":
-                    # Possible binary expression
-                    if prev == char:
-                        tokens.append(prev+char)
-                    prev = char
-                token = char
+                if c == '\\':
+                    escape = True
+                    continue
+                if in_string:
+                    if c == quote_char:
+                        in_string = False
+                    continue
+                if c in ('"', "'"):
+                    in_string = True
+                    quote_char = c
+                    continue
+                if c == ';':
+                    return line[:i]  # cut off comment
+            return line  # no comment
+        return '\n'.join(strip_line(ln) for ln in code.splitlines())
 
 
-
-
-
-
-        pass
 
 
 if __name__ == "__main__":
@@ -306,4 +244,8 @@ if __name__ == "__main__":
     
     asm = MacroAssembler(filename)
     if asm.filedata:
-        asm.parse()
+        tokenlist = asm.preparse()
+        for item in tokenlist:
+            tokval = ' '.join(t.value for t in item.tokens)
+            print(f"TokenLine: file:{item.filename}, linenum: {item.lineno}, line: [{tokval}]")
+        #asm.parse()
