@@ -9,26 +9,75 @@ from typing import NamedTuple, Iterator
 class IncludeDepthExceeded(RecursionError):
     pass
 
+# Self-explanitory. Tokens are important for parsing.
+# See MacroAssembler.TOKEN_SPEC for token types.
 class Token(NamedTuple):
     type: str
     value: str
     position: str
 
+# Contains a line of tokens and information about where it was tokenized from.
+# 
 class TokenLine(NamedTuple):
     tokens: list[Token]
     filename: str
     lineno: int
 
-'''
-class TokenType(object):
-    ERROR = 0
-    NUMBER = 1
-    LABEL = 2
-    DIRECTIVE = 3
-    MACRO = 4
-    OPERATOR = 5
+#NOTE: See the doc for MacroParamList for this object's usage.
+class MacroParam(NamedTuple):
+    paramid: int        #Starts at 0
+    param: tuple[Token]
 
-'''
+# Used for both macro definition and macro invocation.
+# NOTE: In this doc, MacroAssembler's class instances are referred to as `asm`
+# NOTE: In this doc, MacroParamList's class instances are referred to as `self`
+# NOTE: This entire text block is mostly geared towards planning *how* to use
+#       this object's instance rather than a documentation *of* it, though
+#       it ought to do a good job of that too.
+# Definition: See MacroDictEntry() documentation. Parmeters may only contain
+#   a 1-tuple containing a single token of type IDENTIFIER.
+# Invocation: Parameters may contain any number of tokens, comma-separated.
+#   Parameters may contain macro invocations. Do not evaluate parameters here.
+#   Collapse all tokens containing this macro's invocation into this object.
+#   NOTE: At this step, if the macro name is "eval(" or "concat(", stop here.
+#       These are built-in macros for SPASM-ng and perform special operations
+#       that standard macros cannot. Skip all other steps listed here and know
+#       that the results of this operation will expand in-place. This will
+#       likely involve some kind of evalulate method that I haven't yet made.
+#   Get macro definition (MacroDictEntry) object by doing 
+#   asm.macros[self.name.value]
+#   Then expand the entirety of its tokenlines into an expansion buffer.
+#   YOU MUST DO A DEEP COPY TO AVOID MUTATING THE DEFINITION MACRO BODY.
+#   Match any use of asm.macros[self.name.value].paramlist.params[N].param.value
+#   with any token's value of the IDENTIFIER type in the expansion buffer.
+#   Match asm.macros[self.name.value].paramlist.params[N].param.paramid with
+#   self.params.paramid and get the matching self's param. Replace all tokens
+#   matched in the expansion buffer with their corresponding self's param.
+#   Then call an evaluation method on this expansion buffer.
+#   NOTE: Whenever you evalulate these, it's highly likely that global state
+#       will mutate. This behavior is required for proper processing so long as
+#       you parse one line at a time. In the order they appear.
+#   It is entirely possible that the expansion buffer contains macro
+#   macro invocations as well. During evalulation, these too will create an
+#   expansion buffer. It is here you can check for macro expansion recursion
+#   depth.
+#NOTE: The endpos property's is intended to be used after collecting parameter
+#   tokens. Further use outside of that may end up unreliable since all those
+#   tokens are supposed to collapse into a single token via its caller, so
+#   the TokenLine it comes from ends up being mutated during processing.
+class MacroParamList(NamedTuple):
+    name: Token
+    params: tuple[MacroParam]
+    endpos: int
+
+# Used in MacroAssembler().macros for the value. The key used to reference this
+# value should match MacroDictEntry().paramlist.name.value
+# tokenlines' first (and possibly only) entry should exclude all parts of the
+# line not part of the macro's body. For macros defined with #macro, this is
+# often empty, and may be omitted.
+class MacroDictEntry(NamedTuple):
+    paramlist: MacroParamList
+    tokenlines: list[TokenLine]
 
 
 class MacroAssembler(object):
@@ -41,7 +90,7 @@ class MacroAssembler(object):
         # Hex and binary numbers
         ("HEX_NUMBER",  r'(?:\$[0-9A-Fa-f]+|[0-9A-Fa-f]+H(?![A-Za-z0-9_]))'),
         ("BIN_NUMBER",  r'(?:%[01]+|[01]+B(?![A-Za-z0-9_]))'),
-        ("DEC_NUMBER",  r'\d+'),
+        ("DEC_NUMBER",  r'\d+(?:[dD](?![A-Za-z0-9_]))?'),
         # Function-like macro: identifier immediately followed by (
         ("MACRO_CALL",  r'[A-Za-z_][A-Za-z0-9_]*\('),
         # Directives (e.g., .define)
@@ -69,9 +118,23 @@ class MacroAssembler(object):
         self.reset()
 
     def reset(self):
-        self.macros = dict()
-        self.symtable = dict()
+        self.macros: dict[str, MacroDictEntry] = dict()
+        self.symtable: dict[str, int|None] = dict()
         self.result = bytearray()
+
+    #===========================================================================
+    # Marker to make the parse easier to find
+    def parse(self, tokenlines:list[TokenLine]):
+        for parser_pass in range(1,3):
+            print(f"Pass {parser_pass} start.")
+            if parser_pass == 1:
+                # Let's put testing in here for now. We won't need both passes
+                # until we're ready to perform label resolution.
+                for item in tokenlines:
+                    tokval = ' '.join(t.value for t in item.tokens)
+                    print(f"TokenLine: file:{item.filename}, linenum: {item.lineno}, line: [{tokval}]")
+        return
+
 
 
     def openfile(self, filepath=None):
@@ -87,9 +150,10 @@ class MacroAssembler(object):
             print(f"Error reading file '{filepath}': {e}")
             return
         return filedata
-
-
-
+    
+    def process(self):
+        tokenlines = self.preparse()
+        return self.parse(tokenlines)
 
     def preparse(self, filepath=None, inccount=1) -> list[TokenLine]:
         ''' Tokenizes the file at <filepath>, recursively resolving all #include
@@ -131,24 +195,6 @@ class MacroAssembler(object):
                 tokenlines.append(tokenline)
         return tokenlines
         
-
-
-    def parse(self, filedata=None):
-        if filedata is None:
-            filedata = self.filedata
-        lines = filedata.splitlines() # Split filedata into individual lines
-        for i in range(2): # The original code had a loop for 2 passes, keeping it for now.
-            for linenum,line in enumerate(lines): # Iterate over lines
-                # Skip empty lines or lines that are just whitespace
-                if not line.strip():
-                    continue
-                line = self.strip_comments(line)
-                tokens = list(self.tokenize(line))
-                print(f"Line number {linenum}: {line}")
-                for token in tokens:
-                    print(token)
-
-
     def unescape_string(self, raw: str) -> str:
         if len(raw) < 2 or raw[0] != raw[-1] or raw[0] not in ('"', "'"):
             raise ValueError(f"Invalid string literal {raw!r}")
@@ -243,9 +289,4 @@ if __name__ == "__main__":
     filename = "tools/macrotest.z80"
     
     asm = MacroAssembler(filename)
-    if asm.filedata:
-        tokenlist = asm.preparse()
-        for item in tokenlist:
-            tokval = ' '.join(t.value for t in item.tokens)
-            print(f"TokenLine: file:{item.filename}, linenum: {item.lineno}, line: [{tokval}]")
-        #asm.parse()
+    asm.process()
