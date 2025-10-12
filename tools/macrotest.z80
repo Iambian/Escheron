@@ -10,3 +10,10 @@ m_printacc(mf_2DIGIT|mf_RIGHT_ALIGN|mf_SIGNED_SHOW_NEG|mf_SIGNED_SHOW_POS)
 .db 0
 .echo "This is a test. Address: ",saveSScreen,", here."
 
+;Comprehensive macro function testing.
+macro(
+.directive(1, 2, other(3, 4), 5) \ biscuit("something", something)
+MyMacro("foo, bar", 2)
+MyMacro()
+macro(1, (2, 3), 4)
+macro(1, 2

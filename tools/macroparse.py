@@ -3,33 +3,30 @@
 #
 #
 
-import string, re, sys, random
-from typing import NamedTuple, Iterator
+import string, re, sys, random, copy
+from typing import NamedTuple, Iterator, Optional
 
 class IncludeDepthExceeded(RecursionError):
     pass
 
-'''
-Self-explanitory. Tokens are important for parsing.
-See MacroAssembler.TOKEN_SPEC for token types.
-'''
 class Token(NamedTuple):
+    ''' Self-explanitory. Tokens are important for parsing.
+        See MacroAssembler.TOKEN_SPEC for token types.
+    '''
     type: str
     value: str
     position: str
 
-'''
-Contains a line of tokens and information about where it was tokenized from.
-'''
 class TokenLine(NamedTuple):
+    ''' A line of tokens and information about where it was tokenized from.
+    '''
     tokens: list[Token]
     filename: str
     lineno: int
 
-'''
-NOTE: See the doc for MacroParamList for this object's usage.
-'''
 class MacroParam(NamedTuple):
+    ''' NOTE: See the doc for MacroParamList for this object's usage.
+    '''
     paramid: int        #Starts at 0
     param: tuple[Token]
 
@@ -83,9 +80,11 @@ Used in MacroAssembler().macros for the value. The key used to reference this
 value should match MacroDictEntry().paramlist.name.value
 tokenlines' first (and possibly only) entry should exclude all parts of the
 line not part of the macro's body. For macros defined with #macro, this is
-often empty, and may be omitted.
+often empty, and may be omitted. 
+A duplicate of the name was added. Just in case I need it.
 '''
 class MacroDictEntry(NamedTuple):
+    name: Token
     paramlist: MacroParamList
     tokenlines: list[TokenLine]
 
@@ -125,6 +124,7 @@ class MacroAssembler(object):
     def __init__(self, filepath):
         self.filedata = self.openfile(filepath)
         self.filepath = filepath
+        self.defaultmacros = dict()
         self.reset()
 
     def reset(self):
@@ -134,38 +134,117 @@ class MacroAssembler(object):
 
     def process(self):
         tokenlines = self.preparse()
-        return self.parse(tokenlines)
+        tokenlinescopy = copy.deepcopy(tokenlines)
+        self.parse(tokenlinescopy, 1)
+        tokenlinescopy = copy.deepcopy(tokenlines)
+        self.parse(tokenlinescopy, 2)
+        return self.result
 
     #===========================================================================
     # Marker to make the parse easier to find
-    def parse(self, tokenlines:list[TokenLine]):
+    def parse(self, tokenlines:list[TokenLine], passid=1, depth=1):
+        ''' NOTE: tokenlines WILL MUTATE.
+        THIS IS BY DESIGN TO SUPPORT IN-PLACE MACRO EXPANSION. TOP-LEVEL CALLERS
+        MUST DEEPCOPY tokenlines PRIOR TO CALLING AND REGENERATE FROM THE COPY
+        IN ORDER TO CORRECTLY PERFORM A SECOND PASS.
+        '''
         def printtok(tokens: list[Token]):
             return ' '.join(t.value for t in tokens)
-        for parser_pass in range(1,3):
-            print(f"Pass {parser_pass} start.")
-            if parser_pass == 1:
-                # Let's put testing in here for now. We won't need both passes
-                # until we're ready to perform label resolution.
-                '''                
-                for item in tokenlines:
-                    tokval = printtok(item.tokens)
-                    print(f"TokenLine: file:{item.filename}, linenum: {item.lineno}, line: [{tokval}]")
+        print(f"Pass {passid} start.")
 
-                '''
-                for tokenline in tokenlines:
-                    startpos = 0
-                    while True:
+        inside_macrodef = False
+        preop_if_level = 0
+        # Macros must always be regenerated at the start of each pass since
+        # they may expand differently the next time around
+        self.macros = copy.deepcopy(self.defaultmacros)
+
+        # This is the parser section. This processes the tokenlines object
+        # and potentially mutates it for macro expansion purposes. All
+        # possible mutations are on or after the current tokenline.
+        tokenline_index = 0
+        while tokenline_index < len(tokenlines):
+            try:
+                tokenline = tokenlines[tokenline_index]
+            except:
+                break
+            tokens = tokenline.tokens
+            lead_token = tokens[0]
+            if lead_token.type == "PREOP":
+                lead_token_val = lead_token.value.upper()
+                # Insert #macro and #endmacro here to prevent other preop
+                # parsing for purposes of macro expansion later on, where they
+                # may be parsed then.
+
+                # Insert #if #ifdef #ifndef #else #elif #endif here to allow
+                # further flow control.
+
+                #Really, #DEFINE needs to be among the last to be processed
+                # among the preops. 
+                if lead_token_val == "#DEFINE":
+                    if len(tokens) < 2:
+                        raise ValueError(f"Incomplete #DEFINE operation at {tokenline.filename}:{tokenline.lineno}")
+                    if tokens[1].type in ("IDENTIFIER","DIRECTIVE"):
+                        # This is a bare macro def. These have no parameters.
+                        mde_tokline = self.slice_tokline(tokenline, 2)
+                        mpl = MacroParamList(tokens[1], tuple(), 0, 0)
+                        mde = MacroDictEntry(mpl.name, mpl, [mde_tokline,])
+                        self.macros[tokens[1].value] = mde
+                    elif tokens[1].type in ("MACRO_CALL", "DIRECTIVE_CALL"):
+                        mpl = self.find_macro_and_param(tokenline)
+                        if mpl.endpos+1 >= len(tokenline.tokens):
+                            raise ValueError(f"Disallowed empty macro body at {tokenline.filename}:{tokenline.lineno}")
+                        mde_tokline = self.slice_tokline(tokenline,mpl.endpos)
+                        mde = MacroDictEntry(mpl.name, mpl, [mde_tokline,] )
+                        pass
+                    else:
+                        raise ValueError(f"Unexpected token in {tokenline.filename}:{tokenline.lineno} pos {tokens[1].position}")
+
+            tokenline_index += 1
+            pass
+
+        # Postprocess testing
+        if passid == 1:
+            #Print what the macros filled out to.
+            for k in self.macros:
+                print(self.macros[k].name.value)
+                #print(self.macros[k])
+
+            # Let's put testing in here for now. We won't need both passes
+            # until we're ready to perform label resolution.
+            '''
+            # Basic visual test for exposing underlying tokens
+            for tokenline in tokenlines:
+                print(tokenline)
+            '''
+            '''
+            # Visual test for summarizing TokenList contents, space-delimit
+            for item in tokenlines:
+                tokval = printtok(item.tokens)
+                print(f"TokenLine: file:{item.filename}, linenum: {item.lineno}, line: [{tokval}]")
+
+            '''
+            '''
+            # Visual test for identifying all function-like macro on a line
+            for tokenline in tokenlines:
+                startpos = 0
+                while True:
+                    try:
                         v = self.find_macro_and_param(tokenline, startpos)
-                        if v is None:
-                            break
-                        startpos = v.endpos
-                        numparams = len(v.params)
-                        print(f"Macro sig found in {tokenline.filename}: {tokenline.lineno}, pos: {v.startpos}, params: {numparams}")
-                        print(f"Macroname: {v.name.value}")
-                        for i in range(numparams):
-                            print(f"Param {i}: {printtok(v.params[i].param)}")
+                    except Exception as e:
+                        print(f"Error encountered: {e}")
+                    if v is None:
+                        break
+                    startpos = v.endpos
+                    numparams = len(v.params)
+                    print(f"Macro sig found in {tokenline.filename}: {tokenline.lineno}, pos: {v.startpos}, params: {numparams}")
+                    print(f"Macroname: {v.name.value}")
+                    for i in range(numparams):
+                        print(f"Param {i}: {printtok(v.params[i].param)}")
+            '''
         return
-
+    
+    def slice_tokline(self, tokenline:TokenLine, start, end=None):
+        return TokenLine(tokenline.tokens[start:end], tokenline.filename, tokenline.lineno)
 
     def preparse(self, filepath=None, inccount=1) -> list[TokenLine]:
         ''' Tokenizes the file at <filepath>, recursively resolving all #include
@@ -207,7 +286,7 @@ class MacroAssembler(object):
                 tokenlines.append(tokenline)
         return tokenlines
     
-    def find_macro_and_param(self, tokenline:TokenLine, start=0) -> MacroParamList|None:
+    def find_macro_and_param(self, tokenline:TokenLine, start=0) -> Optional[MacroParamList]:
         paren_level = None
         macro_name:Token = None
         macro_params:list[MacroParam] = []
@@ -215,38 +294,45 @@ class MacroAssembler(object):
         param_id = 0
         for pos in range(start,len(tokenline.tokens)):
             token = tokenline.tokens[pos]
+            # Iterate until it catches on a macro call. Once it does, any
+            # further macros will simply increase parenthesis level as if it
+            # were a '(' operator, since they're basically named open parens.
             if token.type in ("DIRECTIVE_CALL", "MACRO_CALL") and token.value.endswith('('):
-                start_pos = pos
-                paren_level = 0
-                macro_name = token
+                if not macro_name:
+                    start_pos = pos
+                    paren_level = 0
+                    macro_name = token
+                    continue
+                else:
+                    paren_level += 1
+            # If we haven't caught a macro, skip further processing.
+            if not macro_name:
                 continue
-            if paren_level is None:
-                continue
-            # The above is a guard to prevent further processing if we're not
-            # processing a functionlike macro.
-            if token.type == "OPERATOR":
+            # Otherwise, keep iterating with the available symbols.
+            elif token.type == "OPERATOR":
                 if token.value == "(":
                     paren_level += 1
                 if token.value == ")":
                     paren_level -= 1
+                    # 0 is the baseline. If falls below 0, we fell out of macro.
                     if paren_level < 0:
                         param = MacroParam(param_id, tuple(param_buffer))
                         macro_params.append(param)
                         end_pos = pos
                         break
-            if token.type == "COMMA" and paren_level == 0:
+            elif token.type == "COMMA" and paren_level == 0:
                 param = MacroParam(param_id, tuple(param_buffer))
                 macro_params.append(param)
                 param_buffer = []
                 param_id += 1
                 continue
             # All other tokens are placed into the buffer with the above
-            # ensuring that the commas and the matching close paren is not
-            # added to the token stream.
+            # ensuring that the commas and the final closing paren is not added.
+            # Parens that are part of params, however, will be added.
             param_buffer.append(token)
         else:
             # Loop ended without breaking. Means that a function signature
-            # wasn't found, or the matching close paren wasn't found.
+            # wasn't found, or the final close paren wasn't found.
             if not macro_name:
                 return None
             raise ValueError(f"Matching parenthesis not found in {tokenline.filename}: Ln {tokenline.lineno}, starting at {macro_name.position}")
