@@ -116,6 +116,20 @@ class MacroAssembler(object):
         MUST DEEPCOPY tokenlines PRIOR TO CALLING AND REGENERATE FROM THE COPY
         IN ORDER TO CORRECTLY PERFORM A SECOND PASS.
         '''
+        ''' TODO: If in the case of macro expansion (depth>1) the macro body
+            must have been copied before passing this in. the tokenlines it
+            is passed in may have lines remove()'d from them if they are
+            non-emittable, as in the case of preops, but only after they have
+            been parsed. The lines they emit, once the parse() has returned
+            to its caller, is inserted into where the macro was expanded. If
+            more than one line, then these lines are inserted as such:
+            the stuff before the first line is prepended to the new first line.
+            All intermediary lines are inserted into the original tokenlines at
+            the current line position. The tokens after the insertion point is
+            appended to the final line of the new tokens. If the macro is only
+            one line, then the prepend and append line are the same. That is,
+            it's an insertion.
+        '''
         if self.DEBUG_MODE:
             def printtok(tokens: tuple[Token, ...]):
                 return ' '.join(t.value for t in tokens)
@@ -157,6 +171,7 @@ class MacroAssembler(object):
                 tokenline_index += 1 # Consume the line
                 continue # Skip further processing for this line
 
+            #NOTE: There will be another PREOP block. After macro expansion.
             if lead_token.type == "PREOP":
                 lead_token_val = lead_token.value.upper()
                 if lead_token_val == "#MACRO":
@@ -198,7 +213,75 @@ class MacroAssembler(object):
                         pass
                     else:
                         raise ValueError(f"Unexpected token in {tokenline.filename}:{tokenline.lineno} pos {tokens[1].position}")
+            # Macro expansion
+            macexp_idx = 0
+            macexp_tokens = list(tokens)
+            while True:
+                token = macexp_tokens[macexp_idx]
+                if token.type in ("DIRECTIVE", "IDENTIFIER", "DIRECTIVE_CALL", "MACRO_CALL"):
+                    if token.value in self.macros:
+                        mac_mde = self.macros[token.value]
+                        if token.value.endswith("("):
+                            # macexp_tokens is mutable so we can't trust that tokenline
+                            # has the data we need in the place we need it in.
+                            temp_tokline = self.splice_tokline(tokenline, None, None, macexp_tokens)
+                            inv_mpl = self.find_macro_and_param(temp_tokline, macexp_idx)
+                            assert(inv_mpl, "Macro expansion error. Tripping this error shouldn't be possible.")
+                        else:
+                            inv_mpl = MacroParamList(token, tuple(), macexp_idx, macexp_idx)
+                        params_found = len(inv_mpl.params)
+                        params_expected = len(mac_mde.paramlist.params)
+                        if  params_found != params_expected:
+                            raise ValueError(f"Macro param count mismatch. Found {params_found}, expected {params_expected} in {tokenline.filename}:{tokenline.lineno} ")
+                        
+                        ''' TODO: at this point, we have macro name, dict entry
 
+                            (params expected) in mac_mde, params found (if any)
+                            in inv_mpl (note: start:end was made so consistent
+                            action can be taken between bare and function macros) 
+                            Something to expand macros into a buffer should take
+                            a look at the params in mac_mde and find matching
+                            tokens to replace with params found in inv_mpl.
+                            Once expansion buffer is finished copying,
+                            run parse() on it. This may mutate this list.
+                            The mutated list is inserted in-place with rules
+                            regarding multiline inserts, described in the TODO
+                            block near start of parse().
+                            It should be safe to process this mutated tokenline
+                            without accounting for actual expansion since the
+                            recursive nature of expansion ensures that no other
+                            expansions are possible (either because they've all
+                            been expanded, or the parser threw an error).
+                            Profiling may be required to determine if this
+                            impacts performance, but I think it's negligible
+                            under non-contrived scenarios.
+                        '''
+                        invocation_expansion_buffer:list[TokenLine] = list()
+                        for mdef_tokline in mac_mde.tokenlines:
+                            mdef_tokenbuf:list[Token] = list()
+                            mdef_paramlist = [p.param[0] for p in mac_mde.paramlist.params]
+                            for mdef_token in mdef_tokline.tokens:
+                                #backfill parameters
+                                if mdef_token.type == "IDENTIFIER":
+                                    if mdef_token.value in mdef_paramlist:
+                                        idx = mdef_paramlist.index(mdef_token.value)
+                                        mdef_tokenbuf.extend(list(inv_mpl.params[idx].param))
+                                else:
+                                    mdef_tokenbuf.append(mdef_token)
+                            invocation_expansion_buffer.append(self.splice_tokline(mdef_tokline,None, None, mdef_tokenbuf))
+                        # Expansion buffer created. Parse it? Mutates in-place.
+                        self.parse(invocation_expansion_buffer, passid, depth+1)
+
+
+                #Note: Have a way to break out of this at some point.
+
+
+                pass
+
+
+
+
+                
             tokenline_index += 1
             pass
 
@@ -248,8 +331,23 @@ class MacroAssembler(object):
                             print(f"Param {i}: {printtok(v.params[i].param)}")
         return
     
-    def slice_tokline(self, tokenline:TokenLine, start, end=None):
+    def slice_tokline(self, tokenline:TokenLine, start, end=None) -> TokenLine:
         return TokenLine(tokenline.tokens[start:end], tokenline.filename, tokenline.lineno)
+
+    def splice_tokline(self, tokenline:TokenLine, start=None, end=None, newtokens:Optional[list[Token]]=None) -> TokenLine:
+        ''' Reference notes:
+        `newtokens` may be empty (for deletion).
+        Insertion: `start` == `end`. 
+        Replace:   `start` < `end`, where numtokens replaced at `start` is `end`-`start`. 
+        Append:    `start` == `len(tokenline.tokens)`, `end` == `None`. 
+        Prepend:   `start` == `None`, `end` == 0. 
+        Replace All: `start` and `end` == `None`
+        '''
+        oldtokens = list(tokenline.tokens)
+        oldtokens[start:end] = list(newtokens) if newtokens else []
+        return TokenLine(tuple(oldtokens), tokenline.filename, tokenline.lineno)
+
+
 
     def preparse(self, filepath=None, inccount=1) -> list[TokenLine]:
         ''' Tokenizes the file at <filepath>, recursively resolving all #include
