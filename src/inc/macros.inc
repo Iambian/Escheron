@@ -16,6 +16,8 @@
 ;       you'd concat(). Yes, eval("MY","_","STRING") results in "MY_STRING"
 ;
 
+
+
 #define VERBOSE_OUTPUT
 
 #define getpage(adr) ((adr&$00FF0000)>>16)+0

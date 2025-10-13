@@ -19,8 +19,9 @@ class Token(NamedTuple):
 
 class TokenLine(NamedTuple):
     ''' A line of tokens and information about where it was tokenized from.
+        Tokens are stored as a tuple to ensure immutability.
     '''
-    tokens: list[Token]
+    tokens: tuple[Token, ...]
     filename: str
     lineno: int
 
@@ -148,12 +149,15 @@ class MacroAssembler(object):
         MUST DEEPCOPY tokenlines PRIOR TO CALLING AND REGENERATE FROM THE COPY
         IN ORDER TO CORRECTLY PERFORM A SECOND PASS.
         '''
-        def printtok(tokens: list[Token]):
+        def printtok(tokens: tuple[Token, ...]):
             return ' '.join(t.value for t in tokens)
         print(f"Pass {passid} start.")
 
         inside_macrodef = False
+        macrodef_expansion_buffer = list()
+        macrodef_param_list:MacroParamList = None
         preop_if_level = 0
+
         # Macros must always be regenerated at the start of each pass since
         # they may expand differently the next time around
         self.macros = copy.deepcopy(self.defaultmacros)
@@ -169,12 +173,57 @@ class MacroAssembler(object):
                 break
             tokens = tokenline.tokens
             lead_token = tokens[0]
+            # Begin processing the lines
+            if inside_macrodef:
+                # If defining a macro, simply collect the lines.
+                ''' NOTE: WE ARE USING THE EXPANSION BUFFER WHILE COLLECTING
+                    MACRO DATA FOR DEFINITION. WE ARE NOT ACTUALLY EXPANDING
+                    THE MACRO AT THIS POINT, BUT WHEN A MACRO IS INVOKED, IT
+                    IS USED. THIS MAY ALSO BE THE REASON WHY IN SPASM-NG, IT
+                    IS NOT POSSIBLE TO DEFINE A MULTILINE MACRO INSIDE AN
+                    EXISTING MULTILINE MACRO (I.E. NEST #MACRO PREOPS). THOUGH
+                    THIS IS PRESUMING THAT THE EXPANSION BUFFER BEHAVIOR IS
+                    THE SAME. FOR ALL I KNOW, IT'S JUST NESTED POINTERS.
+                    WHICH DOESN'T ACTUALLY RESOLVE ANYTHING. ANYHOO, THIS IS
+                    JUST RAMBLING SO THAT I CAN SIGN OFF WITHOUT ANY CONCERNS
+                    THAT I LEFT A THOUGHT UNEXPRESSED, AND THUS, LIABLE FOR
+                    FORGETTING.
+                '''
+                if lead_token.type == "PREOP" and lead_token.value.upper() == "#ENDMACRO":
+                    # End of macro definition
+                    mde = MacroDictEntry(macrodef_param_list.name, macrodef_param_list, macrodef_expansion_buffer)
+                    self.macros[macrodef_param_list.name.value] = mde
+                    inside_macrodef = False
+                    macrodef_param_list = None
+                    macrodef_expansion_buffer = list()
+                else:
+                    # Collect lines for macro definition
+                    macrodef_expansion_buffer.append(tokenline)
+                tokenline_index += 1 # Consume the line
+                continue # Skip further processing for this line
+
             if lead_token.type == "PREOP":
                 lead_token_val = lead_token.value.upper()
-                # Insert #macro and #endmacro here to prevent other preop
-                # parsing for purposes of macro expansion later on, where they
-                # may be parsed then.
-
+                if lead_token_val == "#MACRO":
+                    # Must be first in preops. These are multi-line macro defs.
+                    # The lines that begin and end the macro (#macro/#endmacro)
+                    # may not contain the macro body. Not an error. Just ignored
+                    if inside_macrodef == True:
+                        raise RecursionError(f"Illegal #MACRO nest at {tokenline.filename}:{tokenline.lineno}")
+                    if len(tokens) < 2:
+                        raise ValueError(f"Incomplete #MACRO operation at {tokenline.filename}:{tokenline.lineno}")
+                    if tokens[1].type == "IDENTIFIER":
+                        # Bare macro def
+                        # There... really isn't much to do.
+                        mpl = MacroParamList(tokens[1], tuple(), 0, 0)
+                        macrodef_param_list = mpl
+                    elif tokens[1].type in ("MACRO_CALL", "DIRECTIVE_CALL"):
+                        mpl = self.find_macro_and_param(tokenline)
+                        macrodef_param_list = mpl
+                    else:
+                        raise ValueError(f"Unexpected token at {tokenline.filename}:{tokenline.lineno} pos {tokens[1].position}")
+                    macrodef_expansion_buffer = list()
+                    inside_macrodef = True
                 # Insert #if #ifdef #ifndef #else #elif #endif here to allow
                 # further flow control.
 
@@ -195,6 +244,7 @@ class MacroAssembler(object):
                             raise ValueError(f"Disallowed empty macro body at {tokenline.filename}:{tokenline.lineno}")
                         mde_tokline = self.slice_tokline(tokenline,mpl.endpos)
                         mde = MacroDictEntry(mpl.name, mpl, [mde_tokline,] )
+                        self.macros[tokens[1].value] = mde
                         pass
                     else:
                         raise ValueError(f"Unexpected token in {tokenline.filename}:{tokenline.lineno} pos {tokens[1].position}")
@@ -204,10 +254,23 @@ class MacroAssembler(object):
 
         # Postprocess testing
         if passid == 1:
+            #'''            
             #Print what the macros filled out to.
+            print("Printing macros...")
             for k in self.macros:
                 print(self.macros[k].name.value)
                 #print(self.macros[k])
+            #'''
+
+            '''
+            #Print the contents of each macro
+            for k in self.macros:
+                v = self.macros[k]
+                print(f"Macro: {k}")
+                print(f"Macro params: {v.paramlist.params}")
+                for tokline in v.tokenlines:
+                    print(tokline)
+            '''
 
             # Let's put testing in here for now. We won't need both passes
             # until we're ready to perform label resolution.
@@ -282,7 +345,7 @@ class MacroAssembler(object):
                     print(f"[{inccount}] -- #INCLUDE stack unwinding from {filepath}:{linenum}")
                     raise e
             else:
-                tokenline = TokenLine(tokens, filepath, linenum)
+                tokenline = TokenLine(tuple(tokens), filepath, linenum)
                 tokenlines.append(tokenline)
         return tokenlines
     
@@ -336,7 +399,9 @@ class MacroAssembler(object):
             if not macro_name:
                 return None
             raise ValueError(f"Matching parenthesis not found in {tokenline.filename}: Ln {tokenline.lineno}, starting at {macro_name.position}")
-        return MacroParamList(macro_name, tuple(macro_params), start_pos, end_pos)
+        result = MacroParamList(macro_name, tuple(macro_params), start_pos, end_pos)
+        #print(result)
+        return result
         
     def tokenize(self, code:str) -> Iterator[Token]:
         cls = self.__class__
