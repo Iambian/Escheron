@@ -10,9 +10,7 @@ class IncludeDepthExceeded(RecursionError):
     pass
 
 class Token(NamedTuple):
-    ''' Self-explanitory. Tokens are important for parsing.
-        See MacroAssembler.TOKEN_SPEC for token types.
-    '''
+    ''' Represents a token identified during lexical analysis. '''
     type: str
     value: str
     position: str
@@ -26,65 +24,32 @@ class TokenLine(NamedTuple):
     lineno: int
 
 class MacroParam(NamedTuple):
-    ''' NOTE: See the doc for MacroParamList for this object's usage.
-    '''
-    paramid: int        #Starts at 0
+    ''' Represents a single parameter within a macro definition or invocation. '''
+    paramid: int        # Starts at 0
     param: tuple[Token]
 
-'''
-Used for both macro definition and macro invocation.
-NOTE: In this doc, MacroAssembler's class instances are referred to as `asm`
-NOTE: In this doc, MacroParamList's class instances are referred to as `self`
-NOTE: This entire text block is mostly geared towards planning *how* to use
-      this object's instance rather than a documentation *of* it, though
-      it ought to do a good job of that too.
-Definition: See MacroDictEntry() documentation. Parmeters may only contain
-  a 1-tuple containing a single token of type IDENTIFIER.
-Invocation: Parameters may contain any number of tokens, comma-separated.
-  Parameters may contain macro invocations. Do not evaluate parameters here.
-  Collapse all tokens containing this macro's invocation into this object.
-  NOTE: At this step, if the macro name is "eval(" or "concat(", stop here.
-      These are built-in macros for SPASM-ng and perform special operations
-      that standard macros cannot. Skip all other steps listed here and know
-      that the results of this operation will expand in-place. This will
-      likely involve some kind of evalulate method that I haven't yet made.
-  Get macro definition (MacroDictEntry) object by doing 
-  asm.macros[self.name.value]
-  Then expand the entirety of its tokenlines into an expansion buffer.
-  YOU MUST DO A DEEP COPY TO AVOID MUTATING THE DEFINITION MACRO BODY.
-  Match any use of asm.macros[self.name.value].paramlist.params[N].param.value
-  with any token's value of the IDENTIFIER type in the expansion buffer.
-  Match asm.macros[self.name.value].paramlist.params[N].param.paramid with
-  self.params.paramid and get the matching self's param. Replace all tokens
-  matched in the expansion buffer with their corresponding self's param.
-  Then call an evaluation method on this expansion buffer.
-  NOTE: Whenever you evalulate these, it's highly likely that global state
-      will mutate. This behavior is required for proper processing so long as
-      you parse one line at a time. In the order they appear.
-  It is entirely possible that the expansion buffer contains macro
-  macro invocations as well. During evalulation, these too will create an
-  expansion buffer. It is here you can check for macro expansion recursion
-  depth.
-NOTE: The endpos property's is intended to be used after collecting parameter
-  tokens. Further use outside of that may end up unreliable since all those
-  tokens are supposed to collapse into a single token via its caller, so
-  the TokenLine it comes from ends up being mutated during processing.
-'''
 class MacroParamList(NamedTuple):
+    '''
+    Represents the name and parameters of a macro, used for both definition
+    and invocation.
+
+    Definition: Parameters may only contain a single IDENTIFIER token.
+    Invocation: Parameters may contain any number of tokens, comma-separated,
+                and may include nested macro invocations.
+    Aspirational: Future implementation will handle built-in SPASM-ng macros
+                  like "eval(" or "concat(" with special in-place expansion.
+    '''
     name: Token
     params: tuple[MacroParam]
     startpos: int
     endpos: int
 
-'''
-Used in MacroAssembler().macros for the value. The key used to reference this
-value should match MacroDictEntry().paramlist.name.value
-tokenlines' first (and possibly only) entry should exclude all parts of the
-line not part of the macro's body. For macros defined with #macro, this is
-often empty, and may be omitted. 
-A duplicate of the name was added. Just in case I need it.
-'''
 class MacroDictEntry(NamedTuple):
+    '''
+    Stores a macro's definition, including its name, parameter list, and
+    the tokenized lines of its body.
+    The `tokenlines` should exclude the #macro/#endmacro directives themselves.
+    '''
     name: Token
     paramlist: MacroParamList
     tokenlines: list[TokenLine]
@@ -92,6 +57,8 @@ class MacroDictEntry(NamedTuple):
 
 class MacroAssembler(object):
     MAX_RECURSION_DEPTH = 8
+    DEBUG_MODE = True # Set to True to enable debug print statements and test code
+    DEBUG_TEST_TYPE = 0
     LBLCHARSTART = string.ascii_letters + '_'
     LBLCHARS = LBLCHARSTART + string.digits
     TOKEN_SPEC = [
@@ -149,9 +116,10 @@ class MacroAssembler(object):
         MUST DEEPCOPY tokenlines PRIOR TO CALLING AND REGENERATE FROM THE COPY
         IN ORDER TO CORRECTLY PERFORM A SECOND PASS.
         '''
-        def printtok(tokens: tuple[Token, ...]):
-            return ' '.join(t.value for t in tokens)
-        print(f"Pass {passid} start.")
+        if self.DEBUG_MODE:
+            def printtok(tokens: tuple[Token, ...]):
+                return ' '.join(t.value for t in tokens)
+            print(f"Pass {passid} start.")
 
         inside_macrodef = False
         macrodef_expansion_buffer = list()
@@ -176,19 +144,6 @@ class MacroAssembler(object):
             # Begin processing the lines
             if inside_macrodef:
                 # If defining a macro, simply collect the lines.
-                ''' NOTE: WE ARE USING THE EXPANSION BUFFER WHILE COLLECTING
-                    MACRO DATA FOR DEFINITION. WE ARE NOT ACTUALLY EXPANDING
-                    THE MACRO AT THIS POINT, BUT WHEN A MACRO IS INVOKED, IT
-                    IS USED. THIS MAY ALSO BE THE REASON WHY IN SPASM-NG, IT
-                    IS NOT POSSIBLE TO DEFINE A MULTILINE MACRO INSIDE AN
-                    EXISTING MULTILINE MACRO (I.E. NEST #MACRO PREOPS). THOUGH
-                    THIS IS PRESUMING THAT THE EXPANSION BUFFER BEHAVIOR IS
-                    THE SAME. FOR ALL I KNOW, IT'S JUST NESTED POINTERS.
-                    WHICH DOESN'T ACTUALLY RESOLVE ANYTHING. ANYHOO, THIS IS
-                    JUST RAMBLING SO THAT I CAN SIGN OFF WITHOUT ANY CONCERNS
-                    THAT I LEFT A THOUGHT UNEXPRESSED, AND THUS, LIABLE FOR
-                    FORGETTING.
-                '''
                 if lead_token.type == "PREOP" and lead_token.value.upper() == "#ENDMACRO":
                     # End of macro definition
                     mde = MacroDictEntry(macrodef_param_list.name, macrodef_param_list, macrodef_expansion_buffer)
@@ -205,16 +160,13 @@ class MacroAssembler(object):
             if lead_token.type == "PREOP":
                 lead_token_val = lead_token.value.upper()
                 if lead_token_val == "#MACRO":
-                    # Must be first in preops. These are multi-line macro defs.
-                    # The lines that begin and end the macro (#macro/#endmacro)
-                    # may not contain the macro body. Not an error. Just ignored
+                    # Multi-line macro definition.
                     if inside_macrodef == True:
                         raise RecursionError(f"Illegal #MACRO nest at {tokenline.filename}:{tokenline.lineno}")
                     if len(tokens) < 2:
                         raise ValueError(f"Incomplete #MACRO operation at {tokenline.filename}:{tokenline.lineno}")
                     if tokens[1].type == "IDENTIFIER":
-                        # Bare macro def
-                        # There... really isn't much to do.
+                        # Bare macro definition (no parameters).
                         mpl = MacroParamList(tokens[1], tuple(), 0, 0)
                         macrodef_param_list = mpl
                     elif tokens[1].type in ("MACRO_CALL", "DIRECTIVE_CALL"):
@@ -224,16 +176,14 @@ class MacroAssembler(object):
                         raise ValueError(f"Unexpected token at {tokenline.filename}:{tokenline.lineno} pos {tokens[1].position}")
                     macrodef_expansion_buffer = list()
                     inside_macrodef = True
-                # Insert #if #ifdef #ifndef #else #elif #endif here to allow
-                # further flow control.
+                # Aspirational: Implement #if, #ifdef, #ifndef, #else, #elif, #endif for flow control.
 
-                #Really, #DEFINE needs to be among the last to be processed
-                # among the preops. 
+                # #DEFINE directives should be processed after other preprocessor directives.
                 if lead_token_val == "#DEFINE":
                     if len(tokens) < 2:
                         raise ValueError(f"Incomplete #DEFINE operation at {tokenline.filename}:{tokenline.lineno}")
                     if tokens[1].type in ("IDENTIFIER","DIRECTIVE"):
-                        # This is a bare macro def. These have no parameters.
+                        # Bare macro definition (no parameters).
                         mde_tokline = self.slice_tokline(tokenline, 2)
                         mpl = MacroParamList(tokens[1], tuple(), 0, 0)
                         mde = MacroDictEntry(mpl.name, mpl, [mde_tokline,])
@@ -252,58 +202,50 @@ class MacroAssembler(object):
             tokenline_index += 1
             pass
 
-        # Postprocess testing
-        if passid == 1:
-            #'''            
-            #Print what the macros filled out to.
-            print("Printing macros...")
-            for k in self.macros:
-                print(self.macros[k].name.value)
-                #print(self.macros[k])
-            #'''
+        if self.DEBUG_MODE and passid == 1:
+            if self.DEBUG_TEST_TYPE == 0:
+                # Print what the macros filled out to.
+                print("Printing macros...")
+                for k in self.macros:
+                    print(self.macros[k].name.value)
 
-            '''
-            #Print the contents of each macro
-            for k in self.macros:
-                v = self.macros[k]
-                print(f"Macro: {k}")
-                print(f"Macro params: {v.paramlist.params}")
-                for tokline in v.tokenlines:
-                    print(tokline)
-            '''
+            if self.DEBUG_TEST_TYPE == 1:
+                # Print the contents of each macro
+                for k in self.macros:
+                    v = self.macros[k]
+                    print(f"Macro: {k}")
+                    print(f"Macro params: {v.paramlist.params}")
+                    for tokline in v.tokenlines:
+                        print(tokline)
 
-            # Let's put testing in here for now. We won't need both passes
-            # until we're ready to perform label resolution.
-            '''
-            # Basic visual test for exposing underlying tokens
-            for tokenline in tokenlines:
-                print(tokenline)
-            '''
-            '''
-            # Visual test for summarizing TokenList contents, space-delimit
-            for item in tokenlines:
-                tokval = printtok(item.tokens)
-                print(f"TokenLine: file:{item.filename}, linenum: {item.lineno}, line: [{tokval}]")
+            if self.DEBUG_TEST_TYPE == 2:
+                # Basic visual test for exposing underlying tokens
+                for tokenline in tokenlines:
+                    print(tokenline)
 
-            '''
-            '''
-            # Visual test for identifying all function-like macro on a line
-            for tokenline in tokenlines:
-                startpos = 0
-                while True:
-                    try:
-                        v = self.find_macro_and_param(tokenline, startpos)
-                    except Exception as e:
-                        print(f"Error encountered: {e}")
-                    if v is None:
-                        break
-                    startpos = v.endpos
-                    numparams = len(v.params)
-                    print(f"Macro sig found in {tokenline.filename}: {tokenline.lineno}, pos: {v.startpos}, params: {numparams}")
-                    print(f"Macroname: {v.name.value}")
-                    for i in range(numparams):
-                        print(f"Param {i}: {printtok(v.params[i].param)}")
-            '''
+            if self.DEBUG_TEST_TYPE == 3:
+                # Visual test for summarizing TokenList contents, space-delimit
+                for item in tokenlines:
+                    tokval = printtok(item.tokens)
+                    print(f"TokenLine: file:{item.filename}, linenum: {item.lineno}, line: [{tokval}]")
+
+            if self.DEBUG_TEST_TYPE == 4:
+                # Visual test for identifying all function-like macro on a line
+                for tokenline in tokenlines:
+                    startpos = 0
+                    while True:
+                        try:
+                            v = self.find_macro_and_param(tokenline, startpos)
+                        except Exception as e:
+                            print(f"Error encountered: {e}")
+                        if v is None:
+                            break
+                        startpos = v.endpos
+                        numparams = len(v.params)
+                        print(f"Macro sig found in {tokenline.filename}: {tokenline.lineno}, pos: {v.startpos}, params: {numparams}")
+                        print(f"Macroname: {v.name.value}")
+                        for i in range(numparams):
+                            print(f"Param {i}: {printtok(v.params[i].param)}")
         return
     
     def slice_tokline(self, tokenline:TokenLine, start, end=None):
@@ -338,7 +280,7 @@ class MacroAssembler(object):
             if tokens[0].value == "#include":
                 if len(tokens) < 2 or tokens[1].type != "STRING":
                     raise ValueError(f"Malformed #INCLUDE at {filepath}:{linenum}.")
-                incpath = self.unescape_string(tokens[1].value) #Verified.
+                incpath = self.unescape_string(tokens[1].value)
                 try:
                     tokenlines.extend(self.preparse(incpath, inccount+1))
                 except IncludeDepthExceeded as e:
@@ -400,7 +342,6 @@ class MacroAssembler(object):
                 return None
             raise ValueError(f"Matching parenthesis not found in {tokenline.filename}: Ln {tokenline.lineno}, starting at {macro_name.position}")
         result = MacroParamList(macro_name, tuple(macro_params), start_pos, end_pos)
-        #print(result)
         return result
         
     def tokenize(self, code:str) -> Iterator[Token]:
@@ -501,13 +442,18 @@ class MacroAssembler(object):
 
 
 if __name__ == "__main__":
-    '''
-    if len(sys.argv) != 2:
-        print("Usage: python macroparse.py <filename>")
-        sys.exit(1)
-    filename = sys.argv[1]
-'''
-    filename = "tools/macrotest.z80"
+    if MacroAssembler.DEBUG_MODE:
+        # For debugging, hardcode filename or use sys.argv
+        # if len(sys.argv) != 2:
+        #     print("Usage: python macroparse.py <filename>")
+        #     sys.exit(1)
+        # filename = sys.argv[1]
+        filename = "tools/macrotest.z80"
+    else:
+        if len(sys.argv) != 2:
+            print("Usage: python macroparse.py <filename>")
+            sys.exit(1)
+        filename = sys.argv[1]
     
     asm = MacroAssembler(filename)
     asm.process()
