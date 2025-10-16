@@ -2,6 +2,12 @@
 #include "src/inc/macros.inc"
 #include "src/inc/gamedefs.inc"
 
+#define X 10 / X
+#define FOO(x) x + x / FOO(2)
+#macro TEST()
+    MOV A, B
+#endmacro
+
 m_setxy($05,5)    ;this is a comment
 .db "Welcome \rto Americana.\nPlease make your\nselection, followed\nby the pound\nsign now.\n"
 m_setacc2(%11110000)

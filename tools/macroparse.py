@@ -4,16 +4,21 @@
 #
 
 import string, re, sys, random, copy
-from typing import NamedTuple, Iterator, Optional
+from typing import NamedTuple, Iterator, Optional, Tuple
 
 class IncludeDepthExceeded(RecursionError):
+    pass
+class MacroExpansionDepthExceeded(RecursionError):
+    pass
+
+class SymbolNotFoundError(NameError):
     pass
 
 class Token(NamedTuple):
     ''' Represents a token identified during lexical analysis. '''
     type: str
     value: str
-    position: str
+    position: int
 
 class TokenLine(NamedTuple):
     ''' A line of tokens and information about where it was tokenized from.
@@ -61,6 +66,7 @@ class MacroAssembler(object):
     DEBUG_TEST_TYPE = 0
     LBLCHARSTART = string.ascii_letters + '_'
     LBLCHARS = LBLCHARSTART + string.digits
+    MATH_OPS = ('+','-','*','/','&','|','^','<<','>>','==','!=','<','>','<=','>=','&&','||')
     TOKEN_SPEC = [
         # Strings (single or double quoted, with escapes)
         ("STRING",      r'"(?:\\.|[^"\\])*"' + r"|" + r"'(?:\\.|[^'\\])*'"),
@@ -90,7 +96,6 @@ class MacroAssembler(object):
     get_token = re.compile(TOK_REGEX).match
 
     def __init__(self, filepath):
-        self.filedata = self.openfile(filepath)
         self.filepath = filepath
         self.defaultmacros = dict()
         self.reset()
@@ -99,6 +104,7 @@ class MacroAssembler(object):
         self.macros: dict[str, MacroDictEntry] = dict()
         self.symtable: dict[str, int|None] = dict()
         self.result = bytearray()
+        self.origin = 0
 
     def process(self):
         tokenlines = self.preparse()
@@ -116,20 +122,11 @@ class MacroAssembler(object):
         MUST DEEPCOPY tokenlines PRIOR TO CALLING AND REGENERATE FROM THE COPY
         IN ORDER TO CORRECTLY PERFORM A SECOND PASS.
         '''
-        ''' TODO: If in the case of macro expansion (depth>1) the macro body
-            must have been copied before passing this in. the tokenlines it
-            is passed in may have lines remove()'d from them if they are
-            non-emittable, as in the case of preops, but only after they have
-            been parsed. The lines they emit, once the parse() has returned
-            to its caller, is inserted into where the macro was expanded. If
-            more than one line, then these lines are inserted as such:
-            the stuff before the first line is prepended to the new first line.
-            All intermediary lines are inserted into the original tokenlines at
-            the current line position. The tokens after the insertion point is
-            appended to the final line of the new tokens. If the macro is only
-            one line, then the prepend and append line are the same. That is,
-            it's an insertion.
-        '''
+        if len(list(TokenLine)) < 1:
+            return
+        if depth > self.MAX_RECURSION_DEPTH:
+            leadingttokenline = tokenlines[0]
+            raise MacroExpansionDepthExceeded(f"Expansion depth exceeded, starting at {leadingttokenline.filename}:{leadingttokenline.lineno}")
         if self.DEBUG_MODE:
             def printtok(tokens: tuple[Token, ...]):
                 return ' '.join(t.value for t in tokens)
@@ -151,8 +148,9 @@ class MacroAssembler(object):
         while tokenline_index < len(tokenlines):
             try:
                 tokenline = tokenlines[tokenline_index]
-            except:
-                break
+            except IndexError:
+                print(f"Unhandled OOB assembly/buffer at index {tokenline_index} of {len(tokenlines)}")
+                raise IndexError(f"Unhandled access at recursion level {depth}")
             tokens = tokenline.tokens
             lead_token = tokens[0]
             # Begin processing the lines
@@ -191,14 +189,17 @@ class MacroAssembler(object):
                         raise ValueError(f"Unexpected token at {tokenline.filename}:{tokenline.lineno} pos {tokens[1].position}")
                     macrodef_expansion_buffer = list()
                     inside_macrodef = True
-                # Aspirational: Implement #if, #ifdef, #ifndef, #else, #elif, #endif for flow control.
-
                 # #DEFINE directives should be processed after other preprocessor directives.
+                # NOTE: SPASM-ng appears to be parsing the macro body of a
+                #   #DEFINE prior to assigning its contents. Run more assembler
+                #   tests to verify exact behavior as it also varies between
+                #   passes. Review SPASM-ng's source to discover more info.
                 if lead_token_val == "#DEFINE":
                     if len(tokens) < 2:
                         raise ValueError(f"Incomplete #DEFINE operation at {tokenline.filename}:{tokenline.lineno}")
                     if tokens[1].type in ("IDENTIFIER","DIRECTIVE"):
                         # Bare macro definition (no parameters).
+                        
                         mde_tokline = self.slice_tokline(tokenline, 2)
                         mpl = MacroParamList(tokens[1], tuple(), 0, 0)
                         mde = MacroDictEntry(mpl.name, mpl, [mde_tokline,])
@@ -216,6 +217,7 @@ class MacroAssembler(object):
             # Macro expansion
             macexp_idx = 0
             macexp_tokens = list(tokens)
+            restart_parse = False
             while True:
                 token = macexp_tokens[macexp_idx]
                 if token.type in ("DIRECTIVE", "IDENTIFIER", "DIRECTIVE_CALL", "MACRO_CALL"):
@@ -233,29 +235,7 @@ class MacroAssembler(object):
                         params_expected = len(mac_mde.paramlist.params)
                         if  params_found != params_expected:
                             raise ValueError(f"Macro param count mismatch. Found {params_found}, expected {params_expected} in {tokenline.filename}:{tokenline.lineno} ")
-                        
-                        ''' TODO: at this point, we have macro name, dict entry
-
-                            (params expected) in mac_mde, params found (if any)
-                            in inv_mpl (note: start:end was made so consistent
-                            action can be taken between bare and function macros) 
-                            Something to expand macros into a buffer should take
-                            a look at the params in mac_mde and find matching
-                            tokens to replace with params found in inv_mpl.
-                            Once expansion buffer is finished copying,
-                            run parse() on it. This may mutate this list.
-                            The mutated list is inserted in-place with rules
-                            regarding multiline inserts, described in the TODO
-                            block near start of parse().
-                            It should be safe to process this mutated tokenline
-                            without accounting for actual expansion since the
-                            recursive nature of expansion ensures that no other
-                            expansions are possible (either because they've all
-                            been expanded, or the parser threw an error).
-                            Profiling may be required to determine if this
-                            impacts performance, but I think it's negligible
-                            under non-contrived scenarios.
-                        '''
+                        # Prepare expansion buffer
                         invocation_expansion_buffer:list[TokenLine] = list()
                         for mdef_tokline in mac_mde.tokenlines:
                             mdef_tokenbuf:list[Token] = list()
@@ -269,20 +249,59 @@ class MacroAssembler(object):
                                 else:
                                     mdef_tokenbuf.append(mdef_token)
                             invocation_expansion_buffer.append(self.splice_tokline(mdef_tokline,None, None, mdef_tokenbuf))
-                        # Expansion buffer created. Parse it? Mutates in-place.
-                        self.parse(invocation_expansion_buffer, passid, depth+1)
+                        try:
+                            self.parse(invocation_expansion_buffer, passid, depth+1)
+                        except MacroExpansionDepthExceeded as e:
+                            print(f"[{depth}] -- Macro expansion stack unwinding from {tokenline.filename}:{tokenline.lineno}")
+                            raise e
+                        except Exception as e:
+                            print(f"[{depth}] -- Error encountered, unwinding from {tokenline.filename}:{tokenline.lineno}")
+                            raise e
+                        # Expansion buffer created and modified in-place.
+                        # Now insert first line into macexp_tokens, replacing
+                        # the tokens that formed that macro.
+                        start = inv_mpl.startpos
+                        end = inv_mpl.endpos+1
+                        macexp_tokens[start:end] = []   #Erase macro invocation
+                        ieb = invocation_expansion_buffer
+                        if len(ieb) == 0:
+                            # Macro empty. Reconstruct line, then restart parse
+                            newtokline = self.splice_tokline(tokenline, None, None, macexp_tokens)
+                            tokenlines[tokenline_index] = newtokline
+                            restart_parse = True
+                        elif len(ieb) == 1:
+                            # Single line macro. Replace current line, then restart.
+                            macexp_tokens[start:start] = ieb[0].tokens
+                            newtokline = self.splice_tokline(tokenline, None, None, macexp_tokens)
+                            tokenlines[tokenline_index] = newtokline
+                            restart_parse = True
+                        else:
+                            # Multi-line macro. Replace current line, extending
+                            # with all new lines. Then restart to properly parse
+                            # new and improved first line.
+                            left = self.splice_tokline(tokenline, None, None, macexp_tokens[:start] + ieb[0].tokens)
+                            ieb[0] = left
+                            right = self.splice_tokline(tokenline, None, None, ieb[-1].tokens + macexp_tokens[:start])
+                            ieb[-1] = right
+                            tokenlines[tokenline_index:tokenline_index+1] = ieb
+                            restart_parse = True
+                        break
+                    elif token.type in ("DIRECTIVE_CALL", "MACRO_CALL"):
+                        raise ValueError(f"Unknown or unidentified macro '{token.value}' or malformed call/expression at {tokenline.filename}:{tokenline.lineno}")
+                # Ok. If we got here, we're still parsing the tokens on this line.
+                macexp_idx += 1
+                if macexp_idx >= len(macexp_tokens):
+                    break
 
-
-                #Note: Have a way to break out of this at some point.
-
-
-                pass
-
-
-
-
-                
+            if restart_parse:
+                continue
             tokenline_index += 1
+            '''
+            TODO: Implement the other PREOP tokens. So far, we're working
+            with #if, #ifdef, #ifndef, #else, #elif, #endif for flow control.
+            '''
+            # Next: Parsing the other PREOP tokens
+
             pass
 
         if self.DEBUG_MODE and passid == 1:
@@ -330,7 +349,169 @@ class MacroAssembler(object):
                         for i in range(numparams):
                             print(f"Param {i}: {printtok(v.params[i].param)}")
         return
-    
+        
+    def expr_parse(self, tokenline:TokenLine, segment:Tuple[int,int], passnum:int=1) -> Token:
+        tokseg = self.slice_tokline(tokenline, segment[0], segment[1])
+        tokens = tokseg.tokens
+        if len(tokens) == 0:
+            raise ValueError(f"Expression segment returned zero at {tokenline.filename}:{tokenline.lineno}")
+        tokseg_idx = 0
+        baseval:int = None
+        operator:Token = None
+        unary:Token = None
+        newval:int = None
+        while tokseg_idx < len(tokens):
+            token = tokens[tokseg_idx]
+            if "NUM" in token.type:
+                newval = self._expr_parse_getval(token, passnum)
+                if unary is not None:
+                    if unary.value == "-":
+                        newval = -newval
+                if baseval is not None and operator is not None:
+                    baseval = self._expr_combine(baseval, operator, newval)
+                    operator = None
+                    continue
+                elif baseval is None:
+                    if operator is None:
+                        #Reachable here if this is the first number
+                        baseval = newval
+                    else:
+                        raise ValueError(f"Illegal operator position at {tokenline.filename}:{tokenline.lineno} col {operator.position}")
+            if token.type == "OPERATOR":
+                if token.value in ('+','-') and unary is None:
+                    #If trying to predict a unary, one must not be set.
+                    if baseval is None or operator is not None:
+                        # If not baseval, then what we have must be unary.
+                        # If we have an operator, then this could be a unary.
+                        unary = token
+                elif baseval is not None and operator is None and token.value not in self.MATH_OPS:
+                    # Ensure that a valid operator is now in place only if
+                    # we have a prior operand existing.
+                    operator = token
+                    continue
+                elif token.value == '(':
+                    paren_level = 0
+                    startpos = tokseg_idx+1
+                    try:
+                        while True:
+                            tokseg_idx += 1
+                            temptok = tokens[tokseg_idx]
+                            if temptok.value == "(":
+                                paren_level += 1
+                            if temptok.value == ")":
+                                paren_level -= 1
+                                if paren_level < 0:
+                                    endpos = tokseg_idx-1
+                                    tokseg_idx += 1 #advance past close paren
+                                    break
+                    except:
+                        raise ValueError(f"Closing parenthesis not found at {tokenline.filename}:{tokenline.lineno}")
+                    if startpos > endpos:
+                        # An empty paren sequence should result in zero.
+                        newval = 0
+                    else:
+                        temptokline = TokenLine(tokens, tokenline.filename, tokenline.lineno)
+                        temptokline = self.slice_tokline(temptokline, startpos, endpos)
+                        try:
+                            newval = self.parse_expression(temptokline)
+                        except Exception as e:
+                            raise e
+                    if unary is not None and unary.value == '-':
+                        newval = -newval
+                        unary = None
+                    if baseval is not None and operator is not None:
+                        baseval = self._expr_combine(baseval, operator, newval)
+                        operator = None
+                    elif baseval is None and operator is None:
+                        baseval = newval
+                    else:
+                        raise ValueError(f"Incomplete expression at {tokenline.filename}:{tokenline.lineno}")
+                    continue
+                else:
+                    raise ValueError(f"Invalid operator or operator use at {tokenline.filename}:{tokenline.lineno} col {token.position}")
+            tokseg_idx += 1
+        if operator is not None:
+            raise ValueError(f"Incomplete expression detected at {tokenline.filename}:{tokenline.lineno}")
+        if baseval is None:
+            raise ValueError(f"Malformed expression or expression does not yield a value at {tokenline.filename}:{tokenline.lineno}")
+        return Token("DEC_NUMBER", str(baseval), tokenline.tokens[0].position)
+
+    def _expr_parse_getval(self, token: Token, passnum:int) -> int:
+        ''' Raises an exception on unrecognized tokens.
+            Returns 0 on first-pass unidentified identifiers.
+            Returns self.origin on operator "$"
+            Returns None on other expression operators.
+            Raises an exception on non-expression operators.
+        ''' 
+        if "NUMBER" in token.type:
+            if token.value.startswith("$"):
+                return int(token.value[1:], 16)
+            else:
+                v = token.value
+                if token.value.endswith(('H','h','D','d','B','b')):
+                    v = v[:-1]
+                return int(v, {"H":16, "B":2, "D":10}[token.type[0]])
+        elif token.type == "IDENTIFIER":
+            if token.value not in self.symtable:
+                if passnum == 1:
+                    return 0
+                else:
+                    raise ValueError(f"Symbol {token.value} not found.")
+            else:
+                return self.symtable[token.value]
+        
+        elif token.type == "OPERATOR" and token.value == "$":
+            return self.origin
+        elif token.type == "OPERATOR" and token.value in ",\\":
+            raise ValueError(f"Non-expression symbol {token.value} used.")
+        elif token.type == "OPERATOR":
+            return None
+        else:
+            raise ValueError(f"Illegal token type {token.type} of value {token.value} found in expression.")
+        
+    def _expr_combine(self, baseval:int, operator_token:Token, newval:int) -> int:
+        current_value = baseval
+        operand_value = newval
+        if operator_token.value == "+":
+            current_value += operand_value
+        elif operator_token.value == "-":
+            current_value -= operand_value
+        elif operator_token.value == "*":
+            current_value *= operand_value
+        elif operator_token.value == "/":
+            if operand_value == 0:
+                raise ZeroDivisionError(f"Division by zero at {operator_token.position}")
+            current_value //= operand_value # Integer division
+        elif operator_token.value == "&":
+            current_value &= operand_value
+        elif operator_token.value == "|":
+            current_value |= operand_value
+        elif operator_token.value == "^":
+            current_value ^= operand_value
+        elif operator_token.value == "<<":
+            current_value <<= operand_value
+        elif operator_token.value == ">>":
+            current_value >>= operand_value
+        elif operator_token.value == "==":
+            current_value = 1 if current_value == operand_value else 0
+        elif operator_token.value == "!=":
+            current_value = 1 if current_value != operand_value else 0
+        elif operator_token.value == "<":
+            current_value = 1 if current_value < operand_value else 0
+        elif operator_token.value == ">":
+            current_value = 1 if current_value > operand_value else 0
+        elif operator_token.value == "<=":
+            current_value = 1 if current_value <= operand_value else 0
+        elif operator_token.value == ">=":
+            current_value = 1 if current_value >= operand_value else 0
+        elif operator_token.value == "&&":
+            current_value = 1 if (current_value != 0 and operand_value != 0) else 0
+        elif operator_token.value == "||":
+            current_value = 1 if (current_value != 0 or operand_value != 0) else 0
+        else:
+            raise ValueError(f"Unknown or unsupported operator '{operator_token.value}' at {operator_token.position}")
+        return current_value
+
     def slice_tokline(self, tokenline:TokenLine, start, end=None) -> TokenLine:
         return TokenLine(tokenline.tokens[start:end], tokenline.filename, tokenline.lineno)
 
@@ -347,6 +528,37 @@ class MacroAssembler(object):
         oldtokens[start:end] = list(newtokens) if newtokens else []
         return TokenLine(tuple(oldtokens), tokenline.filename, tokenline.lineno)
 
+    @staticmethod
+    def locate_expressions(tokenline: TokenLine) -> Tuple[Tuple[int, int], ...]:
+        '''
+        Locates expressions in a TokenLine. An expression is a consecutive sequence
+        of tokens of the type HEX_NUMBER, BIN_NUMBER, DEC_NUMBER, IDENTIFIER, or OPERATOR.
+        All other token types are considered non-expression tokens.
+        This function returns a tuple of 2-tuples, each 2-tuple represents the
+        start and end position (inclusive) of each expression.
+        If no expressions are found, the main tuple should be empty.
+        NOTE: Addendum: operator [BACKSLASH] is considered a logical newline so
+            this is to be both a separator and to be omitted from an expression.
+        '''
+
+        expression_token_types = {"HEX_NUMBER", "BIN_NUMBER", "DEC_NUMBER", "IDENTIFIER", "OPERATOR"}
+        expressions = []
+        current_expression_start = None
+
+        for i, token in enumerate(tokenline.tokens):
+            if token.type in expression_token_types:
+                if not (token.type == "OPERATOR" and token.value == "\\"):
+                    if current_expression_start is None:
+                        current_expression_start = i
+            else:
+                if current_expression_start is not None:
+                    expressions.append((current_expression_start, i - 1))
+                    current_expression_start = None
+        
+        if current_expression_start is not None:
+            expressions.append((current_expression_start, len(tokenline.tokens) - 1))
+            
+        return tuple(expressions)
 
 
     def preparse(self, filepath=None, inccount=1) -> list[TokenLine]:
@@ -360,6 +572,8 @@ class MacroAssembler(object):
             raise IncludeDepthExceeded(f"#INCLUDE depth exceeded on file: {filepath}")
         tokenlines = []
         filedata = self.openfile(filepath)
+        if filedata is None:
+            raise FileNotFoundError(f"File {filepath} not found.")
         lines = filedata.splitlines()
         for linenum, line in enumerate(lines, start=1):
             if not line.strip():
@@ -383,6 +597,9 @@ class MacroAssembler(object):
                     tokenlines.extend(self.preparse(incpath, inccount+1))
                 except IncludeDepthExceeded as e:
                     print(f"[{inccount}] -- #INCLUDE stack unwinding from {filepath}:{linenum}")
+                    raise e
+                except FileNotFoundError as e:
+                    print(f"#INCLUDE statement asked for a missing file at {filepath}:{linenum}, error to follow.")
                     raise e
             else:
                 tokenline = TokenLine(tuple(tokens), filepath, linenum)

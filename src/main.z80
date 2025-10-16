@@ -100,6 +100,20 @@ m_printacc(mf_2DIGIT|mf_RIGHT_ALIGN|mf_SIGNED_SHOW_NEG|mf_SIGNED_SHOW_POS)
 .db "JUDGE MY VOW.\n"
 .db "1234567890!\n@#$%^&*()-=+",0
 
+#macro eval2(exp)
+    exp
+#endmacro
+
+#macro redef_macro(val)
+    #define VALUE eval(val+0)
+    .dw VALUE
+    .echo "VALUE is ", val+1
+#endmacro
+
+redef_macro(address_test)
+redef_macro(2)
+address_test .equ $
+
 
 
 ;.varloc("32")
