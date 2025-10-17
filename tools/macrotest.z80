@@ -7,6 +7,8 @@
 #macro TEST()
     MOV A, B
 #endmacro
+#define A 1
+#define AA 2
 
 m_setxy($05,5)    ;this is a comment
 .db "Welcome \rto Americana.\nPlease make your\nselection, followed\nby the pound\nsign now.\n"
@@ -22,4 +24,4 @@ macro(
 MyMacro("foo, bar", 2)
 MyMacro()
 macro(1, (2, 3), 4)
-macro(1, 2
+macro(1, 2, $44h
