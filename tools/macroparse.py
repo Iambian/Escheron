@@ -211,12 +211,16 @@ class MacroAssembler(object):
             #NOTE: There will be another PREOP block. After macro expansion.
             if lead_token.type == "PREOP":
                 lead_token_val = lead_token.value.upper()
+                if lead_token_val in ("#MACRO", "#DEFINE"):
+                    if len(tokens) < 2:
+                        raise ValueError(f"Incomplete {lead_token_val} operation at {tokenline.filename}:{tokenline.lineno}")
+                    if tokens[1].value in ("eval(", "concat("):
+                        raise ValueError(f"Illegal redefinition of reserved macro name {tokens[1].value} at {tokenline.filename}:{tokenline.lineno}")
+
                 if lead_token_val == "#MACRO":
                     # Multi-line macro definition.
                     if inside_macrodef == True:
                         raise RecursionError(f"Illegal #MACRO nest at {tokenline.filename}:{tokenline.lineno}")
-                    if len(tokens) < 2:
-                        raise ValueError(f"Incomplete #MACRO operation at {tokenline.filename}:{tokenline.lineno}")
                     if tokens[1].type == "IDENTIFIER":
                         # Bare macro definition (no parameters).
                         mpl = MacroParamList(tokens[1], tuple(), 0, 0)
@@ -230,25 +234,26 @@ class MacroAssembler(object):
                     macrodef_expansion_buffer = list()
                     inside_macrodef_startline = tokenline
                     inside_macrodef = True
-                    # Is not necessary to increment tokenline_index here; that'll
-                    # be done on loop restart inside the inside_macrodef block.
+                    #Have to manually increment to avoid further line parsing.
+                    tokenline_index += 1
+                    continue
                 # #DEFINE directives should be processed after other preprocessor directives.
                 # NOTE: SPASM-ng appears to be parsing the macro body of a
                 #   #DEFINE prior to assigning its contents. Run more assembler
                 #   tests to verify exact behavior as it also varies between
                 #   passes. Review SPASM-ng's source to discover more info.
                 if lead_token_val == "#DEFINE":
-                    if len(tokens) < 2:
-                        raise ValueError(f"Incomplete #DEFINE operation at {tokenline.filename}:{tokenline.lineno}")
                     if tokens[1].type in ("IDENTIFIER","DIRECTIVE"):
                         # Bare macro definition (no parameters).
                         mde_tokline = self.slice_tokline(tokenline, 2)
                         mde_expansionbuf = [mde_tokline,]
+                        #DEBUGGING START
                         if tokens[1].value == "AA":
-                            print("Trace on.")
-                            inputtrace = True
+                            print("Trace off.")
+                            inputtrace = False
                         else:
                             inputtrace = False
+                        #DEBUGGING END
                         self.parse(mde_expansionbuf, passid, depth+1, inputtrace)
                         mpl = MacroParamList(tokens[1], tuple(), 0, 0)
                         mde = MacroDictEntry(mpl.name, mpl, mde_expansionbuf)
@@ -346,11 +351,17 @@ class MacroAssembler(object):
                             tokenlines[tokenline_index:tokenline_index+1] = ieb
                             restart_parse = True
                         break
+                    elif token.type == "MACRO_CALL" and token.value.lower() == "eval(":
+                        pass
+                    elif token.type == "MACRO_CALL" and token.value.lower() == "concat(":
+                        pass
                     elif token.type in ("DIRECTIVE_CALL", "MACRO_CALL"):
+                        print(self.macros.keys())
                         raise ValueError(f"Unknown or unidentified macro '{token.value}' or malformed call/expression at {tokenline.filename}:{tokenline.lineno}")
                 # Ok. If we got here, we're still parsing the tokens on this line.
                 macexp_idx += 1
-                print(f"Macroparse status idx: {macexp_idx} at {tokenline.filename}:{tokenline.lineno}")
+                if trace:
+                    print(f"Macroparse status idx: {macexp_idx} at {tokenline.filename}:{tokenline.lineno}")
 
             if restart_parse:
                 continue
@@ -371,6 +382,11 @@ class MacroAssembler(object):
             # if concat() is somehow encountered? concat()'s purpose is to
             # concatenate strings to form a label, which can then be used as
             # text replacement for right-hand values in .equ statements and such.
+
+            #NOTE: Maybe that can be implemented by not actually running an
+            #       expression parse on any of the contents if depth > 1 since
+            #       we're expanding macros at that point?
+            #       But that still doesn't solve the bare #DEFINE problem >.>
 
             #TODO: Directive parsing. Find all the [backslash] chars and split
             # them wrt newlines.

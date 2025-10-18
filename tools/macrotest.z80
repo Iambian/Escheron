@@ -1,6 +1,6 @@
-#include "src/inc/osdefs.inc"
-#include "src/inc/macros.inc"
-#include "src/inc/gamedefs.inc"
+;#include "src/inc/osdefs.inc"
+;#include "src/inc/macros.inc"
+;#include "src/inc/gamedefs.inc"
 
 #define X 10 / X
 #define FOO(x) x + x / FOO(2)
@@ -10,19 +10,22 @@
 #define A 1
 #define AA 2
 #define AA AA+AA
+#define AA AA+AA
 
-m_setxy($05,5)    ;this is a comment
-.db "Welcome \rto Americana.\nPlease make your\nselection, followed\nby the pound\nsign now.\n"
-m_setacc2(%11110000)
-m_printacc(mf_2DIGIT|mf_RIGHT_ALIGN|mf_SIGNED_SHOW_NEG|mf_SIGNED_SHOW_POS)
-.db " Hello.",0
-.db 0
-.echo "This is a test. Address: ",saveSScreen,", here."
+.db AA
+
+;m_setxy($05,5)    ;this is a comment
+;.db "Welcome \rto Americana.\nPlease make your\nselection, followed\nby the pound\nsign now.\n"
+;m_setacc2(%11110000)
+;m_printacc(mf_2DIGIT|mf_RIGHT_ALIGN|mf_SIGNED_SHOW_NEG|mf_SIGNED_SHOW_POS)
+;.db " Hello.",0
+;.db 0
+;.echo "This is a test. Address: ",saveSScreen,", here."
 
 ;Comprehensive macro function testing.
-macro(
-.directive(1, 2, other(3, 4), 5) \ biscuit("something", something)
-MyMacro("foo, bar", 2)
-MyMacro()
-macro(1, (2, 3), 4)
-macro(1, 2, $44h
+;macro(
+;.directive(1, 2, other(3, 4), 5) \ biscuit("something", something)
+;MyMacro("foo, bar", 2)
+;MyMacro()
+;macro(1, (2, 3), 4)
+;macro(1, 2, $44h
