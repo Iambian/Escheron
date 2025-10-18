@@ -64,7 +64,14 @@ class MacroDictEntry(NamedTuple):
 class MacroAssembler(object):
     MAX_RECURSION_DEPTH = 8
     DEBUG_MODE = True # Set to True to enable debug print statements and test code
-    DEBUG_TEST_TYPE = 2
+    STOP_REPORTING_DEPTH_AT = 2
+    #===========================================================================
+    #===========================================================================
+    # A border was added because I'm tired of trying to hunt for this variable
+    # each time I want to change the test type.
+    DEBUG_TEST_TYPE = 5
+    #===========================================================================
+    #===========================================================================
     LBLCHARSTART = string.ascii_letters + '_'
     LBLCHARS = LBLCHARSTART + string.digits
     MATH_OPS = ('+','-','*','/','&','|','^','<<','>>','==','!=','<','>','<=','>=','&&','||')
@@ -115,14 +122,31 @@ class MacroAssembler(object):
         self.parse(tokenlinescopy, 2)
         return self.result
 
+    def print_shorttok(self, tokenline:TokenLine|list[Token]|MacroDictEntry):
+        def ptt(tl:list[Token]):
+            print(' '.join(t.value for t in tl))
+        if isinstance(tokenline, MacroDictEntry):
+            tokenlines = tokenline.tokenlines
+            for idx,tokenline in enumerate(tokenlines):
+                print(f"Line {idx}: ",end='')
+                ptt(tokenline.tokens)
+            return
+        if isinstance(tokenline, TokenLine):
+            tokenline = tokenline.tokens
+        ptt(tokenline)
+        
+
+
     #===========================================================================
     # Marker to make the parse easier to find
-    def parse(self, tokenlines:list[TokenLine], passid=1, depth=1):
+    def parse(self, tokenlines:list[TokenLine], passid=1, depth=1, trace=None):
         ''' NOTE: tokenlines WILL MUTATE.
         THIS IS BY DESIGN TO SUPPORT IN-PLACE MACRO EXPANSION. TOP-LEVEL CALLERS
         MUST DEEPCOPY tokenlines PRIOR TO CALLING AND REGENERATE FROM THE COPY
         IN ORDER TO CORRECTLY PERFORM A SECOND PASS.
         '''
+        if trace:
+            print(f"Input tokenlines len: {len(tokenlines)}")
         if len(tokenlines) < 1:
             return
         if depth > self.MAX_RECURSION_DEPTH:
@@ -131,16 +155,20 @@ class MacroAssembler(object):
         if self.DEBUG_MODE:
             def printtok(tokens: tuple[Token, ...]):
                 return ' '.join(t.value for t in tokens)
-            print(f"Pass {passid} start at depth {depth}")
+            #NOTE: 
+            if depth < self.STOP_REPORTING_DEPTH_AT:
+                print(f"Pass {passid} start at depth {depth}")
 
         inside_macrodef = False
+        inside_macrodef_startline:TokenLine = None
         macrodef_expansion_buffer = list()
         macrodef_param_list:MacroParamList = None
         preop_if_level = 0
 
         # Macros must always be regenerated at the start of each pass since
         # they may expand differently the next time around
-        self.macros = copy.deepcopy(self.defaultmacros)
+        if depth == 1:
+            self.macros = copy.deepcopy(self.defaultmacros)
 
         # This is the parser section. This processes the tokenlines object
         # and potentially mutates it for macro expansion purposes. All
@@ -153,7 +181,16 @@ class MacroAssembler(object):
                 print(f"Unhandled OOB assembly/buffer at index {tokenline_index} of {len(tokenlines)}")
                 raise IndexError(f"Unhandled access at recursion level {depth}")
             tokens = tokenline.tokens
+            if trace:
+                print(f"Tokenline idx {tokenline_index}: ",end='')
+                self.print_shorttok(tokens)
+
+            if len(tokens) < 1:
+                tokenline_index += 1
+                continue
             lead_token = tokens[0]
+
+
             # Begin processing the lines
             if inside_macrodef:
                 # If defining a macro, simply collect the lines.
@@ -162,6 +199,7 @@ class MacroAssembler(object):
                     mde = MacroDictEntry(macrodef_param_list.name, macrodef_param_list, macrodef_expansion_buffer)
                     self.macros[macrodef_param_list.name.value] = mde
                     inside_macrodef = False
+                    inside_macrodef_startline = None
                     macrodef_param_list = None
                     macrodef_expansion_buffer = list()
                 else:
@@ -184,11 +222,13 @@ class MacroAssembler(object):
                         mpl = MacroParamList(tokens[1], tuple(), 0, 0)
                         macrodef_param_list = mpl
                     elif tokens[1].type in ("MACRO_CALL", "DIRECTIVE_CALL"):
+                        #Trailing parenthesis in args is not a problem here.
                         mpl = self.find_macro_and_param(tokenline)
                         macrodef_param_list = mpl
                     else:
                         raise ValueError(f"Unexpected token at {tokenline.filename}:{tokenline.lineno} pos {tokens[1].position}")
                     macrodef_expansion_buffer = list()
+                    inside_macrodef_startline = tokenline
                     inside_macrodef = True
                     # Is not necessary to increment tokenline_index here; that'll
                     # be done on loop restart inside the inside_macrodef block.
@@ -202,17 +242,26 @@ class MacroAssembler(object):
                         raise ValueError(f"Incomplete #DEFINE operation at {tokenline.filename}:{tokenline.lineno}")
                     if tokens[1].type in ("IDENTIFIER","DIRECTIVE"):
                         # Bare macro definition (no parameters).
-                        
                         mde_tokline = self.slice_tokline(tokenline, 2)
+                        mde_expansionbuf = [mde_tokline,]
+                        if tokens[1].value == "AA":
+                            print("Trace on.")
+                            inputtrace = True
+                        else:
+                            inputtrace = False
+                        self.parse(mde_expansionbuf, passid, depth+1, inputtrace)
                         mpl = MacroParamList(tokens[1], tuple(), 0, 0)
-                        mde = MacroDictEntry(mpl.name, mpl, [mde_tokline,])
+                        mde = MacroDictEntry(mpl.name, mpl, mde_expansionbuf)
                         self.macros[tokens[1].value] = mde
                     elif tokens[1].type in ("MACRO_CALL", "DIRECTIVE_CALL"):
                         mpl = self.find_macro_and_param(tokenline)
-                        if mpl.endpos+1 >= len(tokenline.tokens):
+                        if mpl.endpos+2 >= len(tokenline.tokens):
                             raise ValueError(f"Disallowed empty macro body at {tokenline.filename}:{tokenline.lineno}")
-                        mde_tokline = self.slice_tokline(tokenline,mpl.endpos)
-                        mde = MacroDictEntry(mpl.name, mpl, [mde_tokline,] )
+                        mde_tokline = self.slice_tokline(tokenline,mpl.endpos+1)
+                        mde_expansionbuf = [mde_tokline,]
+                        #Note: Parameterized #defines should not preemptively expand
+                        #self.parse(mde_expansionbuf, passid, depth+1)
+                        mde = MacroDictEntry(mpl.name, mpl, mde_expansionbuf )
                         self.macros[tokens[1].value] = mde
                         pass
                     else:
@@ -223,8 +272,12 @@ class MacroAssembler(object):
             macexp_idx = 0
             macexp_tokens = list(tokens)
             restart_parse = False
-            while macexp_idx >= len(macexp_tokens):
+            if trace:
+                print(f"Made it to macroexpansion section. tokens input: {len(macexp_tokens)} ")
+            while macexp_idx < len(macexp_tokens):
                 token = macexp_tokens[macexp_idx]
+                if trace:
+                    print(token)
                 if token.type in ("DIRECTIVE", "IDENTIFIER", "DIRECTIVE_CALL", "MACRO_CALL"):
                     if token.value in self.macros:
                         mac_mde = self.macros[token.value]
@@ -324,6 +377,8 @@ class MacroAssembler(object):
 
 
             pass
+        if depth==1 and inside_macrodef:
+            raise ValueError(f"Failed to close #MACRO definition starting at {inside_macrodef_startline.filename}:{inside_macrodef_startline.lineno}")
 
         if self.DEBUG_MODE and passid == 1 and depth == 1:
             if self.DEBUG_TEST_TYPE == 0:
@@ -373,6 +428,8 @@ class MacroAssembler(object):
             if self.DEBUG_TEST_TYPE == 5:
                 # Visual test for identifying what each macro expands to
                 # Summary notation used
+                print("Debug test type 5 start")
+                print(self.macros.keys())
                 for k in self.macros:
                     n, plist, toklines = self.macros[k]
                     if len(toklines) == 0:

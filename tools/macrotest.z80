@@ -9,6 +9,7 @@
 #endmacro
 #define A 1
 #define AA 2
+#define AA AA+AA
 
 m_setxy($05,5)    ;this is a comment
 .db "Welcome \rto Americana.\nPlease make your\nselection, followed\nby the pound\nsign now.\n"
