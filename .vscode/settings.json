@@ -100,5 +100,6 @@
     }    
   },
   "editor.acceptSuggestionOnEnter": "off",
-  "editor.quickSuggestionsDelay": 300
+  "editor.quickSuggestionsDelay": 300,
+  "python.REPL.enableREPLSmartSend": false
 }
