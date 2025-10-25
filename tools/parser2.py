@@ -50,6 +50,11 @@ class Parser(object):
         self.origin = 0
         self.parse(self.tokens, 1)
         self.results:bytearray = self.parse(self.tokens, 2)
+        # Notes on self.if_stack:
+        # True = is taking this branch. Always becomes None elsewise.
+        # False = is not taking this branch. Is looking for condition change.
+        # None = A branch has already been taken. Do not consider any others.
+        self.if_stack:list[bool] = []
         pass
 
     def parse(self, tokens:"TokenStream", passid=1, depth=1, trace=False) -> "TokenStream|bytearray":
@@ -60,14 +65,166 @@ class Parser(object):
                 continue
             token0 = line[0]
             token0v = token0.v.upper()
+            # Must handle condition-changing preops first.
+            if token0.type == "PREOP" and token0v == "#ENDIF":
+                if len(self.if_stack) < 1:
+                    err(token0, "#ENDIF used without corresponding #IF/#IFDEF/#IFNDEF.")
+                self.if_stack.pop()
+                continue
+            if token0.type == "PREOP" and token0v == "#ELSE":
+                if len(self.if_stack) < 1:
+                    err(token0, "#ELSE used without corresponding #IF/#IFDEF/#IFNDEF.")
+                b = self.if_stack[-1]
+                if b is False:
+                    self.if_stack[-1] = True
+                else:
+                    self.if_stack[-1] = None
+                continue
+            if token0.type == "PREOP" and token0v == "#ELIF":
+                if len(self.if_stack) < 1:
+                    err(token0, "#ELIF used without corresponding #IF/#IFDEF/#IFNDEF.")
+                self.if_stack[-1] = not self.if_stack[-1]
+                if len(line) < 2:
+                    err(token0, f"Missing parameters for preop {token0.v}")
+                ifexpr = self.parse(line[1:], 2, depth+1, trace)
+                ifresult = True if self.eval_expr(ifexpr, 2) != 0 else False
+                b = self.if_stack[-1]
+                if b is False:
+                    if ifresult is True:
+                        self.if_stack[-1] = True
+                else:
+                    self.if_stack[-1] = None
+            # Now that we did stuff that could change if_stack level or state...
+            if len(self.if_stack) > 0 and not self.if_stack[-1]:
+                # Consume lines if top of stack is False or None
+                continue
+            # This token line is reachable. Continue processing.
             if token0.type == "PREOP":
-                if token0v in ("#IF", "#IFDEF", "#DEFINE", "#MACRO", "#UNDEF"):
+                if token0v in ("#IF", "#IFDEF", "#IFNDEF", "#DEFINE", "#MACRO", "#UNDEF"):
                     if len(line) < 2:
                         err(token0, f"Missing parameters for preop {token0.v}")
-                    exprtoks = self.parse(line[1:], passid, depth+1, trace)
+                    token1 = line[1]
+                    if token0v in ("#IFDEF", "#IFNDEF"):
+                        ifresult = False
+                        if token0v in self.symtable:
+                            ifresult = True
+                        elif token0v+'(' in self.symtable:  # Function macrodef
+                            ifresult = True
+                        if token0v == "#IFNDEF":
+                            ifresult = not ifresult
+                        self.if_stack.append(ifresult)
+                        continue
+                    if token0v == "#IF":
+                        ifexpr = self.parse(line[1:], 2, depth+1, trace)
+                        ifresult = True if self.eval_expr(ifexpr, 2) != 0 else False
+                        self.if_stack.append(ifresult)
+                        continue
+                    if token0v in ("#MACRO", "#DEFINE"):
+                        if line[1].type not in ("IDENT", "MACRO", "DIRECTIVE", "DIR_CALL"):
+                            err(token1, f"Invalid identifier assigned to {token0v}")
+                    if token0v in ("#UNDEF", "#UNDEFINE"):
+                        if token0v in self.symtable:
+                            del self.symtable[token0v]
+                            continue
+                        withparen = token0v + '('
+                        if withparen in self.symtable:
+                            del self.symtable[withparen]
+                            continue
+                    if token0v == "#DEFINE":
+                        if token1.type in ("IDENT", "DIRECTIVE"):
+                            # No params. Simple macro. Could be a symtable entry
+                            macname = token1.v
+                            macbody = line[2:]
+                            try:
+                                macbody = self.parse(macbody, 2, depth+1, trace)
+                                macbody = self.eval_expr(macbody, passid)
+                            except:
+                                # Suppress errors. Possible values of macbody:
+                                # 1. Empty (no body) [instant error]
+                                # 2. Tokenlist / Macro expanded [eval error]
+                                # 3. int (no errors)
+                                pass
+                            if isinstance(macbody, int):
+                                macdef = macbody
+                            else:
+                                macdef = MacroDef(token1, tuple(), macbody)
+                            self.symtable[macname] = macdef
+                        elif token1.type in ("MACRO", "DIR_CALL"):
+                            if token1.v in ("eval(","concat("):
+                                err(token1, f"Illegal redefinition of reserved macro name {token1.v}")
+                            paramlist = self.get_paramlist(line, 1)
+                            if paramlist:
+                                if any([(len(param) > 1 or param[0].type != "IDENT") for param in paramlist]):
+                                    err(token1, "Illegal identifier(s) found in macro signature.")
+                                macrolen = sum([len(param) for param in paramlist])
+                                macrolen += len(paramlist) #n-1 commas plus end paren = n
+                                paramlist = [param[0] for param in paramlist] # Flatten list with 1st token ea.
+                            else:
+                                macrolen = 1    #empty params. No args.
+                            macrobody = line[2+macrolen:]
+                            macrodef = MacroDef(token1, tuple(paramlist), macrobody)
+                            self.symtable[token1.v] = macrodef
+                        else:
+                            err(token1, "Illegal macro identifier")
+                    if token0v == "#MACRO":
+                        # We'll have to iterate through until we find an
+                        # #encmacro
+                        pass
+
+
+
+
+
+
+
+
+
+
 
 
         pass
+
+    def get_paramlist(self,tokenline:list[Token], start:int) -> list[list[Token]]:
+        if len(tokenline) < 1:
+            raise ValueError(redmsg("You may not pass an empty line into find_closeparen()"))
+        if start >= len(tokenline):
+            err(tokenline[-1], f"Start value {start} is out of bounds.")
+        paramlist:list[list[Token]] = []
+        paramtokens:list[Token] = []
+        for idx, token in enumerate(tokenline[start:], start):
+            if token.type == "OPER" and token.v == "(":
+                depth += 1
+            if token.type == "OPER" and token.v == ")":
+                depth -= 1
+                if depth < 0:
+                    break
+            if token.type == "COMMA":
+                paramlist.append(paramtokens)
+                paramtokens = []
+                continue
+            paramtokens.append(token)
+        else:
+            err(tokenline[start], "Line has no matching close parenthesis.")
+        return paramlist
+        
+            
+
+    def find_closeparen(self,tokenline:list[Token], start:int) -> int:
+        if len(tokenline) < 1:
+            raise ValueError(redmsg("You may not pass an empty line into find_closeparen()"))
+        if start >= len(tokenline):
+            err(tokenline[-1], "Attempted to find close parenthesis past end of line.")
+        depth = 0
+        for idx, token in enumerate(tokenline[start:], start):
+            if token.type == "OPER" and token.v == "(":
+                depth += 1
+            if token.type == "OPER" and token.v == ")":
+                depth -= 1
+                if depth < 0:
+                    break
+        else:
+            err(tokenline[start], "Line has no matching close parenthesis.")
+        return idx
 
 
     def eval_val(self, token:Token, passnum=1):
@@ -250,7 +407,7 @@ class Parser(object):
             err(operator, "Incomplete expression detected at around this position.")
         if baseval is None:
             err(token, "Malformed expression or expression does not yield a value at around this position.")
-        return from_token(tokens[0], "NUM", baseval)
+        return baseval
 
 
 
