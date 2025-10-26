@@ -5,6 +5,7 @@
 import os, sys, random, copy, re, colorama
 from typing import NamedTuple, Iterator, Optional, Tuple
 from collections import deque
+from colorama import Fore, Style
 
 colorama.just_fix_windows_console()
 
@@ -29,10 +30,8 @@ class MacroDef(NamedTuple):
     body: "TokenStream"     # Yeah. This tracks.
 
 def redmsg(msg):
-    from colorama import Fore, Style
     return f"{Fore.RED}{msg}{Style.RESET_ALL}"
 def yellowmsg(msg):
-    from colorama import Fore, Style
     return f"{Fore.YELLOW}{msg}{Style.RESET_ALL}"
 def errmsg(token:Token, msg:str):
     return redmsg(f"[{token.file}: LN {token.row}, COL {token.col}] {msg}")
@@ -46,10 +45,11 @@ class Parser(object):
     MATH_OPS = ('+','-','*','/','&','|','^','<<','>>','==','!=','<','>','<=','>=','&&','||')
     def __init__(self, tokendata:"TokenStream"):
         self.tokens = tokendata
-        self.symtable:dict[str, int|str]
+        self.symtable:dict[str, int|str] = dict()
         self.origin = 0
+        self.results:bytearray = bytearray()
         self.parse(self.tokens, 1)
-        self.results:bytearray = self.parse(self.tokens, 2)
+        self.parse(self.tokens, 2)
         # Notes on self.if_stack:
         # True = is taking this branch. Always becomes None elsewise.
         # False = is not taking this branch. Is looking for condition change.
@@ -60,6 +60,7 @@ class Parser(object):
     def parse(self, tokens:"TokenStream", passid=1, depth=1, trace=False) -> "TokenStream|bytearray":
         # Only returns bytearray if passid=2 and depth=1.
         iterator = tokens.getline()
+        results:list[Token] = []
         for line in iterator:
             if len(line) < 1:
                 continue
@@ -76,23 +77,27 @@ class Parser(object):
                     err(token0, "#ELSE used without corresponding #IF/#IFDEF/#IFNDEF.")
                 b = self.if_stack[-1]
                 if b is False:
+                    # If false (skipped IF/ELIF with no change), unconditionally toggle to true
                     self.if_stack[-1] = True
                 else:
+                    # Otherwise (True/None) becomes stuck to None.
                     self.if_stack[-1] = None
                 continue
             if token0.type == "PREOP" and token0v == "#ELIF":
                 if len(self.if_stack) < 1:
                     err(token0, "#ELIF used without corresponding #IF/#IFDEF/#IFNDEF.")
-                self.if_stack[-1] = not self.if_stack[-1]
+                #self.if_stack[-1] = not self.if_stack[-1]
                 if len(line) < 2:
                     err(token0, f"Missing parameters for preop {token0.v}")
                 ifexpr = self.parse(line[1:], 2, depth+1, trace)
                 ifresult = True if self.eval_expr(ifexpr, 2) != 0 else False
                 b = self.if_stack[-1]
                 if b is False:
+                    # If false, consider if we need to toggle to true.
                     if ifresult is True:
                         self.if_stack[-1] = True
                 else:
+                    # Otherwise, (True/None) now becomes stuck to None
                     self.if_stack[-1] = None
             # Now that we did stuff that could change if_stack level or state...
             if len(self.if_stack) > 0 and not self.if_stack[-1]:
@@ -104,11 +109,12 @@ class Parser(object):
                     if len(line) < 2:
                         err(token0, f"Missing parameters for preop {token0.v}")
                     token1 = line[1]
+                    token1v = token1.v
                     if token0v in ("#IFDEF", "#IFNDEF"):
                         ifresult = False
-                        if token0v in self.symtable:
+                        if token1v in self.symtable:
                             ifresult = True
-                        elif token0v+'(' in self.symtable:  # Function macrodef
+                        elif token1v+'(' in self.symtable:  # Function macrodef
                             ifresult = True
                         if token0v == "#IFNDEF":
                             ifresult = not ifresult
@@ -150,9 +156,9 @@ class Parser(object):
                                 macdef = MacroDef(token1, tuple(), macbody)
                             self.symtable[macname] = macdef
                         elif token1.type in ("MACRO", "DIR_CALL"):
-                            if token1.v in ("eval(","concat("):
+                            if token1.v in ("eval(","concat(","eval","concat"):
                                 err(token1, f"Illegal redefinition of reserved macro name {token1.v}")
-                            paramlist = self.get_paramlist(line, 1)
+                            paramlist = self.get_paramlist(line, 2)
                             if paramlist:
                                 if any([(len(param) > 1 or param[0].type != "IDENT") for param in paramlist]):
                                     err(token1, "Illegal identifier(s) found in macro signature.")
@@ -166,23 +172,60 @@ class Parser(object):
                             self.symtable[token1.v] = macrodef
                         else:
                             err(token1, "Illegal macro identifier")
+                    if token0v == "#ENDMACRO":
+                        err(token0, "#ENDMACRO used without corresponding #MACRO.")
                     if token0v == "#MACRO":
-                        # We'll have to iterate through until we find an
-                        # #encmacro
-                        pass
+                        if depth > 1:
+                            print(yellowmsg("An error that is not meant to be reachable has happened."))
+                            err(token0, "Illegal nesting of #MACRO during expansion.")
+                        if token1.v in ("eval(","concat(","eval","concat"):
+                            err(token1, f"Illegal redefinition of reserved macro name {token1.v}")
+                        paramlist = self.get_paramlist(line, 2)
+                        if paramlist:
+                            if any([(len(param) > 1 or param[0].type != "IDENT") for param in paramlist]):
+                                err(token1, "Illegal identifier(s) found in macro signature.")
+                            paramlist = [param[0] for param in paramlist] # Flatten list with 1st token ea.
+                            #Note: Length not considered because anything after
+                            #the macrodef on the same line is discarded.
+                        macrobody = []
+                        while True:
+                            try:
+                                macroline = next(iterator)
+                            except StopIteration:
+                                err(token0, "EOF encountered without #ENDMACRO.")
+                            if len(macroline) < 1:
+                                continue
+                            mltok0 = macroline[0]
+                            if mltok0.type == "PREOP" and mltok0.v == "#MACRO":
+                                err(mltok0, "Illegal nesting of #MACRO statement.")
+                            macroline.append(from_token(mltok0, 'NEWLINE', '\n'))
+                            if mltok0.type == "PREOP" and mltok0.v == "#ENDMACRO":
+                                break
+                            macrobody.extend(macroline)
+                        #NOTE: macrobody now set. prior block shou
+                        macrodef = MacroDef(token1, tuple(paramlist), macrobody)
+                        self.symtable[token1.v] = macrodef
+                        
+                pass
+            # Preops processed. Begin macro expansion section.
+            
+            # insert macro expansion
+            
+            # Instruction and directive parsing goes here.
+            # NOTE: Standalone labels, with or with trailing colon, or the same
+            # except with instruction/directive afterward should alias to
+            # IDENTIFIER .equ $ \ [leftover line contents]
+            # and resubmit edited line to tokens.
+            # NOTE: If depth > 1, do not do any actual processing. Just let it
+            # pass through to results.
+            # NOTE: If depth == 1, advance .org as normal. On pass 2, output
+            # byte data to self.results (distinct to local results) and let
+            # local results be an empty list.
 
-
-
-
-
-
-
-
-
-
-
-
-        pass
+            # Final part
+            if depth > 1:
+                results += line + Token("NEWLINE",'\n', 0, 0, "")
+        return results
 
     def get_paramlist(self,tokenline:list[Token], start:int) -> list[list[Token]]:
         if len(tokenline) < 1:
@@ -191,6 +234,7 @@ class Parser(object):
             err(tokenline[-1], f"Start value {start} is out of bounds.")
         paramlist:list[list[Token]] = []
         paramtokens:list[Token] = []
+        depth = 0
         for idx, token in enumerate(tokenline[start:], start):
             if token.type == "OPER" and token.v == "(":
                 depth += 1
@@ -256,8 +300,8 @@ class Parser(object):
                 symval = self.symtable[tokval]
                 if not isinstance(symval, int):
                     err(token, f"Symbol [{tokval}] type expected int, got {type(symval)}")
-                return self.symtable[token.value]
-        elif token.type == "OPERATOR" and token.value == "$":
+                return self.symtable[token.v]
+        elif token.type == "OPERATOR" and token.v == "$":
             return self.origin
         else:
             err(token, f"Illegal token type {toktype} of value {tokval}")
@@ -332,7 +376,7 @@ class Parser(object):
                 continue
 
             current_value:int = None
-            if "NUM" in token.type or token.type == "IDENTIFIER" or (token.type == "OPERATOR" and token.value == '$'):
+            if "NUM" in token.type or token.type == "IDENTIFIER" or (token.type == "OPERATOR" and token.v == '$'):
                 current_value = self.eval_val(token, passnum)
                 tokseg_idx += 1
             elif token.type == "OPERATOR" and token.v == '(':
@@ -356,14 +400,13 @@ class Parser(object):
                         break
                     temp_idx += 1
                 else: # Loop finished without finding matching parenthesis
-                    raise ValueError(f"Closing parenthesis not found at around {tokenline.filename}:{tokenline.lineno} col {tokens[start_paren_pos].position}")
+                    err(temp_token, "Closing parenthesis not found.")
 
                 if sub_expr_start_idx > sub_expr_end_idx:
                     current_value = 0 # Empty parenthesis sequence
                 else:
                     sub_tokline = tokens[sub_expr_start_idx:sub_expr_end_idx + 1] # +1 for exclusive end
-                    current_value_token = self.eval_expr(sub_tokline, (0, len(sub_tokline.tokens) - 1), passnum) # Recursive call
-                    current_value = int(current_value_token.v) # Convert result token value to int
+                    current_value = self.eval_expr(sub_tokline, passnum)  # Recursive call
             else:
                 err(token, f"Unexpected token {token.v} of type {token.type}")
 
@@ -392,7 +435,7 @@ class Parser(object):
                         err(next_token, "Invalid operator sequence encountered.")
                     operator = next_token
                     tokseg_idx += 1
-                elif next_token.type == "OPERATOR" and next_token.value in ('(', ')'):
+                elif next_token.type == "OPERATOR" and next_token.v in ('(', ')'):
                     # Parentheses are handled by the main loop, not as binary operators here
                     # This case should ideally not be reached if parsing is correct,
                     # as '(' would start a new value and ')' would end a sub-expression.
@@ -472,7 +515,6 @@ class TokenStream(object):
             #If there are any resubmitted tokens, consume them first.
             if self.resub_tokens:
                 token = self.resub_tokens.popleft()
-                pass
             else:
                 token = self.tokens[tokens_index]
                 tokens_index += 1
