@@ -83,7 +83,10 @@ class Parser(object):
                         s2 = [v.v if v.type != "NEWLINE" else "\n" for v in v.body.tokens]
                         s2 = ' '.join(t for t in s2)
                     except Exception as e:
-                        print(f"{s1}:{s2}")
+                        try:
+                            print(f"{s1}:{s2}")
+                        except:
+                            print(f"{v.params}\n{v.body.tokens}")
                         raise e
                 else:
                     s = v
@@ -101,12 +104,16 @@ class Parser(object):
     def from_filename(cls, filename):
         return cls(TokenStream.from_filename(filename))
 
-    def parse(self, tokens:"TokenStream", passid=1, depth=1, trace=False) -> "TokenStream|bytearray":
+    def parse(self, tokens:"TokenStream", passid=1, depth=1, trace=False) -> list[Token]:
         # Only returns bytearray if passid=2 and depth=1.
+        #if depth >1:
+        #    print(' '.join([t.v for t in tokens.tokens if t.v and ord(t.v[0]) >= 32]))
         iterator = tokens.getline()
         results:list[Token] = []
-        for line in iterator:
-                
+        for lidx,line in enumerate(iterator):
+            #s = ' '.join([t.v for t in line if t.v and ord(t.v[0]) >= 32])
+            #print(yellowmsg(f"[L{lidx}][D{depth}] {s}"))
+
             if len(line) < 1:
                 continue
             if self.__class__.DEBUGMODE:
@@ -192,15 +199,11 @@ class Parser(object):
                             macname = token1.v
                             macbody = line[2:]
                             try:
-                                print(macbody)
-                                # NOTE: FIGURE OUT WHAT'S HAPPENING TO macbody
-                                # BETWEEN HERE AND THE END OF self.parse()
-                                # IT OUGHT TO BE A PASSTHROUGH FOR
-                                # NON-DIRECTIVE TOKENS.
                                 macbody = self.parse(TokenStream(macbody), 2, depth+1, trace)
+                                #print(macbody)
                                 macbody = self.eval_expr(macbody, passid)
                             except Exception as e:
-                                print(yellowmsg(f"Macrobody passthrough exception: {e}"))
+                                #print(yellowmsg(f"Macrobody passthrough exception: {e}"))
                                 # Suppress errors. Possible values of macbody:
                                 # 1. Empty (no body) [instant error]
                                 # 2. Tokenlist / Macro expanded [eval error]
@@ -209,6 +212,8 @@ class Parser(object):
                             if isinstance(macbody, int):
                                 macdef = macbody
                             else:
+                                #if isinstance(macbody, list):
+                                #    print(type(macbody[0]))
                                 macdef = MacroDef(token1, list(), TokenStream(macbody))
                             self.symtable[macname] = macdef
                         elif token1.type in ("MACRO", "DIR_CALL"):
@@ -269,7 +274,7 @@ class Parser(object):
                         continue # Added to skip macro expansion for #MACRO line
                 pass
 
-                #'''
+                '''
                 # Preops processed. Begin macro expansion section.
                 line_changed = False
                 new_line_tokens = [] # This will be the reconstructed line after expansion
@@ -425,7 +430,7 @@ class Parser(object):
                     # If the line changed, resubmit it to the token stream and restart the loop for this line
                     tokens.resubmit_tokens(new_line_tokens)
                     continue # Restart the outer loop to process the resubmitted line
-                #'''
+                '''
             # Instruction and directive parsing goes here.
             # NOTE: Standalone labels, with or with trailing colon, or the same
             # except with instruction/directive afterward should alias to
@@ -439,7 +444,7 @@ class Parser(object):
             types = [i.type for i in line]
             values = [i.v for i in line]
             if "DIRECTIVE" in types and depth < 2:
-                print(yellowmsg("Handling directive"))
+                print(yellowmsg("HANDLE DIR ↑"))
                 if sum([1 if i=="DIRECTIVE" else 0 for i in types]) > 1:
                     err(line[0],"There may not be more than one directive on a single logical line.")
                 diridx = types.index("DIRECTIVE")
@@ -456,10 +461,9 @@ class Parser(object):
             # Final part
             if depth > 1:
                 token = Token("NEWLINE",'\n', 0, 0, "")
-                print(f"[{depth}]-- {line} {token}")
+                #print(f"[{depth}]-- {line} {token}")
                 line.append(token)
-
-                results += line
+                results.extend(line)
         return results
 
     def get_paramlist(self,tokenline:list[Token], start:int) -> list[list[Token]]:
@@ -784,6 +788,9 @@ class TokenStream(object):
                     if token.type == "PREOP" and token.v.upper() == "#DEFINE":
                         inside_define = True
                     tokens.append(token)
+        if tokens:
+            yield tokens
+            tokens = []
 
 class Tokenizer(object):
     MAX_INCLUDE_DEPTH = 8
