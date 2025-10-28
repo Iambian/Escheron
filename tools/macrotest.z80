@@ -1,6 +1,6 @@
 #include "src/inc/osdefs.inc"
-;#include "src/inc/macros.inc"
-;#include "src/inc/gamedefs.inc"
+#include "src/inc/macros.inc"
+#include "src/inc/gamedefs.inc"
 
     ld a,10 \ ld b,20 \ ld c,30
 #define backslash_test .db 30 \ .dw label \.db "Seventeen"
