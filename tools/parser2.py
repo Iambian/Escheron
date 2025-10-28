@@ -6,7 +6,7 @@ import os, sys, random, copy, re, colorama
 import traceback
 from typing import NamedTuple, Iterator, Optional, Tuple
 from collections import deque
-from colorama import Fore, Style
+from colorama import Fore, Style, Back
 
 colorama.just_fix_windows_console()
 
@@ -73,7 +73,9 @@ class Parser(object):
         try:
             self.parse(self.tokens, 1)
         except Exception as e:
-            print(redmsg(e.with_traceback()))
+            print(Fore.RED)
+            traceback.print_exc()
+            print(Style.RESET_ALL)
 
         #self.parse(self.tokens, 2)
         if len(self.if_stack):
@@ -81,7 +83,7 @@ class Parser(object):
             err(baseentry.token, "Unbalanced #IF/#ENDIF statements starting here")
         if self.__class__.DEBUGMODE:
             print("--Symbol Table--")
-            #'''
+            '''
             for k in self.symtable:
                 v = self.symtable[k]
                 if isinstance(v, int):
@@ -107,7 +109,7 @@ class Parser(object):
                         print(t)
                 else:
                     print(f"Symdef [{k}]: {s}")
-            #'''
+            '''
             pass
         pass
 
@@ -173,6 +175,7 @@ class Parser(object):
             # Now that we did stuff that could change if_stack level or state...
             if len(self.if_stack) > 0 and (self.if_stack[-1].cond is False or self.if_stack[-1].cond is None):
                 # Consume lines if top of stack is False or None
+                print(f"Skipping line {tokline2str(line)}")
                 continue
             # This token line is reachable. Continue processing.
             if token0.type == "PREOP":
@@ -303,12 +306,15 @@ class Parser(object):
                 if tokent in ("MACRO","IDENT","DIR_CALL") and tokenv in self.symtable:
                     symentry = self.symtable[tokenv]
                     if isinstance(symentry, MacroDef):
-                        if tokent.endswith('('):
+                        if tokenv.endswith('('):
+                            print(yellowmsg(f"endswith, obj {tokenv}"))
                             invokelist = self.get_params_from_iter(lineiter)
                         else:
+                            print(yellowmsg(f"not endswith, obj {tokenv}"))
                             invokelist = []
                         paramlist = [i.v for i in symentry.params]
                         if len(paramlist) > len(invokelist):
+                            print(yellowmsg(f"Input state: paramlist len [{len(paramlist)}], invokelist len [{len(invokelist)}]"))
                             err(token,"Insufficient parameters passed to macro invocation.")
                         premacrobody = symentry.body.tokens #copies \ and NL
                         print(f"Macro expansion object {tokenv} type paramlist: {type(paramlist)}, body type {symentry.body.tokens}")
@@ -332,11 +338,48 @@ class Parser(object):
                         resubmit.append(from_token(token, "NUM", symentry))
                     else:
                         err(token, f"Unknown symentry return type value [{token.v}], type [{type(symentry)}]")
+                elif tokent == "MACRO" and tokenv.lower() in ("eval(", "concat("):
+                    # Built-in macros
+                    invokelist = self.get_params_from_iter(lineiter)
+                    if all([len(i) == 1 for i in invokelist]):
+                        if all([i[0].type == "STRING" for i in invokelist]):
+                            #Single string token, Possibly multiparam
+                            print(yellowmsg("String process"))
+                            s = ''.join([i[0].v for i in invokelist])
+                            # The macro names lie. This is fine.
+                            if token.v.lower() == "eval(":
+                                resubmit.append(from_token(token, "STRING", s))
+                            elif token.v.lower() == "concat(":
+                                resubmit.append(from_token(token, "IDENT", s))
+                            else:
+                                err(token, "Unrecognized macro. This error should have been unreachable.")
+                        elif len(invokelist) > 1:
+                            # Single token, Multiparam in all other conditions
+                            err(token, f"Unsupported {tokenv} usage: Multiple params but not all are strings.")
+                        else:
+                            # Single token single param, not string.
+                            if tokenv.lower() == "concat(":
+                                err(token, f"Unsupported {tokenv} usage: Single param, but not string.")
+                            if token.v.lower() == "eval(":
+                                print(f"Invocation list for {token}: {invokelist[0]}")
+                                val = self.eval_expr(invokelist[0], passid)
+                                resubmit.append(from_token(token, "NUM", val))
+                    elif len(invokelist) == 1:
+                        if tokenv.lower() == "concat(":
+                            err(token, f"Unsupported {tokenv} usage: Single param, but not string.")
+                        if token.v.lower() == "eval(":
+                            print(f"Invocation list for {token}: {invokelist[0]}")
+                            val = self.eval_expr(invokelist[0], passid)
+                            resubmit.append(from_token(token, "NUM", val))
+                    else:
+                        err(token, "Unsupported builtin macro use: Multitoken multiparam.")
+
+
                 else:
                     resubmit.append(token)
             if line != resubmit:
                 print(f"Token resubmittting. Old: [{tokline2str(line)}], new: [{tokline2str(resubmit)}]")
-                if resubmit[-1].type != "NEWLINE":
+                if resubmit and resubmit[-1].type != "NEWLINE":
                     resubmit.append(from_token(token, "NEWLINE", "\n"))
                 tokens.resubmit_tokens(resubmit)
                 continue
@@ -616,7 +659,7 @@ class Parser(object):
                 continue
 
             current_value:int = None
-            if "NUM" in token.type or token.type == "IDENTIFIER" or (token.type == "OPER" and token.v == '$'):
+            if "NUM" in token.type or token.type == "IDENTIFIER" or (token.type == "OPER" and token.v == '$') or token.type == "IDENT":
                 current_value = self.eval_val(token, passnum)
                 tokseg_idx += 1
             elif token.type == "OPER" and token.v == '(':
