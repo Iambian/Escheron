@@ -93,15 +93,16 @@ class Parser(object):
         self.if_stack:list[IfStackEntry] = []
         try:
             self.parse(self.tokens, 1)
+
+            if len(self.if_stack):
+                baseentry = self.if_stack[0]
+                err(baseentry.token, "Unbalanced #IF/#ENDIF statements starting here")
         except Exception as e:
             print(Fore.RED)
             traceback.print_exc()
             print(Style.RESET_ALL)
 
         #self.parse(self.tokens, 2)
-        if len(self.if_stack):
-            baseentry = self.if_stack[0]
-            err(baseentry.token, "Unbalanced #IF/#ENDIF statements starting here")
         if self.__class__.DEBUGMODE and self.__class__.SHOW_SYMTABLE:
             mode = self.__class__.SHOW_SYMTABLE_MODE
             print("--Symbol Table--")
@@ -281,27 +282,21 @@ class Parser(object):
             resubmit:list[Token] = []
             lineiter = iter(line)
             for token in lineiter:
-                print(token.v)
                 tokenv, tokent = (token.v, token.type)
                 if tokent in ("MACRO","IDENT","DIR_CALL","DIRECTIVE") and tokenv in self.symtable:
                     symentry = self.symtable[tokenv]
                     if isinstance(symentry, MacroDef):
-                        #print(token)
                         if tokenv.endswith('('):
                             invokelist = self.get_params_from_iter(lineiter)
                             if invokelist == [[]]:
                                 invokelist = []
                         else:
                             invokelist = []
-                        #print(invokelist)
                         paramlist = [i.v for i in symentry.params]
-                        #print(paramlist)
                         if len(paramlist) > len(invokelist):
                             err(token, "Insufficient parameters passed to macro invocation.")
                         macrobody = []
-                        #print(symentry.body.tokens)
                         for mtoken in symentry.body.tokens:
-                            #print(mtoken)
                             try:
                                 if mtoken.v in paramlist:
                                     macrobody.extend(invokelist[paramlist.index(mtoken.v)])
@@ -363,6 +358,7 @@ class Parser(object):
                     except:
                         print(line)
                         print(yellowmsg(resubmit))
+                        pass
                 if resubmit and resubmit[-1].type != "NEWLINE":
                     resubmit.append(NEWLINE_TOKEN)
                 tokens.resubmit_tokens(resubmit)
@@ -401,6 +397,11 @@ class Parser(object):
                     exprval = self.eval_expr(line[2:], passid)
                     # Add in check to prevent redefinition but only on same-pass
                     self.symtable[line[0].v] = exprval
+                if values[diridx].upper() == ".ERROR":
+                    print(yellowmsg("Warn: .error directive implementation incomplete."))
+                    print(redmsg(".error directive encountered. Raising error using text available."))
+                    err(token, f"{tokline2str(line)}")
+
 
             # This final section is intended to collect emittable tokens during
             # a recursive call (macro expansion) and return them to complete
