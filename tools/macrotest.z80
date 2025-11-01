@@ -31,5 +31,5 @@
 ;.directive(1, 2, other(3, 4), 5) \ biscuit("something", something)
 ;MyMacro("foo, bar", 2)
 ;MyMacro()
-;macro(1, (2, 3), 4)
+;macro(1, 2, (2, 3), 4)
 ;macro(1, 2, $44h

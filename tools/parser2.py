@@ -26,10 +26,13 @@ class Token(NamedTuple):
     file: str
 
 class IfStackEntry(NamedTuple):
-    ''' The conditional has the following states and meanings:
-    True = The current branch is being taken.
-    False = The current is not being taken but is still available to take.
-    None = A branch has already been taken and no more at this level will take.
+    ''' `cond` has the following states and meanings:
+
+    `True` = The current branch is being taken.
+    `False` = The current is not being taken but is still available to take.
+    `None` = A branch has already been taken and no more at this level will take.
+
+    `token` exists for traceback purposes.
     '''
     token: Token            #Added to allow error tracing.
     cond: Optional[bool]
@@ -71,7 +74,8 @@ def printerr(token:Token, msg:str):
 
 class Parser(object):
     DEBUGMODE = True
-    SHOW_SYMTABLE = True
+    SHOW_SYMTABLE = False
+    SHOW_SYMTABLE_MODE = None    #None|"SYM"|"MAC"
     SHOW_PARSE_LINESTART = False
     SHOW_PARSE_AFTER_PREOP = True
     MAX_RECURSION_DEPTH = 8
@@ -99,12 +103,13 @@ class Parser(object):
             baseentry = self.if_stack[0]
             err(baseentry.token, "Unbalanced #IF/#ENDIF statements starting here")
         if self.__class__.DEBUGMODE and self.__class__.SHOW_SYMTABLE:
+            mode = self.__class__.SHOW_SYMTABLE_MODE
             print("--Symbol Table--")
             for k in self.symtable:
                 v = self.symtable[k]
-                if not isinstance(v, MacroDef):
+                if not isinstance(v, MacroDef) and not mode=="MAC":
                     print(f"Symdef [{k}]: {repr(v)}")
-                else:
+                elif isinstance(v, MacroDef) and not mode=="SYM":
                     strparams = f"({', '.join([str(t.v) for t in v.params])})"
                     strbody = ' '.join([str(t.v) for t in v.body.tokens])
                     print(f"Macrodef [{k}] params: {strparams}")
@@ -125,7 +130,7 @@ class Parser(object):
             if len(line) < 1:
                 continue
             if cls.DEBUGMODE and cls.SHOW_PARSE_LINESTART:
-                print(errmsg(line[0], f"{'·'*(depth-1)} {tokline2str(line)}"))
+                print(errmsg(line[0], f"LS: {'·'*(depth-1)} {tokline2str(line)}"))
             if len(tokline2str(line)) > 256:
                 err(line[0],"Line buffer exceeded reasonable length.")
             token0 = line[0]
@@ -206,16 +211,10 @@ class Parser(object):
                             macname = token1.v
                             macbody = line[2:]
                             try:
-                                # These will intentionally attempt to trigger
-                                # exceptions. All intermediary values of macbody
-                                # should be valid regardless of where the error is.
-                                macbody = self.parse(TokenStream(macbody), 2, depth+1, trace)
                                 macbody = self.eval_expr(macbody, passid)
                             except Exception as e:
-                                # Suppress errors. Possible values of macbody:
-                                # 1. Empty (no body) [instant error]
-                                # 2. Tokenlist / Macro expanded [eval error]
-                                # 3. int (no errors)
+                                # If err, macbody still contains original
+                                # contents. That's fine. It's just a text repl.
                                 pass
                             if isinstance(macbody, int):
                                 macdef = macbody
@@ -268,9 +267,9 @@ class Parser(object):
                             mltok0v = mltok0.v.upper()
                             if mltok0.type == "PREOP" and mltok0v == "#MACRO":
                                 err(mltok0, "Illegal nesting of #MACRO statement.")
-                            macroline.append(from_token(mltok0, 'NEWLINE', '\n'))
                             if mltok0.type == "PREOP" and mltok0v == "#ENDMACRO":
                                 break
+                            macroline.append(from_token(mltok0, 'NEWLINE', '\n'))
                             macrobody.extend(macroline)
                         #NOTE: macrobody now set. prior block shou
                         macrodef = MacroDef(token1, paramlist, TokenStream(macrobody))
@@ -306,7 +305,13 @@ class Parser(object):
                                     macrobody.append(newtoken)
                             except Exception as e:
                                 raise e
-                        resubmitval = self.parse(TokenStream(macrobody), passid, depth+1, trace)
+                        try:
+                            # Call macro_expand with passid
+                            expanded_macrobody = self.macro_expand(macrobody, passid, builtinmacros=True, depth=depth+1)
+                            resubmitval = self.parse(TokenStream(expanded_macrobody), passid, depth+1, trace)
+                        except Exception as e:
+                            print(errmsg(token, f"{' '*depth} Error in parse recursion. Unwinding from [{token}]"))
+                            raise e
                         resubmit.extend(resubmitval)
                         if not isinstance(resubmitval, list):
                             raise ValueError("Resubmission value returned from parse is not a list.")
@@ -314,41 +319,28 @@ class Parser(object):
                         resubmit.append(from_token(token, "NUM", symentry))
                     else:
                         err(token, f"Unknown symentry return type value [{token.v}], type [{type(symentry)}]")
-                elif tokent == "MACRO" and tokenv.lower() in ("eval(", "concat("):
+                elif tokent == "MACRO" and tokenv.lower() in ("eval(", "concat(") and expanded_builtin_macro:
                     # Built-in macros
                     invokelist = self.get_params_from_iter(lineiter)
-                    if all([len(i) == 1 for i in invokelist]):
-                        if all([i[0].type == "STRING" for i in invokelist]):
-                            #Single string token, Possibly multiparam
-                            s = ''.join([i[0].v for i in invokelist])
-                            # The macro names lie. This is fine.
-                            if token.v.lower() == "eval(":
-                                resubmit.append(from_token(token, "STRING", s))
-                            elif token.v.lower() == "concat(":
-                                resubmit.append(from_token(token, "IDENT", s))
-                            else:
-                                err(token, "Unrecognized macro. This error should have been unreachable.")
-                        elif len(invokelist) > 1:
-                            # Single token, Multiparam in all other conditions
-                            err(token, f"Unsupported {tokenv} usage: Multiple params but not all are strings.")
-                        else:
-                            # Single token single param, not string.
-                            if tokenv.lower() == "concat(":
-                                err(token, f"Unsupported {tokenv} usage: Single param, but not string.")
-                            if token.v.lower() == "eval(":
-                                val = self.eval_expr(invokelist[0], passid)
-                                resubmit.append(from_token(token, "NUM", val))
-                    elif len(invokelist) == 1:
-                        if tokenv.lower() == "concat(":
-                            err(token, f"Unsupported {tokenv} usage: Single param, but not string.")
-                        if token.v.lower() == "eval(":
-                            val = self.eval_expr(invokelist[0], passid)
-                            resubmit.append(from_token(token, "NUM", val))
-                    else:
-                        err(token, "Unsupported builtin macro use: Multitoken multiparam.")
-                    #End built-in macros processing
-                    pass
-
+                    # The parse method already handles built-in macros, so we can just call it
+                    # with the current token and its parameters.
+                    # This effectively re-routes the built-in macro handling from parse() to macro_expand()
+                    # by calling macro_expand() from parse() and then parse() again for the result.
+                    # This is a bit convoluted, but it maintains the existing structure.
+                    # A cleaner approach might be to have parse() call macro_expand() for ALL macros,
+                    # and macro_expand() handles both user-defined and built-in macros.
+                    # For now, I'll just pass the original token and its parameters to macro_expand.
+                    
+                    # Create a temporary token list for the built-in macro invocation
+                    temp_macro_invocation = [token] + self.joinparams(invokelist)
+                    
+                    try:
+                        # Call macro_expand to process the built-in macro
+                        expanded_builtin_macro = self.macro_expand(temp_macro_invocation, passid, builtinmacros=True, depth=depth+1)
+                        resubmit.extend(expanded_builtin_macro)
+                    except Exception as e:
+                        print(errmsg(token, f"{' '*depth} Error in built-in macro expansion. Unwinding from [{token}]"))
+                        raise e
                 else:
                     resubmit.append(token)
             if line != resubmit:
@@ -394,17 +386,10 @@ class Parser(object):
                 results.extend(line)
 
         # Strip final newline from results for macro expansion insertion
-        # Optimistically try to reduce the results if it is expression-only
         if results:
             t = results[-1]
             if isinstance(t, Token) and t.type == "NEWLINE":
                 results.pop()
-            if depth > 1:
-                try:
-                    evalres = self.eval_expr(results, 2)
-                    results = [from_token(token0,"NUM",evalres),]
-                except:
-                    pass
 
         return results
 
@@ -437,7 +422,7 @@ class Parser(object):
 
         return paramlist
     
-    def macro_expand(self, toklist:list[Token], builtinmacros=False, depth=1) -> list[Token]:
+    def macro_expand(self, toklist:list[Token], passid:int, builtinmacros=False, depth=1) -> list[Token]:
         if depth > self.__class__.MAX_RECURSION_DEPTH:
             raise ValueError(f"Macro expansion depth limit exceeded.")
         newtokens = []
@@ -456,27 +441,80 @@ class Parser(object):
                     # If it exists and is a MacroDef, start replacing
                     # paramdefs with invocation parameters.
                     oldmacrobody = symentry.body.tokens
-                    macroparams = symentry.params
-                    if len(macroparams) > len(invokeparams):
+                    macroparams_v = [p.v for p in symentry.params] # Extract string values of parameters
+                    if len(macroparams_v) > len(invokeparams):
                         err(token, f"Insufficient parameters passed to macro [{token}] invocation.")
                     newmacrobody = []
                     for macrotoken in oldmacrobody:
-                        macrotokenval, macrotokentype = (macrotoken.v, macrotoken.type)
-                        if macrotokenval in macroparams:
-                            newmacrobody.extend(invokeparams[macroparams.index(macrotokenval)])
+                        macrotokenval = macrotoken.v
+                        if macrotokenval in macroparams_v:
+                            # Substitute parameter with its invoked value
+                            newmacrobody.extend(invokeparams[macroparams_v.index(macrotokenval)])
                         else:
                             newmacrobody.append(macrotoken)
                     # Expand any expandables inside new macrobody.
                     try:
-                        newmacrobody = self.macro_expand(newmacrobody, builtinmacros, depth+1)
+                        newmacrobody = self.macro_expand(newmacrobody, passid, builtinmacros, depth+1)
                     except Exception as e:
                         print(errmsg(token, f"{' '*depth} Error in macro recursion. Unwinding from [{token}]"))
                         raise e
                 elif tokenval in ("eval(","concat(") and builtinmacros:
                     # Processing built-in.
-                    ## PLACEHOLDER START
-                    newmacrobody = [token] + self.joinparams(invokeparams)
-                    ## PLACEHOLDER END
+                    # Pre-expand parameters first
+                    expanded_invokeparams = []
+                    for param_tokens in invokeparams:
+                        try:
+                            expanded_param = self.macro_expand(param_tokens, passid, builtinmacros, depth + 1)
+                            expanded_invokeparams.append(expanded_param)
+                        except Exception as e:
+                            print(errmsg(token, f"{' '*(depth+1)} Error in parameter macro expansion. Unwinding from [{token}]"))
+                            raise e
+
+                    is_eval = (tokenval.lower() == "eval(")
+                    is_concat = (tokenval.lower() == "concat(")
+
+                    # Check if all parameters are single tokens and resolve to strings
+                    all_single_string_or_ident = True
+                    resolved_strings = []
+                    for param in expanded_invokeparams:
+                        if len(param) == 1:
+                            resolved_str = self._resolve_to_string(param[0], passid)
+                            if resolved_str is not None:
+                                resolved_strings.append(resolved_str)
+                            else:
+                                all_single_string_or_ident = False
+                                break
+                        else:
+                            all_single_string_or_ident = False
+                            break
+
+                    if is_eval:
+                        if all_single_string_or_ident:
+                            # Eval with multiple string/ident params -> concatenate to STRING
+                            concatenated_s = ''.join(resolved_strings)
+                            newmacrobody = [from_token(token, "STRING", concatenated_s)]
+                        elif len(expanded_invokeparams) == 1:
+                            # Eval with single param, not string/ident -> assume expression
+                            expr_tokens = expanded_invokeparams[0]
+                            try:
+                                # Need to parse the expression tokens before evaluating
+                                # The parse method expects a TokenStream, so wrap it
+                                parsed_expr = self.parse(TokenStream(expr_tokens), passid, depth + 1)
+                                eval_result = self.eval_expr(parsed_expr, passid)
+                                newmacrobody = [from_token(token, "NUM", eval_result)]
+                            except Exception as e:
+                                err(token, f"Error evaluating expression in eval() macro: {e}")
+                        else:
+                            err(token, "Unknown or unsupported eval() macro usage: Multiple parameters not all resolving to single strings/idents, or single parameter not an expression.")
+                    elif is_concat:
+                        if all_single_string_or_ident:
+                            # Concat with multiple string/ident params -> concatenate to IDENT
+                            concatenated_s = ''.join(resolved_strings)
+                            newmacrobody = [from_token(token, "IDENT", concatenated_s)]
+                        else:
+                            err(token, "Unknown or unsupported concat() macro usage: Parameters must all be single tokens resolving to strings or idents.")
+                    else:
+                        err(token, "Unrecognized built-in macro. This error should have been unreachable.")
                 else:
                     # We found something that wasn't recognized. Pass through
                     # for now and let the caller raise any errors this may cause
@@ -654,7 +692,32 @@ class Parser(object):
             err(oper, f"Unknown or unsupported operator '{oper.v}'")
         return base
 
-
+    def _resolve_to_string(self, token:Token, passid:int) -> Optional[str]:
+        """
+        Resolves a token to a string if it's a STRING type or an IDENT
+        that resolves to a string in the symtable.
+        """
+        if token.type == "STRING":
+            return unescape_string(token.v)
+        elif token.type == "IDENT":
+            if token.v in self.symtable:
+                symval = self.symtable[token.v]
+                if isinstance(symval, str):
+                    return symval
+                elif isinstance(symval, MacroDef):
+                    # If it's a MacroDef, it might expand to a string.
+                    # This is a recursive call, so we need to be careful about depth.
+                    # For now, let's assume direct string resolution for IDENT.
+                    # If a macro expands to a string, it should be handled by the pre-expansion step.
+                    pass # Fall through to return None
+                elif isinstance(symval, int):
+                    # An IDENT resolving to an int is not a string for eval/concat purposes
+                    pass # Fall through to return None
+                else:
+                    err(token, f"Symbol [{token.v}] type expected string or int, got {type(symval)}")
+            # If not in symtable or not a string, it doesn't resolve to a string
+            return None
+        return None
 
     def eval_expr(self, tokenline:list[Token], passnum:int=1) -> int:
         ''' Parses an expression in tokenline between and including the position
