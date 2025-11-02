@@ -72,11 +72,11 @@ def printerr(token:Token, msg:str):
 
 class Parser(object):
     DEBUGMODE = True
-    SHOW_SYMTABLE = False
+    SHOW_SYMTABLE = True
     SHOW_SYMTABLE_MODE = None    #None|"SYM"|"MAC"
     SHOW_PARSE_LINESTART = True
     SHOW_PARSE_AFTER_PREOP = False
-    SHOW_RESUBMISSIONS = False
+    SHOW_RESUBMISSIONS = True
     SHOW_RESULTS_RETURN = True
     MAX_RECURSION_DEPTH = 8
     MATH_OPS = ('+','-','*','/','&','|','^','<<','>>','==','!=','<','>','<=','>=','&&','||')
@@ -121,7 +121,7 @@ class Parser(object):
     def from_filename(cls, filename):
         return cls(TokenStream.from_filename(filename))
 
-    def parse(self, tokens:"TokenStream", passid=1, depth=1, trace=False, expandbuiltins=True) -> list[Token]:
+    def parse(self, tokens:"TokenStream", passid=1, depth=1, trace=False, nontrival_expand=True) -> list[Token]:
         #All parsed lines must be executed immediately
         cls = self.__class__
         if depth > cls.MAX_RECURSION_DEPTH:
@@ -196,10 +196,9 @@ class Parser(object):
                 if token0v in ("#UNDEF", "#UNDEFINE"):
                     if token1v in self.symtable:
                         del self.symtable[token1v]
-                        continue
                     if token1v + '(' in self.symtable:
                         del self.symtable[token1v + '(']
-                        continue
+                    continue
                 if token0v == "#ENDMACRO":
                     err(token0, "#ENDMACRO used without corresponding #MACRO.")
                 #
@@ -230,14 +229,26 @@ class Parser(object):
                         # The expansion here should NOT expand eval( and concat(
                         # Otherwise, proceed with evaluation as before
                         try:
+                            print(f"#DEFINE DEBUG STEP0: {token1v}: {tokline2minitok(macrobody)}")
                             macrobody = self.parse(TokenStream(macrobody), passid, depth+1, trace, False)
-                            macrobody = self.eval_expr(macrobody, passid)
+                            print(f"#DEFINE DEBUG STEP1: {token1v}: {tokline2minitok(macrobody)}")
+                            if len(paramlist):
+                                raise Exception("This exception is just to prevent eval if macro has parameters.")
+                            macrobody = self.eval_expr(macrobody, 2)
+                            print(f"#DEFINE DEBUG STEP2: {token1v}: {macrobody}")
+
                         except Exception as e:
+                            print(f"#DEFINE DEBUG EXCEPTION")
+                            s = traceback.format_exc()
+                            print(s)
                             #raise e
                             # Passthrough. macrobody will always have a valid result.
                             pass
                         if isinstance(macrobody, int):
                             # Simple define
+                            macrodef = macrobody
+                        elif isinstance(macrobody, str):
+                            # Also simple define, but resolves to string.
                             macrodef = macrobody
                         elif isinstance(macrobody, Token):
                             err(token0, "This error should not be reachable. Output macrobody in #DEFINE is not supposed to be a Token type.")
@@ -285,7 +296,7 @@ class Parser(object):
                 tokenv, tokent = (token.v, token.type)
                 if tokent in ("MACRO","IDENT","DIR_CALL","DIRECTIVE") and tokenv in self.symtable:
                     symentry = self.symtable[tokenv]
-                    if isinstance(symentry, MacroDef):
+                    if isinstance(symentry, MacroDef) and nontrival_expand:
                         if tokenv.endswith('('):
                             invokelist = self.get_params_from_iter(lineiter)
                             if invokelist == [[]]:
@@ -318,12 +329,14 @@ class Parser(object):
                         # Any other token must be passed through as-is.
                         resubmit.append(token)
                 elif tokent == "MACRO" and tokenv.lower() in ("eval(", "concat("):
-                    if not expandbuiltins:
+                    '''
+                    if not nontrival_expand:
                         # Consume, reconstruct, then emit tokens to prevent
                         # any further expansions within.
                         t = self.joinparams(self.get_params_from_iter(lineiter))
                         resubmit.extend([token]+t)
                         continue
+                    '''
                     # Execute built-in macros.
                     invokelist = self.get_params_from_iter(lineiter)
                     if any([param == [] for param in invokelist]):
@@ -334,17 +347,30 @@ class Parser(object):
                         if tokenv.lower() == "eval(":
                             newtoken = from_token(token, "STRING", s)
                         else:
+                            print(f"PREEVALUATED CONCAT: {[self.eval_to_string(param[0]) for param in invokelist]}")
+                            print(f"EVALUATED CONCAT: {s}")
                             newtoken = from_token(token, "IDENT", s)
                     elif len(invokelist) == 1:
-                        newtoken = from_token(token, "NUM", str(self.eval_expr(invokelist[0], passid)))
+                        print(tokline2minitok(invokelist[0]))
+                        reparsed = self.parse(TokenStream(invokelist[0]), passid, depth+1, trace, True)
+                        if len(reparsed):
+                            testtok = reparsed[0]
+                            if testtok.v == "VAR_STARTNAME":
+                                if testtok.v in self.symtable:
+                                    print(f"SYMVAL {testtok.v} = {self.symtable[testtok.v]}")
+                                else:
+                                    print(f"SYMVAL {testtok.v} referenced but not found.")
+                        print(tokline2minitok(reparsed))
+                        newtoken = from_token(token, "NUM", str(self.eval_expr(reparsed, 2)))
                     else:
                         if cls.DEBUGMODE:
                             print(yellowmsg(tokline2minitok(line)))
                         err(token, f"Illegal use of [{token.v}].")
                     resubmit.append(newtoken)
                 else:
-                    # If it wasn't a macro, or if it was a built-in macro but expandbuiltins is False,
-                    # pass the token through and let the evalulators deal with it.
+                    # TODO: Write comment to describe this situation. Had to change
+                    # things so that nontrivial expansions are also excludable,
+                    # not just built-ins.
                     resubmit.append(token)
                 pass
             # If nothing expanded, line should be the same as resubmit.
@@ -355,7 +381,10 @@ class Parser(object):
                 if cls.DEBUGMODE and cls.SHOW_RESUBMISSIONS:
                     try:
                         print(errmsg(line[0],f"RESUB: [{tokline2str(line)}] to [{tokline2str(resubmit)}]"))
+                        print(f"RESUBIN : {tokline2minitok(line)}")
+                        print(f"RESUBOUT: {tokline2minitok(resubmit)}")
                     except:
+                        print("The debug line at resubmit encountered an error.")
                         print(line)
                         print(yellowmsg(resubmit))
                         pass
@@ -390,6 +419,7 @@ class Parser(object):
                     err(line[0],"There may not be more than one directive on a single logical line.")
                 diridx = types.index("DIRECTIVE")
                 if values[diridx].upper() == ".EQU":
+                    print(yellowmsg(f"Processing directive line: [{tokline2minitok(line)}]"))
                     if diridx != 1:
                         err(line[0], "Directive .EQU must have only one token prior.")
                     if line[0].type != "IDENT":
@@ -801,7 +831,7 @@ class Tokenizer(object):
                 token1 = tokenline[1]
                 if token1.type != "STRING":
                     err(token1, f"Invalid #INCLUDE parameter :{token1.v}")
-                includefile = unescape_string(token1.v)
+                includefile = token1.v
                 try:
                     includestream = cls.makestream(includefile, depth+1)
                 except Exception as e:
@@ -826,6 +856,8 @@ class Tokenizer(object):
             elif kind == "UNKNOWN":
                 raise SyntaxError(redmsg(f"Unexpected character {value!r} at position {pos}"))
             else:
+                if kind == "STRING":
+                    value = unescape_string(value)
                 yield SubToken(kind, value, pos)
             pos = mo.end()
             mo = cls.get_token(code, pos)
