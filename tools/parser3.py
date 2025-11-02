@@ -254,6 +254,10 @@ class Parser(object):
                             err(token0, "This error should not be reachable. Output macrobody in #DEFINE is not supposed to be a Token type.")
                         else:
                             macrodef = MacroDef(token1, paramlist, TokenStream(macrobody))
+                        if not isinstance(macrodef, MacroDef):
+                            print(f"#DEFINE DEBUG STEP3: {token1v} assigned as {macrodef}")
+                        else:
+                            print(f"#DEFINE DEBUG STEP3: {token1v} assigned as {macrodef.params}: {tokline2minitok(macrodef.body.tokens)}")
                         self.symtable[token1v] = macrodef
                     if token0v == "#MACRO":
                         # Ignore contents of macrobody here. Anything following
@@ -294,9 +298,26 @@ class Parser(object):
             lineiter = iter(line)
             for token in lineiter:
                 tokenv, tokent = (token.v, token.type)
+                if tokenv == "VAR_STARTNAME":
+                    if "VAR_STARTNAME" in self.symtable:
+                        en = self.symtable["VAR_STARTNAME"]
+                        if not isinstance(en, MacroDef):
+                            print(f"MACROEXPANSION DEBUG STEP: {tokenv} assigned as {en}")
+                        else:
+                            print(f"MACROEXPANSION DEBUG STEP: {tokenv} assigned as {en.params}: {tokline2minitok(en.body.tokens)}")
+
+
                 if tokent in ("MACRO","IDENT","DIR_CALL","DIRECTIVE") and tokenv in self.symtable:
                     symentry = self.symtable[tokenv]
+                    if "VAR_STARTNAME" in self.symtable:
+                        en = self.symtable["VAR_STARTNAME"]
+                        if not isinstance(en, MacroDef):
+                            print(f"MACROEXPANSION DEBUG STEP1: exparam {nontrival_expand} {tokenv} assigned as {en}")
+                        else:
+                            print(f"MACROEXPANSION DEBUG STEP1: exparam {nontrival_expand} {tokenv} assigned as {en.params}: {tokline2minitok(en.body.tokens)}")
+
                     if isinstance(symentry, MacroDef) and nontrival_expand:
+                        print(f"Attempting to expand {tokenv}")
                         if tokenv.endswith('('):
                             invokelist = self.get_params_from_iter(lineiter)
                             if invokelist == [[]]:
@@ -321,7 +342,7 @@ class Parser(object):
                         # Attempt to further expand the macros inside macrobody
                         # Don't expand upon any eval() or concat() yet, tho.
                         try:
-                            macrobody = self.parse(TokenStream(macrobody), passid, depth+1, trace, False)
+                            macrobody = self.parse(TokenStream(macrobody), passid, depth+1, trace, True)
                         except:
                             pass
                         resubmit.extend(macrobody)
@@ -956,3 +977,8 @@ if __name__ == "__main__":
 
 
     '''
+#NOTE: This is how I invoke on the command line to output all that debug text
+#   to a separate output file. Keep because we may lose it.
+#
+# python tools/parser3.py tools/macrotest.z80 > parser_output.txt
+#
