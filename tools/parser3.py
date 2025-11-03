@@ -25,6 +25,7 @@ class Token(NamedTuple):
     row: int
     file: str
 
+
 class IfStackEntry(NamedTuple):
     ''' `token` for traceback. `cond` means the following:
     
@@ -59,6 +60,11 @@ def redmsg(msg):
     return f"{Fore.RED}{msg}{Style.RESET_ALL}"
 def yellowmsg(msg):
     return f"{Fore.YELLOW}{msg}{Style.RESET_ALL}"
+def warnmsg(token:Token, msg:str):
+    prerun = f"[{token.file}: LN {token.row}, COL {token.col}]"
+    if ERRMSG_RIGHT_ALIGN and len(prerun) < ERRMSG_RIGHT_ALIGN_COL:
+        prerun = ' '*(ERRMSG_RIGHT_ALIGN_COL-len(prerun)) + prerun
+    return yellowmsg(f"{prerun} {msg}")
 def errmsg(token:Token, msg:str):
     prerun = f"[{token.file}: LN {token.row}, COL {token.col}]"
     if ERRMSG_RIGHT_ALIGN and len(prerun) < ERRMSG_RIGHT_ALIGN_COL:
@@ -439,7 +445,9 @@ class Parser(object):
                 if sum([1 if i=="DIRECTIVE" else 0 for i in types]) > 1:
                     err(line[0],"There may not be more than one directive on a single logical line.")
                 diridx = types.index("DIRECTIVE")
-                if values[diridx].upper() == ".EQU":
+                dirtok = line[diridx]
+                dirid = values[diridx].upper()
+                if dirid == ".EQU":
                     print(yellowmsg(f"Processing directive line: [{tokline2minitok(line)}]"))
                     if diridx != 1:
                         err(line[0], "Directive .EQU must have only one token prior.")
@@ -448,10 +456,83 @@ class Parser(object):
                     exprval = self.eval_expr(line[2:], passid)
                     # Add in check to prevent redefinition but only on same-pass
                     self.symtable[line[0].v] = exprval
-                if values[diridx].upper() == ".ERROR":
+                elif dirid == ".ERROR":
+                    # Red text echo, plus program halt.
                     print(yellowmsg("Warn: .error directive implementation incomplete."))
                     print(redmsg(".error directive encountered. Raising error using text available."))
                     err(token, f"{tokline2str(line)}")
+                elif dirid == ".ECHO":
+                    # You'll want to figure out how this is going to work.
+                    pass
+                elif dirid in (".DB", ".BYTE"):
+                    # Data byte (8 bit) support
+                    # Limits: Warn if byte < -128 or > 255
+                    print(yellowmsg(f"DB DEBUG1: DB input {line[diridx+1]}"))
+                    data = self.parse_bytestream(line[diridx+1:], 1)
+                    print(yellowmsg(f"DB DEBUG2: DB output {data.hex()}"))
+                    pass
+                elif dirid in (".DW", ".WORD"):
+                    # Data word (16 bit) support
+                    # Strings pad each char to 16 bit.
+                    # Limits apply. Warn if < INT16_MIN or > UINT16_MAX
+                    pass
+                elif dirid in (".DL", ".LONG"):
+                    # Data long (24 bit) support
+                    # Strings pad each char to 24 bit.
+                    # Limits apply. Warn if < INT24_MIN or > UINT24_MAX
+                    pass
+                elif dirid in (".BLOCK", ".FILL"):
+                    # They do the same thing in SPASM-ng.
+                    # First param is length. It must be positive.
+                    # Optional second param is byte to use. Defaults to 0.
+                    pass
+                elif dirid in (".LIST", ".NOLIST"):
+                    # Toggle list modes including or excluding this current
+                    # statement invocation.
+                    pass
+                elif dirid == ".ASSUME":
+                    # might have more than one use. reviewing source.
+                    pass
+                elif dirid == ".SHOW":
+                    # This presumably allows you to echo the contents of a
+                    # DEFINE'd object in some manner that an echo can't do.
+                    # You'll want to explore this one some more.
+                    pass
+                elif dirid == ".OPTION":
+                    # idk what this does. At all. Reviewing source.
+                    # After reviewing the source, I still don't know what
+                    # it does. All I know is that it reads an expression with
+                    # '=' as a delimiter, and that it creates a double-underscore
+                    # define. In source we see the following:
+                    # "set_define (define, expr, -1, false);
+                    # That... appears "normal". Still idk why this exists.
+                    pass
+                elif dirid == ".SEEK":
+                    # idk what this does. probably auxillary file I/O
+                    # It does unsafe things. Maybe we should just error if
+                    # we see it.
+                    pass
+                elif dirid == ".EXPORT":
+                    # Label exporting
+                    pass
+                elif dirid == ".ADDINSTR":
+                    #The syntax for this is very weird. See if it's resolvable.
+                    pass
+                elif dirid == ".WARN":
+                    # Yellow text echo.
+                    pass
+                elif dirid == ".ORG":
+                    # Sets self.origin
+                    # Must be a positive number.
+                    pass
+                elif dirid == ".END":
+                    # End source parsing. That is to say, simply stop.
+                    pass
+                else:
+                    err(dirtok, "Unrecognized directive")
+
+
+                
 
 
             # This final section is intended to collect emittable tokens during
@@ -474,11 +555,47 @@ class Parser(object):
 
         return results
     
+
+
+    def parse_bytestream(self, tokenline:list[Token], bytewidth:Optional[int]) -> Optional[bytes]:
+        #NOTE: if bytewidth is None, this outputs data to console.
+        #NOTE: Extended echo syntax is not available.
+        iterline = iter(tokenline)
+        paramlist = self.get_params_from_iter(iterline, True)
+        result = bytearray()
+        if not paramlist or paramlist == [[]]:
+            raise ValueError(redmsg("Empty expression in bytestream parsing is disallowed."))
+        for param in paramlist:
+            if not param:
+                raise ValueError(redmsg("Empty parameter in bytestream parsing is disallowed."))
+            if len(param) == 1:
+                stringified = self.eval_to_string(param[0])
+                if isinstance(stringified, str) and bytewidth is not None:
+                    for c in stringified:
+                        result.append(ord(c))
+                        for _ in range(3-bytewidth,2):
+                            result.append(0)
+                    continue
+                elif isinstance(stringified, str) and bytewidth is None:
+                    result.extend(stringified.encode("ASCII"))
+
+            exprval = self.eval_expr(param)
+            if bytewidth is None:
+                result.extend(str(exprval).encode("ASCII"))
+            else:
+                int_min = -(1 << ((8*bytewidth)-1))
+                int_max = (1 << (8*bytewidth)-1)-1
+                if exprval < int_min or exprval > int_max:
+                    print(warnmsg(param[0],f"Expression evalulates outside bounds. Value {exprval} is being truncated."))
+                #exprval = max(exprval, int_min)
+                #exprval = min(exprval, int_max)
+                result.extend(exprval.to_bytes(16,"little", True if exprval<0 else False)[:bytewidth])
+        return result
+
     def strip_token_meta(self, tokenin:Token|list[Token]):
         if isinstance(tokenin, Token):
             return [(tokenin.type, tokenin.v)]
         return list(zip([t.type for t in tokenin], [t.v for t in tokenin]))
-
 
     def joinparams(self, paramlist:list[list[Token]]):
         tokenlist = []
@@ -500,7 +617,7 @@ class Parser(object):
                     return symentry
         return None
 
-    def get_params_from_iter(self, iterable:Iterator[Token]) -> list[list[Token]]:
+    def get_params_from_iter(self, iterable:Iterator[Token], omit_close_paren:bool = False) -> list[list[Token]]:
         parenlevel = 0
         paramlist = []
         tokens = []
@@ -511,9 +628,15 @@ class Parser(object):
                 elif item.v == ")":
                     parenlevel -= 1
                     if parenlevel < 0:
+                        if omit_close_paren:
+                            err(item, "Too many close parentheses found.")
+                        if not tokens and paramlist:
+                            err(item, "[TRAILING] Empty parameters are disallowed.")
                         paramlist.append(tokens)
                         break
             if item.type == "COMMA" and parenlevel == 0:
+                if not tokens:
+                    err(item, "[INNER] Empty parameters are disallowed.")
                 paramlist.append(tokens)
                 tokens = []
                 continue
@@ -521,8 +644,11 @@ class Parser(object):
         else:
             if not item:
                 raise ValueError(redmsg("No tokens after expansion invocation."))
-            err(item, "Macro invocation has a no matching closing parenthesis.")
-        return paramlist                    
+            if not tokens:
+                err(item, "[TRAILING] Empty parameters are disallowed.")
+            if not omit_close_paren:
+                err(item, "Macro invocation has no matching closing parenthesis.")
+        return paramlist
 
     def is_macro_defined(self, name_without_open_paren) -> bool:
         if name_without_open_paren in self.symtable:
