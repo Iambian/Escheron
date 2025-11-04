@@ -467,24 +467,28 @@ class Parser(object):
                 elif dirid in (".DB", ".BYTE"):
                     # Data byte (8 bit) support
                     # Limits: Warn if byte < -128 or > 255
-                    print(yellowmsg(f"DB DEBUG1: DB input {line[diridx+1]}"))
                     data = self.parse_bytestream(line[diridx+1:], 1)
-                    print(yellowmsg(f"DB DEBUG2: DB output {data.hex()}"))
+                    self.write_data(data)
                     pass
                 elif dirid in (".DW", ".WORD"):
                     # Data word (16 bit) support
                     # Strings pad each char to 16 bit.
                     # Limits apply. Warn if < INT16_MIN or > UINT16_MAX
+                    data = self.parse_bytestream(line[diridx+1:], 2)
+                    self.write_data(data)
                     pass
                 elif dirid in (".DL", ".LONG"):
                     # Data long (24 bit) support
                     # Strings pad each char to 24 bit.
                     # Limits apply. Warn if < INT24_MIN or > UINT24_MAX
+                    data = self.parse_bytestream(line[diridx+1:], 3)
+                    self.write_data(data)
                     pass
                 elif dirid in (".BLOCK", ".FILL"):
                     # They do the same thing in SPASM-ng.
                     # First param is length. It must be positive.
                     # Optional second param is byte to use. Defaults to 0.
+
                     pass
                 elif dirid in (".LIST", ".NOLIST"):
                     # Toggle list modes including or excluding this current
@@ -555,30 +559,41 @@ class Parser(object):
 
         return results
     
+    def write_data(self, extendable:bytes|bytearray):
+        #This is a simple routine for now. It exists because it's a single point
+        #of output. I intend to change this later to implement forms of
+        #alternate data outout, either to another file, or another segment.
+        #I suspect this sort of thing is how .seek might have been usable. idk.
+        #But it looks like a great idea for now. Keeping everything in one spot.
+        self.binres.extend(extendable)
 
 
     def parse_bytestream(self, tokenline:list[Token], bytewidth:Optional[int]) -> Optional[bytes]:
         #NOTE: if bytewidth is None, this outputs data to console.
         #NOTE: Extended echo syntax is not available.
+        print(tokenline)
         iterline = iter(tokenline)
         paramlist = self.get_params_from_iter(iterline, True)
+        print(paramlist)
         result = bytearray()
         if not paramlist or paramlist == [[]]:
             raise ValueError(redmsg("Empty expression in bytestream parsing is disallowed."))
         for param in paramlist:
+            print(param)
             if not param:
                 raise ValueError(redmsg("Empty parameter in bytestream parsing is disallowed."))
             if len(param) == 1:
                 stringified = self.eval_to_string(param[0])
                 if isinstance(stringified, str) and bytewidth is not None:
                     for c in stringified:
-                        result.append(ord(c))
-                        for _ in range(3-bytewidth,2):
-                            result.append(0)
+                        charval = ord(c).to_bytes(16,"little", signed=False)[:bytewidth]
+                        self.origin += bytewidth
+                        result.extend(charval)
                     continue
                 elif isinstance(stringified, str) and bytewidth is None:
-                    result.extend(stringified.encode("ASCII"))
-
+                    encoded = stringified.encode("ASCII")
+                    self.origin += len(encoded)
+                    result.extend(encoded)
             exprval = self.eval_expr(param)
             if bytewidth is None:
                 result.extend(str(exprval).encode("ASCII"))
@@ -589,7 +604,7 @@ class Parser(object):
                     print(warnmsg(param[0],f"Expression evalulates outside bounds. Value {exprval} is being truncated."))
                 #exprval = max(exprval, int_min)
                 #exprval = min(exprval, int_max)
-                result.extend(exprval.to_bytes(16,"little", True if exprval<0 else False)[:bytewidth])
+                result.extend(exprval.to_bytes(16,"little",signed= True if exprval<0 else False)[:bytewidth])
         return result
 
     def strip_token_meta(self, tokenin:Token|list[Token]):
@@ -646,6 +661,8 @@ class Parser(object):
                 raise ValueError(redmsg("No tokens after expansion invocation."))
             if not tokens:
                 err(item, "[TRAILING] Empty parameters are disallowed.")
+            paramlist.append(tokens)
+            tokens = []
             if not omit_close_paren:
                 err(item, "Macro invocation has no matching closing parenthesis.")
         return paramlist
@@ -1004,7 +1021,7 @@ class Tokenizer(object):
                 raise SyntaxError(redmsg(f"Unexpected character {value!r} at position {pos}"))
             else:
                 if kind == "STRING":
-                    value = unescape_string(value)
+                    value = cls.unescape_string(value)
                 yield SubToken(kind, value, pos)
             pos = mo.end()
             mo = cls.get_token(code, pos)
@@ -1044,50 +1061,50 @@ class Tokenizer(object):
         except:
             print(f"Failed to open {filename}")
             return None
-
-# Not sure who's supposed to own this yet, but I'm getting the feeling that
-# the answer is "everyone"
-def unescape_string(raw: str) -> str:
-    if len(raw) < 2 or raw[0] != raw[-1] or raw[0] not in ('"', "'"):
-        raise ValueError(f"Invalid string literal {raw!r}")
-    content = raw[1:-1]  # strip quotes
-    result = []
-    p = ''
-    for i,c in enumerate(content):
-        if c == '\\':
-            p = c
-            continue
-        if p == '\\':
-            tc = c.upper()
-            if tc == "N":
-                result.append('\n')
-            elif tc == "R":
-                result.append('\r')
-            elif tc == "T":
-                result.append('\t')
-            elif tc == "0":
-                result.append('\0')
-            elif tc == "\\":
-                result.append('\\')
-            elif tc == "\'":
-                result.append('\'')
-            elif tc == "\"":
-                result.append('\"')
-            elif tc == "#":
-                result.append(chr(random.randint(0,255)))
+        
+    @staticmethod
+    def unescape_string(raw: str) -> str:
+        if len(raw) < 2 or raw[0] != raw[-1] or raw[0] not in ('"', "'"):
+            raise ValueError(f"Invalid string literal {raw!r}")
+        content = raw[1:-1]  # strip quotes
+        result = []
+        p = ''
+        for i,c in enumerate(content):
+            if c == '\\':
+                p = c
+                continue
+            if p == '\\':
+                tc = c.upper()
+                if tc == "N":
+                    result.append('\n')
+                elif tc == "R":
+                    result.append('\r')
+                elif tc == "T":
+                    result.append('\t')
+                elif tc == "0":
+                    result.append('\0')
+                elif tc == "\\":
+                    result.append('\\')
+                elif tc == "\'":
+                    result.append('\'')
+                elif tc == "\"":
+                    result.append('\"')
+                elif tc == "#":
+                    result.append(chr(random.randint(0,255)))
+                else:
+                    result.append(c)
+                p = ''
             else:
                 result.append(c)
-            p = ''
         else:
-            result.append(c)
-    else:
-        if p == '\\':
-            result.append(p)
-    return ''.join(c for c in result)
+            if p == '\\':
+                result.append(p)
+        return ''.join(c for c in result)
 
 
 if __name__ == "__main__":
     ts = Parser.from_filename("tools/macrotest.z80")
+    print(ts.binres)
     pass
     '''
     if MacroAssembler.DEBUG_MODE:
