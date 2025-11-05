@@ -1,5 +1,9 @@
-# Second revision of the parser/assembler simulating SPASM-ng. Mostly.
-#
+# Third revision of the parser/assembler simulating SPASM-ng. Mostly.
+# Full two-pass support is not implemented. As long as what you wrote can
+# operate with only a single pass, or you segment the compilation as needed.
+# The operation is fairly brittle.
+# This doesn't process any actual z80 instructions. Only the bare minimum needed
+# to parse macros and use the .ORG and .DB/W/L directives.
 #
 
 import os, sys, random, copy, re, colorama
@@ -86,14 +90,15 @@ class Parser(object):
     SHOW_RESULTS_RETURN = True
     MAX_RECURSION_DEPTH = 8
     MATH_OPS = ('+','-','*','/','&','|','^','<<','>>','==','!=','<','>','<=','>=','&&','||')
-    def __init__(self, tokendata:"TokenStream"):
+    def __init__(self, tokendata:"TokenStream", importsymtable=None):
         ''' NOTE: self.parse() should, when complete, outputs binary data from
             data directives and instructions to self.binres during pass 2
             and depth 1.
         '''
-        print("Starting...")
         self.tokens = tokendata
         self.symtable:dict[str, int|str|MacroDef] = dict()
+        if importsymtable:
+            self.symtable.update(importsymtable)
         self.origin = 0
         self.binres:bytearray = bytearray()
         self.if_stack:list[IfStackEntry] = []
@@ -235,18 +240,13 @@ class Parser(object):
                         # The expansion here should NOT expand eval( and concat(
                         # Otherwise, proceed with evaluation as before
                         try:
-                            print(f"#DEFINE DEBUG STEP0: {token1v}: {tokline2minitok(macrobody)}")
                             macrobody = self.parse(TokenStream(macrobody), passid, depth+1, trace, False)
-                            print(f"#DEFINE DEBUG STEP1: {token1v}: {tokline2minitok(macrobody)}")
                             if len(paramlist):
                                 raise Exception("This exception is just to prevent eval if macro has parameters.")
                             macrobody = self.eval_expr(macrobody, 2)
-                            print(f"#DEFINE DEBUG STEP2: {token1v}: {macrobody}")
 
                         except Exception as e:
-                            print(f"#DEFINE DEBUG EXCEPTION")
                             s = traceback.format_exc()
-                            print(s)
                             #raise e
                             # Passthrough. macrobody will always have a valid result.
                             pass
@@ -260,10 +260,6 @@ class Parser(object):
                             err(token0, "This error should not be reachable. Output macrobody in #DEFINE is not supposed to be a Token type.")
                         else:
                             macrodef = MacroDef(token1, paramlist, TokenStream(macrobody))
-                        if not isinstance(macrodef, MacroDef):
-                            print(f"#DEFINE DEBUG STEP3: {token1v} assigned as {macrodef}")
-                        else:
-                            print(f"#DEFINE DEBUG STEP3: {token1v} assigned as {macrodef.params}: {tokline2minitok(macrodef.body.tokens)}")
                         self.symtable[token1v] = macrodef
                     if token0v == "#MACRO":
                         # Ignore contents of macrobody here. Anything following
@@ -307,23 +303,13 @@ class Parser(object):
                 if tokenv == "VAR_STARTNAME":
                     if "VAR_STARTNAME" in self.symtable:
                         en = self.symtable["VAR_STARTNAME"]
-                        if not isinstance(en, MacroDef):
-                            print(f"MACROEXPANSION DEBUG STEP: {tokenv} assigned as {en}")
-                        else:
-                            print(f"MACROEXPANSION DEBUG STEP: {tokenv} assigned as {en.params}: {tokline2minitok(en.body.tokens)}")
-
 
                 if tokent in ("MACRO","IDENT","DIR_CALL","DIRECTIVE") and tokenv in self.symtable:
                     symentry = self.symtable[tokenv]
                     if "VAR_STARTNAME" in self.symtable:
                         en = self.symtable["VAR_STARTNAME"]
-                        if not isinstance(en, MacroDef):
-                            print(f"MACROEXPANSION DEBUG STEP1: exparam {nontrival_expand} {tokenv} assigned as {en}")
-                        else:
-                            print(f"MACROEXPANSION DEBUG STEP1: exparam {nontrival_expand} {tokenv} assigned as {en.params}: {tokline2minitok(en.body.tokens)}")
 
                     if isinstance(symentry, MacroDef) and nontrival_expand:
-                        print(f"Attempting to expand {tokenv}")
                         if tokenv.endswith('('):
                             invokelist = self.get_params_from_iter(lineiter)
                             if invokelist == [[]]:
@@ -374,20 +360,9 @@ class Parser(object):
                         if tokenv.lower() == "eval(":
                             newtoken = from_token(token, "STRING", s)
                         else:
-                            print(f"PREEVALUATED CONCAT: {[self.eval_to_string(param[0]) for param in invokelist]}")
-                            print(f"EVALUATED CONCAT: {s}")
                             newtoken = from_token(token, "IDENT", s)
                     elif len(invokelist) == 1:
-                        print(tokline2minitok(invokelist[0]))
                         reparsed = self.parse(TokenStream(invokelist[0]), passid, depth+1, trace, True)
-                        if len(reparsed):
-                            testtok = reparsed[0]
-                            if testtok.v == "VAR_STARTNAME":
-                                if testtok.v in self.symtable:
-                                    print(f"SYMVAL {testtok.v} = {self.symtable[testtok.v]}")
-                                else:
-                                    print(f"SYMVAL {testtok.v} referenced but not found.")
-                        print(tokline2minitok(reparsed))
                         newtoken = from_token(token, "NUM", str(self.eval_expr(reparsed, 2)))
                     else:
                         if cls.DEBUGMODE:
@@ -441,14 +416,12 @@ class Parser(object):
             types = [i.type for i in line]
             values = [i.v for i in line]
             if "DIRECTIVE" in types and depth < 2:
-                #print(yellowmsg("HANDLE DIR ↑"))
                 if sum([1 if i=="DIRECTIVE" else 0 for i in types]) > 1:
                     err(line[0],"There may not be more than one directive on a single logical line.")
                 diridx = types.index("DIRECTIVE")
                 dirtok = line[diridx]
                 dirid = values[diridx].upper()
                 if dirid == ".EQU":
-                    print(yellowmsg(f"Processing directive line: [{tokline2minitok(line)}]"))
                     if diridx != 1:
                         err(line[0], "Directive .EQU must have only one token prior.")
                     if line[0].type != "IDENT":
@@ -528,8 +501,14 @@ class Parser(object):
                 elif dirid == ".ORG":
                     # Sets self.origin
                     # Must be a positive number.
-                    pass
+                    expres = self.eval_expr(line[diridx+1:])
+                    if expres < 0:
+                        err(dirtok, ".ORG expression must result in a positive number")
+                    if expres > (1<<24)-1:
+                        err(dirtok, ".ORG expressoin must be less than 01000000h")
+                    self.origin = expres
                 elif dirid == ".END":
+                    raise StopIteration
                     # End source parsing. That is to say, simply stop.
                     pass
                 else:
@@ -571,15 +550,12 @@ class Parser(object):
     def parse_bytestream(self, tokenline:list[Token], bytewidth:Optional[int]) -> Optional[bytes]:
         #NOTE: if bytewidth is None, this outputs data to console.
         #NOTE: Extended echo syntax is not available.
-        print(tokenline)
         iterline = iter(tokenline)
         paramlist = self.get_params_from_iter(iterline, True)
-        print(paramlist)
         result = bytearray()
         if not paramlist or paramlist == [[]]:
             raise ValueError(redmsg("Empty expression in bytestream parsing is disallowed."))
         for param in paramlist:
-            print(param)
             if not param:
                 raise ValueError(redmsg("Empty parameter in bytestream parsing is disallowed."))
             if len(param) == 1:
@@ -866,8 +842,6 @@ class TokenStream(object):
     def __init__(self, tokenlist:list[Token]):
         self.tokens = tokenlist
         self.reset()
-        #for tokenline in self.getline():
-        #    print(" ".join([t.v for t in tokenline]))
         pass
 
     def reset(self):
