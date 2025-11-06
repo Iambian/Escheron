@@ -81,7 +81,7 @@ def printerr(token:Token, msg:str):
 
 
 class Parser(object):
-    DEBUGMODE = True
+    DEBUGMODE = False
     SHOW_SYMTABLE = True
     SHOW_SYMTABLE_MODE = None    #None|"SYM"|"MAC"
     SHOW_PARSE_LINESTART = True
@@ -852,6 +852,12 @@ class TokenStream(object):
     @classmethod
     def from_filename(cls, filename):
         return cls(Tokenizer.from_filename(filename).tokens)
+    
+    @classmethod
+    def from_str(cls, textdata):
+        tokenstream = cls(Tokenizer.from_str(textdata).tokens)
+        #print(tokenstream.tokens)
+        return tokenstream
 
     def resubmit_tokens(self, tokenlist:list[Token]):
         ''' Inserts tokens at the start of the stream so getline() next()
@@ -863,6 +869,7 @@ class TokenStream(object):
 
     def getline(self) -> Iterator[list[Token]]:
         def isnewline(token:Token, defining:bool=False) -> bool:
+            #print(f"token: {token}")
             if not defining and token.type == "OPER" and token.v == '\\':
                 return True
             if token.type == "NEWLINE":
@@ -944,13 +951,20 @@ class Tokenizer(object):
     @classmethod
     def from_filename(cls, filename):
         return cls(cls.makestream(filename))
+    
+    @classmethod
+    def from_str(cls, textdata:str):
+        return cls(cls.makestream("NUL",1,textdata))
 
     @classmethod
-    def makestream(cls, filename, depth=1):
+    def makestream(cls, filename, depth=1, textdata:str=None):
         if depth > cls.MAX_INCLUDE_DEPTH:
             raise ValueError(redmsg("Include depth exceeded."))
         tokenstream = []
-        filedata = cls.readfile(filename)
+        if depth==1 and textdata is not None and filename=="NUL":
+            filedata = textdata.split('\n')
+        else:
+            filedata = cls.readfile(filename)
         if filedata is None:
             raise IOError(redmsg(f"File {filename} not found, depth {depth}"))
         for lineno, line in enumerate(filedata,1):

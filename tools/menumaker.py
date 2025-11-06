@@ -1,5 +1,13 @@
 import tkinter as tk
 from tkinter import ttk
+import dcfreader
+import parser3 as parser
+
+symfile = '''
+#include "src/inc/macros.inc"
+#include "src/inc/osdefs.inc"
+#include "src/inc/gamedefs.inc"
+'''
 
 class MenuMakerApp:
     PIXEL_COLS = 96
@@ -8,8 +16,11 @@ class MenuMakerApp:
     PIXEL_OFF_COLOR = "white"
 
     def __init__(self, master):
+        tokenstream = parser.TokenStream.from_str(symfile)
+        self.initialsymtable = parser.Parser(tokenstream).symtable
         self.master = master
         master.title("Application Title")
+        master.state('zoomed')
 
         # Configure grid to be resizable
         master.grid_rowconfigure(0, weight=1)
@@ -33,6 +44,7 @@ class MenuMakerApp:
         # Bind the resize event to the frame, not the canvas itself
         self.pixel_grid_frame.bind("<Configure>", self._on_canvas_resize)
         self._draw_border_pattern() # Call the border test pattern
+        self._draw_char_test() # Call the new character drawing test
         self.pixel_grid_canvas.update_idletasks() # Force canvas update
 
         # Set a minimum size for the main window to ensure pixels are visible (1x1 pixel minimum)
@@ -64,7 +76,39 @@ class MenuMakerApp:
         self.text_input.config(yscrollcommand=self.text_input_scrollbar.set)
 
         # Bind Enter key to parse_input method
-        self.text_input.bind("<Return>", self.parse_input)
+        self.text_input.bind("<F5>", self.parse_input)
+
+    def print_char_to_screen(self, char_code, start_x, start_y):
+        """
+        Prints a specified character from the DCF font to the virtual screen
+        at the given starting coordinates.
+        """
+        try:
+            # Ensure dcfreader is initialized
+            if not hasattr(self, '_dcf_reader'):
+                self._dcf_reader = dcfreader.DCFReader("tools/escheron.dcf")
+
+            char_data = self._dcf_reader.get_char(char_code)
+            
+            if char_data:
+                for row_idx, row_data in enumerate(char_data.disparr):
+                    for col_idx, pixel_color in enumerate(row_data):
+                        target_x = start_x + col_idx
+                        target_y = start_y + row_idx
+                        # Adjust color mapping based on dcfreader's inverted logic
+                        if pixel_color == dcfreader.Colors.BLACK: # dcfreader.Colors.BLACK means the pixel should be WHITE on screen
+                            self.pixelOff(target_x, target_y)
+                        else: # dcfreader.Colors.WHITE means the pixel should be BLACK on screen
+                            self.pixelOn(target_x, target_y)
+            else:
+                print(f"Character code {char_code} not found in DCF file.")
+        except Exception as e:
+            print(f"Error printing character {char_code}: {e}")
+
+    def _draw_char_test(self):
+        print("--- Drawing Character 'A' Test ---")
+        self.print_char_to_screen(ord('A'), 40, 40)
+        print("--- Character 'A' Test Complete ---")
 
     def _draw_border_pattern(self):
         print("--- Drawing Border Pattern ---")
@@ -159,6 +203,7 @@ class MenuMakerApp:
             self.pixel_grid_canvas.place_configure(width=new_canvas_width, height=new_canvas_height)
             self._create_pixel_grid(new_canvas_width, new_canvas_height)
             self._draw_border_pattern()
+            self._draw_char_test() # Re-draw the character after border pattern
             self.pixel_grid_canvas.update_idletasks()
 
             # Adjust the width of both frames to match the canvas width
@@ -225,11 +270,22 @@ class MenuMakerApp:
 
     def parse_input(self, event=None):
         input_text = self.text_input.get("1.0", tk.END).strip()
-        print(f"Input received: {input_text}") # For debugging
+        #print(f"Input received: {input_text}") # For debugging
+        tokenstream = parser.TokenStream.from_str(input_text)
+        try:
+            #TODO: Implement label and the two-pass system for forward-reference
+            parseobj = parser.Parser(tokenstream, self.initialsymtable)
+            datastream = parseobj.binres
+        except Exception as e:
+            datastream = e
+
+        #
+        # TODO: ACTUALLY PROCESS THE DATASTREAM FOR CONTENTS AND ACT ON THEM
+        #
+
+
         # Placeholder for parsing logic and updating pixel grid/status
-        self.parser_status_label.config(text=f"Parsed: '{input_text}'")
-        # Clear the text input after processing
-        self.text_input.delete("1.0", tk.END)
+        self.parser_status_label.config(text=f"Emitted: '{datastream.hex()}'")
         return "break" # Prevents the default newline character from being inserted
 
 if __name__ == "__main__":
