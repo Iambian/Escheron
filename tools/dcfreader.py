@@ -164,7 +164,7 @@ class DCFReader(object):
             arr.append(int(item[1:],16))
         return arr
     
-    def get_char(self, charid) -> DCFchar:
+    def get_char(self, charid:int) -> DCFchar:
         try:
             char = self.codepoints[charid]
         except:
