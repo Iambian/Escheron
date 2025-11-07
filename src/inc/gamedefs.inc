@@ -13,6 +13,8 @@
 
 #define TEMPDATA_SIZE 16
 #define NEWLINE_HEIGHT 7
+#define BOX_MARGIN_TOP 3
+#define BOX_MARGIN_LEFT 4
 
 ;NOTE: Below is a bit of memory wrangling. If this location is altered, you
 ;   must account for the fact that an interrupt vector table and its routine

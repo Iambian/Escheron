@@ -3,6 +3,8 @@ from tkinter import ttk
 import dcfreader
 import parser3 as parser
 
+# TODO: FIX SIGNED VS NONSIGNED ARITHMETIC IN SCRIPT SYSTEM. THIS BUG IS VISIBLE
+# WHEN TRYING TO PERFORM m_addxy() WITH NEGATIVE NUMBERS.
 
 
 class GameMap(object):
@@ -75,6 +77,12 @@ class GameMap(object):
     
     def NLH(self):
         return self.symtable["NEWLINE_HEIGHT"]
+    
+    def BMT(self):
+        return self.symtable["BOX_MARGIN_LEFT"]
+    
+    def BML(self):
+        return self.symtable["BOX_MARGIN_LEFT"]
 
         
 
@@ -290,6 +298,110 @@ class MenuMakerApp:
         current_color = self.pixel_grid_canvas.itemcget(self.pixels[index], "fill")
         return 1 if current_color == self.PIXEL_ON_COLOR else 0
 
+    def _drawFilledBlackBoxRoutine(self, x1, y1, x2, y2):
+        """
+        Fills a rectangular area with black pixels.
+        (x1, y1) is the top-left corner, (x2, y2) is the bottom-right corner.
+        """
+        for y in range(y1, y2 + 1):
+            for x in range(x1, x2 + 1):
+                self.pixelOn(x, y)
+
+    def _drawBlackBoxWithBordersRoutine(self, x1, y1, x2, y2):
+        """
+        Draws a stylized box with a black fill and a 1-pixel white border
+        based on the provided Z80 routine logic.
+        (x1, y1) is the top-left corner, (x2, y2) is the bottom-right corner
+        of the overall black box.
+        """
+        # 1. Fill the entire box with black
+        self._drawFilledBlackBoxRoutine(x1, y1, x2, y2)
+
+        # 2. Calculate inner dimensions for border drawing (Z80 logic)
+        # E = x2 - x1 - 4
+        # D = y2 - y1 - 4
+        # These represent the number of pixels to draw for the horizontal/vertical segments
+        # of the inner border, excluding the corners.
+        width_inner_segment = x2 - x1 - 4
+        height_inner_segment = y2 - y1 - 4
+
+        # If the box is too small to draw a border, return
+        if width_inner_segment < 0 or height_inner_segment < 0:
+            return
+
+        # Initialize current drawing coordinates (L, H in Z80)
+        current_x = x1
+        current_y = y1
+
+        # Z80: inc h, inc L, inc h, inc L
+        current_y += 1 # H = y1 + 1
+        current_x += 1 # L = x1 + 1
+        current_y += 1 # H = y1 + 2
+        current_x += 1 # L = x1 + 2
+        # Current (x, y) is now (x1 + 2, y1 + 2)
+
+        # Z80: call drawWhitePoint
+        self.pixelOff(current_x, current_y) # Draws (x1+2, y1+2)
+
+        # Z80: dec h
+        current_y -= 1 # Current (x, y) is now (x1 + 2, y1 + 1)
+
+        # Draw Top Border (Z80: ld b,e; loop call drawWhitePoint, inc L)
+        for _ in range(width_inner_segment):
+            self.pixelOff(current_x, current_y)
+            current_x += 1
+
+        # Z80: dec L
+        current_x -= 1
+
+        # Z80: inc H
+        current_y += 1
+
+        # Z80: call drawWhitePoint
+        self.pixelOff(current_x, current_y) # Draws (x2-2, y1+2)
+
+        # Z80: inc L
+        current_x += 1 # Current (x, y) is now (x2 - 2, y1 + 2)
+
+        # Draw Right Border (Z80: ld b,d; loop call drawWhitePoint, inc h)
+        for _ in range(height_inner_segment):
+            self.pixelOff(current_x, current_y)
+            current_y += 1
+
+        # Z80: dec h
+        current_y -= 1
+
+        # Z80: dec L
+        current_x -= 1
+
+        # Z80: call drawWhitePoint
+        self.pixelOff(current_x, current_y) # Draws (x2-3, y2-2)
+
+        # Z80: inc h
+        current_y += 1 # Current (x, y) is now (x2 - 3, y2 - 2)
+
+        # Draw Bottom Border (Z80: ld b,e; loop call drawWhitePoint, dec L)
+        for _ in range(width_inner_segment):
+            self.pixelOff(current_x, current_y)
+            current_x -= 1
+
+        # Z80: inc L
+        current_x += 1
+
+        # Z80: dec h
+        current_y -= 1
+
+        # Z80: call drawWhitePoint
+        self.pixelOff(current_x, current_y) # Draws (x1+2, y2-3)
+
+        # Z80: dec L
+        current_x -= 1 # Current (x, y) is now (x1 + 1, y2 - 3)
+
+        # Draw Left Border (Z80: ld b,d; loop call drawWhitePoint, dec h)
+        for _ in range(height_inner_segment):
+            self.pixelOff(current_x, current_y)
+            current_y -= 1
+
     def parse_input(self, event=None):
         # Reset the entire pixel grid to black
         for row in range(self.PIXEL_ROWS):
@@ -307,11 +419,13 @@ class MenuMakerApp:
             datastream = e
 
         ptr = 0
+        EOF_encountered = None
         while ptr < len(datastream):
             opcode = datastream[ptr]
             if opcode == 0: # m_eof
                 # Consumes 0 more bytes
                 ptr += 1
+                EOF_encountered = True
                 break # End of stream
             elif opcode == 1: # m_setxy(x,y)
                 # Consumes 2 more bytes (x, y)
@@ -325,8 +439,8 @@ class MenuMakerApp:
                 x = datastream[ptr + 1]
                 y = datastream[ptr + 2]
                 # TODO: Implement addxy logic
-                self.gamemap.x(self.gamemap.x()+x)
-                self.gamemap.y(self.gamemap.y()+y)
+                self.gamemap.x((self.gamemap.x()+x) & 0xFF)
+                self.gamemap.y((self.gamemap.y()+y) & 0xFF)
                 ptr += 3
             elif opcode == 3: # m_call(adr)
                 # Consumes 2 more bytes (lo(adr), hi(adr))
@@ -363,7 +477,10 @@ class MenuMakerApp:
                 y1 = datastream[ptr + 2]
                 x2 = datastream[ptr + 3]
                 y2 = datastream[ptr + 4]
-                # TODO: Implement drawbox logic
+                self._drawBlackBoxWithBordersRoutine(x1, y1, x2, y2)
+                self.gamemap.cr((self.gamemap.BML()+x1)&0xFF)
+                self.gamemap.x(self.gamemap.cr)
+                self.gamemap.y((self.gamemap.y()+self.gamemap.BMT())&0xFF)
                 ptr += 5
             elif opcode == 9: # m_menuopt()
                 # Consumes 0 more bytes
@@ -373,7 +490,7 @@ class MenuMakerApp:
                 # Consumes 0 more bytes
                 # TODO: Implement newline logic
                 self.gamemap.x(self.gamemap.cr())
-                self.gamemap.y(self.gamemap.NLH()+self.gamemap.y())
+                self.gamemap.y((self.gamemap.NLH()+self.gamemap.y())&0x255)
                 ptr += 1
             elif opcode == 11: # m_setflag(flagid)
                 # Consumes 1 more byte (flagid)
@@ -388,6 +505,7 @@ class MenuMakerApp:
             elif opcode == 13: # m_setleftmargin()
                 # Consumes 0 more bytes
                 # TODO: Implement setleftmargin logic
+                self.gamemap.cr(self.gamemap.x())
                 ptr += 1
             elif opcode == 14: # m_clracc()
                 # Consumes 0 more bytes
@@ -451,7 +569,10 @@ class MenuMakerApp:
                 self.gamemap.x(x)
                 ptr += 1 # Advance to avoid infinite loop on unknown opcode
 
-        self.parser_status_label.config(text=f"Emitted: '{datastream.hex()}'")
+        if not EOF_encountered:
+            self.parser_status_label.config(text=f"ERROR: STREAM WENT OOB WITHOUT EOF")
+        else:
+            self.parser_status_label.config(text=f"Emitted: '{datastream.hex()}'")
         return "break" # Prevents the default newline character from being inserted
 
 if __name__ == "__main__":
