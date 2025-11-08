@@ -419,8 +419,13 @@ class MenuMakerApp:
             datastream = e
 
         ptr = 0
+        counter = 0
         EOF_encountered = None
         while ptr < len(datastream):
+            counter += 1
+            if counter > 1000:
+                self.parser_status_label.config(text=f"Possible infinite loop detected. Halted.")
+                return "break"
             opcode = datastream[ptr]
             if opcode == 0: # m_eof
                 # Consumes 0 more bytes

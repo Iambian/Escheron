@@ -60,6 +60,11 @@ class MacroDef(NamedTuple):
     params: tuple[Token]    # Only one token per param, each an IDENT type.
     body: "TokenStream"     # Yeah. This tracks.
 
+class LabelDef(NamedTuple):
+    token:Token
+    value:int
+
+
 def redmsg(msg):
     return f"{Fore.RED}{msg}{Style.RESET_ALL}"
 def yellowmsg(msg):
@@ -80,40 +85,48 @@ def printerr(token:Token, msg:str):
     print(errmsg(token, msg))
 
 
+
 class Parser(object):
-    DEBUGMODE = False
-    SHOW_SYMTABLE = True
+    DEBUGMODE = True
+    SHOW_SYMTABLE = False
     SHOW_SYMTABLE_MODE = None    #None|"SYM"|"MAC"
     SHOW_PARSE_LINESTART = True
     SHOW_PARSE_AFTER_PREOP = False
-    SHOW_RESUBMISSIONS = True
+    SHOW_EXPANSION_TOKENS = True
+    SHOW_RESUBMISSIONS = False
     SHOW_RESULTS_RETURN = True
     MAX_RECURSION_DEPTH = 8
     MATH_OPS = ('+','-','*','/','&','|','^','<<','>>','==','!=','<','>','<=','>=','&&','||')
+    Z80INST = {'ADC', 'ADD', 'AND', 'BIT', 'CALL', 'CCF', 'CP', 'CPD', 'CPI', 'CPIR', 'CPL', 'DAA', 'DEC', 'DI', 'DJNZ', 'EI', 'EX', 'EXX', 'HALT', 'IM', 'IN', 'INC', 'IND', 'INDR', 'INI', 'INIR', 'JP', 'JR', 'LD', 'LDD', 'LDI', 'NEG', 'NOP', 'OR',  'OTDR', 'OTIR', 'OUT', 'OUTD', 'OUTI', 'POP', 'PUSH', 'RES', 'RET', 'RETI', 'RETN' 'RL', 'RLA', 'RLC', 'RLCA', 'RLD', 'RR', 'RRA', 'RRCA', 'RRD', 'RST', 'SBC', 'SCF', 'SET', 'SLA', 'SLL', 'SRA', 'SRL', 'SUB', 'XOR'}
+
     def __init__(self, tokendata:"TokenStream", importsymtable=None):
         ''' NOTE: self.parse() should, when complete, outputs binary data from
             data directives and instructions to self.binres during pass 2
             and depth 1.
         '''
         self.tokens = tokendata
+        # symtable resets each pass. Goddamned include guards.
         self.symtable:dict[str, int|str|MacroDef] = dict()
-        if importsymtable:
-            self.symtable.update(importsymtable)
+        # labeltable should persist.
+        self.labeltable:dict[str, LabelDef] = dict()
         self.origin = 0
-        self.binres:bytearray = bytearray()
         self.if_stack:list[IfStackEntry] = []
-        try:
-            self.parse(self.tokens, 1)
+        for passid in range(1,3):
+            self.binres:bytearray = bytearray()
+            self.symtable = dict()
+            if importsymtable:
+                self.symtable.update(importsymtable)
+            try:
+                self.parse(self.tokens, passid)
+                if len(self.if_stack):
+                    baseentry = self.if_stack[0]
+                    err(baseentry.token, "Unbalanced #IF/#ENDIF statements starting here")
+            except Exception as e:
+                print(Fore.RED)
+                traceback.print_exc()
+                print(Style.RESET_ALL)
+            print(self.binres)
 
-            if len(self.if_stack):
-                baseentry = self.if_stack[0]
-                err(baseentry.token, "Unbalanced #IF/#ENDIF statements starting here")
-        except Exception as e:
-            print(Fore.RED)
-            traceback.print_exc()
-            print(Style.RESET_ALL)
-
-        #self.parse(self.tokens, 2)
         if self.__class__.DEBUGMODE and self.__class__.SHOW_SYMTABLE:
             mode = self.__class__.SHOW_SYMTABLE_MODE
             print("--Symbol Table--")
@@ -133,17 +146,18 @@ class Parser(object):
         return cls(TokenStream.from_filename(filename))
 
     def parse(self, tokens:"TokenStream", passid=1, depth=1, trace=False, nontrival_expand=True) -> list[Token]:
-        #All parsed lines must be executed immediately
         cls = self.__class__
         if depth > cls.MAX_RECURSION_DEPTH:
             raise ValueError(redmsg("Maximum recursion depth reached."))
+        tokens.reset()
         iterator = tokens.getline()
         results:list[Token] = []
         for lidx,line in enumerate(iterator):
             if len(line) < 1:
                 continue
             if cls.DEBUGMODE and cls.SHOW_PARSE_LINESTART:
-                print(errmsg(line[0], f"LSTRT: {'·'*(depth-1)} {tokline2str(line)}"))
+                #print(errmsg(line[0], f"LSTRT: {'·'*(depth-1)} {tokline2str(line)}"))
+                print(errmsg(line[0], f"LSTRT: {'·'*(depth-1)} {tokline2minitok(line)}"))
             if len(tokline2str(line)) > 128:
                 err(line[0],"Line buffer exceeded reasonable length.")
             lineiter = iter(line)
@@ -205,6 +219,8 @@ class Parser(object):
                     self.if_stack.append(IfStackEntry(token0, ifresult))
                     continue
                 if token0v in ("#UNDEF", "#UNDEFINE"):
+                    if token1v in self.labeltable:
+                        err(token1,"You may not undefine a label assigned outside of #DEFINE")
                     if token1v in self.symtable:
                         del self.symtable[token1v]
                     if token1v + '(' in self.symtable:
@@ -299,15 +315,25 @@ class Parser(object):
             resubmit:list[Token] = []
             lineiter = iter(line)
             for token in lineiter:
+                if cls.DEBUGMODE and cls.SHOW_EXPANSION_TOKENS:
+                    if token.type == "IDENT" and token.v in self.symtable:
+                        symobj = self.symtable[token.v]
+                        if isinstance(symobj, MacroDef):
+                            print(f"{token}, type {type(symobj)} : {symobj.body.tokens}")
+                        else:
+                            print(f"{token} type {type(symobj)} : {symobj}")
+                    print(token)
                 tokenv, tokent = (token.v, token.type)
                 if tokenv == "VAR_STARTNAME":
                     if "VAR_STARTNAME" in self.symtable:
                         en = self.symtable["VAR_STARTNAME"]
+                        print(yellowmsg(f"VAR_STARTNAME entry on iter {en}"))
 
                 if tokent in ("MACRO","IDENT","DIR_CALL","DIRECTIVE") and tokenv in self.symtable:
                     symentry = self.symtable[tokenv]
                     if "VAR_STARTNAME" in self.symtable:
                         en = self.symtable["VAR_STARTNAME"]
+                        print(yellowmsg(f"VAR_STARTNAME entry accept {en}"))
 
                     if isinstance(symentry, MacroDef) and nontrival_expand:
                         if tokenv.endswith('('):
@@ -335,7 +361,8 @@ class Parser(object):
                         # Don't expand upon any eval() or concat() yet, tho.
                         try:
                             macrobody = self.parse(TokenStream(macrobody), passid, depth+1, trace, True)
-                        except:
+                        except Exception as e:
+                            print(yellowmsg(e))
                             pass
                         resubmit.extend(macrobody)
                     else:
@@ -401,18 +428,15 @@ class Parser(object):
             # would forward-reference such a thing would fail/pass through due
             # to missing symtable entries, or error out later due to redef.
             #
-            # More information to follow, copied from old source.
-            #
-            # Instruction and directive parsing goes here.
-            # NOTE: Standalone labels, with or with trailing colon, or the same
-            # except with instruction/directive afterward should alias to
-            # IDENTIFIER .equ $ \ [leftover line contents]
-            # and resubmit edited line to tokens.
-            # NOTE: If depth > 1, do not do any actual processing. Just let it
-            # pass through to results.
-            # NOTE: If depth == 1, advance .org as normal. On pass 2, output
-            # byte data to self.results (distinct to local results) and let
-            # local results be an empty list.
+
+            if len(line) > 1:
+                # The second token of the line if '=' is being used as .EQU will
+                # alias to .EQU; other possible uses may involve edge cases and
+                # are not to be handled here.
+                item = line[1]
+                if item.type == "OPER" and item.v == "=":
+                    line[1] = from_token(item, "DIRECTIVE", ".EQU")
+
             types = [i.type for i in line]
             values = [i.v for i in line]
             if "DIRECTIVE" in types and depth < 2:
@@ -421,15 +445,32 @@ class Parser(object):
                 diridx = types.index("DIRECTIVE")
                 dirtok = line[diridx]
                 dirid = values[diridx].upper()
+                #print(f"idx:{diridx},id:{dirid} - Line: {tokline2minitok(line)}")
+                # Separate .EQU to allow processing leading labels separately
                 if dirid == ".EQU":
                     if diridx != 1:
                         err(line[0], "Directive .EQU must have only one token prior.")
                     if line[0].type != "IDENT":
                         err(line[0], "Token prior to .EQU must be an identifier.")
-                    exprval = self.eval_expr(line[2:], passid)
-                    # Add in check to prevent redefinition but only on same-pass
-                    self.symtable[line[0].v] = exprval
-                elif dirid == ".ERROR":
+                    labeltok = line[0]
+                    #if labeltok.v == "VAR_STARTNAME":
+                    #    print(yellowmsg(f"{self.labeltable[labeltok.v]}"))
+                    #    err(labeltok, "DEBUG .EQU HALT CODE")
+                    try:
+                        exprval = self.eval_expr(line[2:], passid)
+                    except Exception as e:
+                        print(yellowmsg(f"DEBUG EQUATE TRAIL: {line[2:]}"))
+                        raise e
+                    self.label_inc_once(labeltok, exprval)
+                elif line[0].type == "IDENT":
+                    #If literally anything else, check the first token to see
+                    # if it's an identifier. If so, set label to value of origin
+                    labeltok = line[0]
+                    exprval = self.origin
+                    self.label_inc_once(labeltok, exprval)
+                # Any leading labels with a directive embedded should have been
+                # taken care of now.
+                if dirid == ".ERROR":
                     # Red text echo, plus program halt.
                     print(yellowmsg("Warn: .error directive implementation incomplete."))
                     print(redmsg(".error directive encountered. Raising error using text available."))
@@ -442,6 +483,7 @@ class Parser(object):
                     # Limits: Warn if byte < -128 or > 255
                     data = self.parse_bytestream(line[diridx+1:], 1)
                     self.write_data(data)
+                    print(f"Processing DB directives. Retrieved [{data}]")
                     pass
                 elif dirid in (".DW", ".WORD"):
                     # Data word (16 bit) support
@@ -511,12 +553,22 @@ class Parser(object):
                     raise StopIteration
                     # End source parsing. That is to say, simply stop.
                     pass
+                elif dirid == ".EQU":
+                    # This has already been processed, but this needs to be
+                    # duplicated in this IF-ELIF-ELSE block to prevent
+                    # .EQU from hitting the unrecognized directive error.
+                    pass
                 else:
                     err(dirtok, "Unrecognized directive")
-
-
-                
-
+            elif depth < 2:
+                # If it's not a directive, then the only remaining thing left
+                # that it could be is an instruction. We'll detect a leading
+                # label and assign them accordingly, then figure out how to
+                # implement instruction detection logic later.
+                if line[0].type == "IDENT" and line[0].v.upper() not in cls.Z80INST:
+                    exprval = self.origin
+                    labeltok = line[0]
+                    self.label_inc_once(labeltok, exprval)
 
             # This final section is intended to collect emittable tokens during
             # a recursive call (macro expansion) and return them to complete
@@ -524,8 +576,7 @@ class Parser(object):
             # processed, executed and filtered out by now. What we should have
             # is directives, instructions, and possibly standalone expressions.
             if depth > 1 and line:
-                line.append(NEWLINE_TOKEN)
-                results.extend(line)
+                results.extend(line+[NEWLINE_TOKEN])
 
         # Strip final newline from results for macro expansion insertion
         if results:
@@ -534,10 +585,25 @@ class Parser(object):
                 results.pop()
 
         if cls.DEBUGMODE and cls.SHOW_RESULTS_RETURN:
-            print(errmsg(line[0], f"RERET: {'·'*(depth-1)} {tokline2str(line)}"))
+            print(errmsg(line[0], f"RERET: {'·'*(depth-1)} {tokline2str(results)}"))
 
         return results
     
+    def label_inc_once(self, token:Token, newval):
+        # If no error, assigns `newval` then returns. Passthrough if
+        # not valid label token. Only errors if doing a redef.
+        #NOTE: Today, it's self.labeltable that persists.
+        tokv, tokt = (token.v, token.type)
+        if tokt == "IDENT":
+            if tokv in self.symtable:
+                if tokv in self.labeltable:
+                    print(errmsg(token, f"[{token.v}] already defined. Initial definition follows."))
+                    err(self.labeltable[token.v].token, f"<-- Initial definition for [{token.v}] here")
+                else:
+                    err(token, f"[{token.v}] already defined. Initial definition either #DEFINE'd or imported from elsewhere.")
+        self.labeltable[tokv] = LabelDef(token, newval)
+        self.symtable[tokv] = newval
+
     def write_data(self, extendable:bytes|bytearray):
         #This is a simple routine for now. It exists because it's a single point
         #of output. I intend to change this later to implement forms of
@@ -753,6 +819,7 @@ class Parser(object):
                     # Non-expression token, end of expression
                     break
         if operator is not None:
+            print(yellowmsg(tokens))
             err(operator, "Incomplete expression detected at around this position.")
         if baseval is None:
             err(token, "Malformed expression or expression does not yield a value at around this position.")
@@ -822,16 +889,19 @@ class Parser(object):
                 else:
                     return int(v, 10)
         elif toktype == "IDENT":
+            symval = None
             if tokval not in self.symtable:
                 if passnum == 1:
                     return 0
                 else:
-                    err(token, f"Symbol [{tokval}] not found.")
-            else:
-                symval = self.symtable[tokval]
-                if not isinstance(symval, int):
-                    err(token, f"Symbol [{tokval}] type expected int, got {type(symval)}")
-                return self.symtable[token.v]
+                    if tokval not in self.labeltable:
+                        err(token, f"Symbol [{tokval}] not found.")
+                    else:
+                        symval = self.labeltable[tokval].value
+            symval = self.symtable[tokval]
+            if not isinstance(symval, int):
+                err(token, f"Symbol [{tokval}] type expected int, got {type(symval)}")
+            return symval
         elif token.type == "OPER" and token.v == "$":
             return self.origin
         else:
