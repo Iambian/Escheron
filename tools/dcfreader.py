@@ -87,7 +87,7 @@ class DCFchar(object):
         if width == 0:
             return [Colors.WHITE]  #Something must be displayable, even if nothing.
         arr = []
-        for idx in range(7,-1,-1):
+        for idx in range(7,7-width,-1):
             arr.append(Colors.BLACK if (1<<idx) & bytedata else Colors.WHITE)
         return arr
 

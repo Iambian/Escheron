@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
 import dcfreader
-import parser3 as parser
+import parser4 as parser
 
 # TODO: FIX SIGNED VS NONSIGNED ARITHMETIC IN SCRIPT SYSTEM. THIS BUG IS VISIBLE
 # WHEN TRYING TO PERFORM m_addxy() WITH NEGATIVE NUMBERS.
@@ -24,22 +24,30 @@ class GameMap(object):
     def __init__(self):
         cls = self.__class__
         tokenstream = parser.TokenStream.from_str(cls.symfile)
-        self.incparse = parser.Parser(tokenstream)
+        self.incparse = parser.Parser(tokenstream.tokens)
         self.symtable = self.incparse.symtable
         self.memory = [0] * 65536
 
     def get(self, sym):
-        return self.memory[self.symtable[sym]]
+        return self.memory[int(self.symtable[sym].v)]
     def set(self, sym, val):
-        self.memory[self.symtable[sym]] = val
+        self.memory[int(self.symtable[sym].v)] = val
     def get2(self, sym):
-        adr = self.symtable[sym]
+        adr = int(self.symtable[sym].v)
         return self.memory[adr] + (256* self.memory[adr+1])
     def set2(self, sym, val):
-        adr = self.symtable[sym]
+        adr = int(self.symtable[sym].v)
         self.memory[adr] = val & 0xFF
         self.memory[adr+1] = (val >> 8) & 0xFF
-        
+    def getval(self, label):
+        obj = self.symtable[label]
+        if isinstance(obj, parser.MacroDef):
+            value = int(self.incparse.eval_expr(obj.body, 2).v)
+        elif isinstance(obj, parser.Token):
+            value = int(obj.v)
+        else:
+            raise ValueError(f"Object [{label}] of unknown type")
+        return value
     def x(self, set=None):
         if set is not None:
             self.set("textx", set)
@@ -76,13 +84,13 @@ class GameMap(object):
         return self.get2("textaccshadow")
     
     def NLH(self):
-        return self.symtable["NEWLINE_HEIGHT"]
+        return self.getval("NEWLINE_HEIGHT")
     
     def BMT(self):
-        return self.symtable["BOX_MARGIN_LEFT"]
+        return self.getval("BOX_MARGIN_TOP")
     
     def BML(self):
-        return self.symtable["BOX_MARGIN_LEFT"]
+        return self.getval("BOX_MARGIN_LEFT")
 
         
 
@@ -315,6 +323,8 @@ class MenuMakerApp:
         of the overall black box.
         """
         # 1. Fill the entire box with black
+        x2 = x2 - 1
+        y2 = y2 - 1
         self._drawFilledBlackBoxRoutine(x1, y1, x2, y2)
 
         # 2. Calculate inner dimensions for border drawing (Z80 logic)
@@ -322,8 +332,8 @@ class MenuMakerApp:
         # D = y2 - y1 - 4
         # These represent the number of pixels to draw for the horizontal/vertical segments
         # of the inner border, excluding the corners.
-        width_inner_segment = x2 - x1 - 4
-        height_inner_segment = y2 - y1 - 4
+        width_inner_segment = x2 - x1 - 4 + 1
+        height_inner_segment = y2 - y1 - 4 + 1
 
         # If the box is too small to draw a border, return
         if width_inner_segment < 0 or height_inner_segment < 0:
@@ -412,8 +422,7 @@ class MenuMakerApp:
         #print(f"Input received: {input_text}") # For debugging
         tokenstream = parser.TokenStream.from_str(input_text)
         try:
-            #TODO: Implement label and the two-pass system for forward-reference
-            parseobj = parser.Parser(tokenstream, self.gamemap.symtable)
+            parseobj = parser.Parser(tokenstream.tokens, self.gamemap.symtable)
             datastream = parseobj.binres
         except Exception as e:
             datastream = e
@@ -484,8 +493,8 @@ class MenuMakerApp:
                 y2 = datastream[ptr + 4]
                 self._drawBlackBoxWithBordersRoutine(x1, y1, x2, y2)
                 self.gamemap.cr((self.gamemap.BML()+x1)&0xFF)
-                self.gamemap.x(self.gamemap.cr)
-                self.gamemap.y((self.gamemap.y()+self.gamemap.BMT())&0xFF)
+                self.gamemap.x(self.gamemap.cr())
+                self.gamemap.y((y1+self.gamemap.BMT())&0xFF)
                 ptr += 5
             elif opcode == 9: # m_menuopt()
                 # Consumes 0 more bytes
@@ -495,7 +504,7 @@ class MenuMakerApp:
                 # Consumes 0 more bytes
                 # TODO: Implement newline logic
                 self.gamemap.x(self.gamemap.cr())
-                self.gamemap.y((self.gamemap.NLH()+self.gamemap.y())&0x255)
+                self.gamemap.y((self.gamemap.NLH()+self.gamemap.y())&0xFF)
                 ptr += 1
             elif opcode == 11: # m_setflag(flagid)
                 # Consumes 1 more byte (flagid)
@@ -570,8 +579,8 @@ class MenuMakerApp:
                 # TODO: Implement mltacc2 logic
                 ptr += 2
             else:
-                x, _ = self.print_char(opcode, self.gamemap.x(), self.gamemap.y())
-                self.gamemap.x(x)
+                nx, _ = self.print_char(opcode, self.gamemap.x(), self.gamemap.y())
+                self.gamemap.x(nx)
                 ptr += 1 # Advance to avoid infinite loop on unknown opcode
 
         if not EOF_encountered:

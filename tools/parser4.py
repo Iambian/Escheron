@@ -70,9 +70,9 @@ def tokline2mini(tokenline:list[Token]):
 
 
 class Parser(object):
-    DEBUGMODE = True
-    SHOW_SYMTABLE = True
-    SHOW_SYMTABLE_MODE = None       #None|"SYM"|"MAC"
+    DEBUGMODE = False
+    SHOW_SYMTABLE = False
+    SHOW_SYMTABLE_MODE = "SYM"       #None|"SYM"|"MAC"
     SHOW_PARSE_LINESTART = True
     MAX_RECURSION_DEPTH = 12
     MATH_OPS = ('+','-','*','/','&','|','^','<<','>>','==','!=','<','>','<=','>=','&&','||')
@@ -90,11 +90,12 @@ class Parser(object):
             self.binres = bytearray()
             self.symtable = dict()
             self.symtable.update(oldsymtable)
-            print(self.symtable)
             try:
                 self.parse(self.tokens, passid)
                 if len(self.ifstack):
                     err(self.ifstack[0].token, "Unbalanced #IF/ENDIF from here.")
+                print(f"Pass {passid} completed successfully.")
+                print(f"Output binary: {self.binres}")
             except:
                 traceback.print_exc()
                 print(yellowmsg(f"Pass {passid} ended with error(s)."))
@@ -255,11 +256,15 @@ class Parser(object):
             if cls.DEBUGMODE:
                 pass
             resubmit:list[Token] = []
-            for token in lineiter:
+            for tokenidx, token in enumerate(lineiter):
                 tokenv, tokent = (token.v, token.type)
                 if tokent in {"MACRO","IDENT","DIR_CALL","DIRECTIVE"}:
                     if tokenv.endswith('('):
-                        invokelist = self.get_params_from_iter(lineiter)
+                        try:
+                            invokelist = self.get_params_from_iter(lineiter)
+                        except Exception as e:
+                            print(line)
+                            raise e
                         invokelist = [] if invokelist == [[]] else invokelist
                     else:
                         invokelist = []
@@ -294,7 +299,7 @@ class Parser(object):
                         else:
                             #print(f"extend: {macrobody}")
                             resubmit.extend(macrobody)
-                    elif tokenv in self.labels:
+                    elif tokenv in self.labels and tokenidx:
                         # A label that's been assigned a value directly by .EQU
                         # whether it's this pass or a prior one.
                         if tokenv.endswith('(') or tokent in {"MACRO","DIR_CALL","DIRECTIVE"}:
@@ -324,6 +329,10 @@ class Parser(object):
                             #    print(yellowmsg(tokline2minitok(line)))
                             err(token, f"Illegal use of [{token.v}]. Parameters seen: {invokelist}")
                         resubmit.append(newtoken)
+                    elif token.type in {"MACRO", "DIR_CALL"}:
+                        # Unidentified macro with possible parameters? That's
+                        # an actual error to raise.
+                        err(token, f"MACRO or DIR_CALL [{tokenv}] was not found.")
                     else:
                         #If it didn't resolve, make it someone else's problem.
                         resubmit.append(token)
@@ -545,26 +554,35 @@ class Parser(object):
             if len(param) == 1:
                 stringified = self.eval_to_string(param[0])
                 if isinstance(stringified, str) and bytewidth is not None:
+                    # Is string and is outputting data
                     for c in stringified:
                         charval = ord(c).to_bytes(16,"little", signed=False)[:bytewidth]
                         self.origin += bytewidth
                         result.extend(charval)
                     continue
                 elif isinstance(stringified, str) and bytewidth is None:
+                    # Is string and is not outputtting data (.echo)
                     encoded = stringified.encode("ASCII")
-                    self.origin += len(encoded)
                     result.extend(encoded)
+                    continue
+            # If no string condition caught, process a number instead
             exprval = int(self.eval_expr(param).v)
+            int_min = -(1 << (8*bytewidth-1))
+            int_max = (1 << (8*bytewidth))-1
+            #print(f"Boundaries: {int_min}, {int_max}")
+            if (exprval < int_min) or (exprval > int_max):
+                print(warnmsg(param[0],f"Expression evalulates outside bounds. Value {exprval} is being truncated."))
             if bytewidth is None:
+                # Is a number but is not outputting data (.echo)
                 result.extend(str(exprval).encode("ASCII"))
             else:
-                int_min = -(1 << ((8*bytewidth)-1))
-                int_max = (1 << (8*bytewidth)-1)-1
-                if exprval < int_min or exprval > int_max:
-                    print(warnmsg(param[0],f"Expression evalulates outside bounds. Value {exprval} is being truncated."))
+                # Is a number and it is being output.
+                # Default action is to chop bits that won't fit.
+                # Value clamping logic is here in case of future feature.
                 #exprval = max(exprval, int_min)
                 #exprval = min(exprval, int_max)
                 result.extend(exprval.to_bytes(16,"little",signed= True if exprval<0 else False)[:bytewidth])
+                self.origin += bytewidth
         return result
 
     def sym_assign(self, key, value):
@@ -580,6 +598,7 @@ class Parser(object):
         parenlevel = 0
         paramlist = []
         tokens = []
+        item = None
         for item in iterable:
             if item.type == "OPER":
                 if item.v == "(":
@@ -768,25 +787,22 @@ class Parser(object):
         tokval = token.v
         if "NUM" in toktype:
             if isinstance(tokval, int):
-                return tokval   #Already processed
-            tokval = token.v.upper()
+                return tokval
+            tokval = str(tokval).upper()
             if tokval.startswith("$"):
                 return int(tokval[1:], 16)
             elif tokval.startswith("%"):
                 return int(tokval[1:], 2)
-            else:
-                v = tokval
-                #print(f"TOKENVAL: {type(v)}/{v}")
-                if tokval.endswith(('H','h','D','d','B','b')):
-                    v = v[:-1]
-                # Determine base based on token type suffix or default to 10
-                if "HEX" in toktype:
-                    return int(v, 16)
-                elif "BIN" in toktype:
-                    return int(v, 2)
-                else:
-                    return int(v, 10)
+            v = tokval
+            if tokval.endswith(('H','D','B')):
+                v = v[:-1]
+            if "HEX" in toktype:
+                return int(v, 16)
+            elif "BIN" in toktype:
+                return int(v, 2)
+            return int(v, 10)
         elif toktype == "IDENT":
+            name = tokval
             symval = None
             if tokval not in self.symtable:
                 if passnum == 1:

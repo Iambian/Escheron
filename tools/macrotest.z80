@@ -16,7 +16,25 @@
 #define AA AA+AA
 #define AA AA+AA
 
+.org $9D95
+.dw FutureLabel
 .db AA
+FutureLabel:
+
+#define m_defbox(a,b,c,d) m_drawbox(a,b,c,d)
+#define m_addx(x) m_addxy(x,0)
+#define m_addy(y) m_addxy(0,y)
+ m_defbox(0,0,96,64)    ;mainbox
+ m_defbox(60,45,92,63)  ;moneybox
+ m_addy(4)
+.db "65535"
+; mx_setHLtoVar(cur_gold)
+; m_dispHL(mf_5DIGIT,mf_RIGHT_ALIGN) m_("G")
+ m_defbox(60,0,92,46)   ;statusbox
+.db "Item\nMagic\nEquip\nStatus\nSave"
+m_eof
+
+
 
 ;m_setxy($05,5)    ;this is a comment
 ;.db "Welcome \rto Americana.\nPlease make your\nselection, followed\nby the pound\nsign now.\n"
