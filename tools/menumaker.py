@@ -422,75 +422,94 @@ class MenuMakerApp:
         #print(f"Input received: {input_text}") # For debugging
         tokenstream = parser.TokenStream.from_str(input_text)
         try:
+            exception = None
             parseobj = parser.Parser(tokenstream.tokens, self.gamemap.symtable)
-            datastream = parseobj.binres
+            segment:parser.SegmentDef = parseobj.segments["__DEFAULT"]
+            origin = segment.baseaddr
+            data = segment.data
         except Exception as e:
-            datastream = e
+            exception = e
+            origin = 0
+            data = bytearray([0])
 
-        ptr = 0
+        self.gamemap.memory[origin:origin+len(data)] = data
+        if len(self.gamemap.memory) != 65536:
+            raise ValueError("BAD OBJECT REPLACEMENT IN GAMEMAP MEMORY.")
+        ptr = origin
         counter = 0
+        bound_start = origin
+        bound_end = origin+len(data)
         EOF_encountered = None
-        while ptr < len(datastream):
+        while True:
+            if EOF_encountered:
+                if exception:
+                    self.parser_status_label.config(text=f"Exc: {exception}")
+                else:
+                    self.parser_status_label.config(text=f"{len(data)} bytes at {origin:04x} ran successfully.")
+                break
+            if (ptr < bound_start or ptr >= bound_end) or EOF_encountered:
+                self.parser_status_label.config(text=f"ERR: Stream exited bounds without EOF.")
+                break
             counter += 1
             if counter > 1000:
                 self.parser_status_label.config(text=f"Possible infinite loop detected. Halted.")
                 return "break"
-            opcode = datastream[ptr]
+            opcode = self.gamemap.memory[ptr]
             if opcode == 0: # m_eof
                 # Consumes 0 more bytes
                 ptr += 1
                 EOF_encountered = True
-                break # End of stream
+                continue    #Hit EOF handler at top of routine.
             elif opcode == 1: # m_setxy(x,y)
                 # Consumes 2 more bytes (x, y)
-                x = datastream[ptr + 1]
-                y = datastream[ptr + 2]
+                x = self.gamemap.memory[ptr + 1]
+                y = self.gamemap.memory[ptr + 2]
                 self.gamemap.x(x)
                 self.gamemap.y(y)
                 ptr += 3
             elif opcode == 2: # m_addxy(x,y)
                 # Consumes 2 more bytes (x, y)
-                x = datastream[ptr + 1]
-                y = datastream[ptr + 2]
+                x = self.gamemap.memory[ptr + 1]
+                y = self.gamemap.memory[ptr + 2]
                 # TODO: Implement addxy logic
                 self.gamemap.x((self.gamemap.x()+x) & 0xFF)
                 self.gamemap.y((self.gamemap.y()+y) & 0xFF)
                 ptr += 3
             elif opcode == 3: # m_call(adr)
                 # Consumes 2 more bytes (lo(adr), hi(adr))
-                lo_adr = datastream[ptr + 1]
-                hi_adr = datastream[ptr + 2]
+                lo_adr = self.gamemap.memory[ptr + 1]
+                hi_adr = self.gamemap.memory[ptr + 2]
                 # TODO: Implement call logic
                 ptr += 3
             elif opcode == 4: # m_print(adr)
                 # Consumes 2 more bytes (lo(adr), hi(adr))
-                lo_adr = datastream[ptr + 1]
-                hi_adr = datastream[ptr + 2]
+                lo_adr = self.gamemap.memory[ptr + 1]
+                hi_adr = self.gamemap.memory[ptr + 2]
                 # TODO: Implement print logic
                 ptr += 3
             elif opcode == 5: # m_printacc(flags)
                 # Consumes 1 more byte (flags)
-                flags = datastream[ptr + 1]
+                flags = self.gamemap.memory[ptr + 1]
                 # TODO: Implement printacc logic
                 ptr += 2
             elif opcode == 6: # m_jrfnz(flagid,rel)
                 # Consumes 2 more bytes (flagid, rel)
-                flagid = datastream[ptr + 1]
-                rel = datastream[ptr + 2]
+                flagid = self.gamemap.memory[ptr + 1]
+                rel = self.gamemap.memory[ptr + 2]
                 # TODO: Implement jrfnz logic
                 ptr += 3
             elif opcode == 7: # m_jrfz(flagid,rel)
                 # Consumes 2 more bytes (flagid, rel)
-                flagid = datastream[ptr + 1]
-                rel = datastream[ptr + 2]
+                flagid = self.gamemap.memory[ptr + 1]
+                rel = self.gamemap.memory[ptr + 2]
                 # TODO: Implement jrfz logic
                 ptr += 3
             elif opcode == 8: # m_drawbox(x1,y1,x2,y2)
                 # Consumes 4 more bytes (x1, y1, x2, y2)
-                x1 = datastream[ptr + 1]
-                y1 = datastream[ptr + 2]
-                x2 = datastream[ptr + 3]
-                y2 = datastream[ptr + 4]
+                x1 = self.gamemap.memory[ptr + 1]
+                y1 = self.gamemap.memory[ptr + 2]
+                x2 = self.gamemap.memory[ptr + 3]
+                y2 = self.gamemap.memory[ptr + 4]
                 self._drawBlackBoxWithBordersRoutine(x1, y1, x2, y2)
                 self.gamemap.cr((self.gamemap.BML()+x1)&0xFF)
                 self.gamemap.x(self.gamemap.cr())
@@ -508,12 +527,12 @@ class MenuMakerApp:
                 ptr += 1
             elif opcode == 11: # m_setflag(flagid)
                 # Consumes 1 more byte (flagid)
-                flagid = datastream[ptr + 1]
+                flagid = self.gamemap.memory[ptr + 1]
                 # TODO: Implement setflag logic
                 ptr += 2
             elif opcode == 12: # m_togflag(flagid)
                 # Consumes 1 more byte (flagid)
-                flagid = datastream[ptr + 1]
+                flagid = self.gamemap.memory[ptr + 1]
                 # TODO: Implement togflag logic
                 ptr += 2
             elif opcode == 13: # m_setleftmargin()
@@ -536,57 +555,52 @@ class MenuMakerApp:
                 ptr += 1
             elif opcode == 16: # m_setacc1(val1b)
                 # Consumes 1 more byte (val1b)
-                val1b = datastream[ptr + 1]
+                val1b = self.gamemap.memory[ptr + 1]
                 # TODO: Implement setacc1 logic
                 ptr += 2
             elif opcode == 17: # m_setacc2(val2b)
                 # Consumes 2 more bytes (lo(val2b), hi(val2b))
-                lo_val2b = datastream[ptr + 1]
-                hi_val2b = datastream[ptr + 2]
+                lo_val2b = self.gamemap.memory[ptr + 1]
+                hi_val2b = self.gamemap.memory[ptr + 2]
                 # TODO: Implement setacc2 logic
                 ptr += 3
             elif opcode == 18: # m_adrtoacc1(adr)
                 # Consumes 2 more bytes (lo(adr), hi(adr))
-                lo_adr = datastream[ptr + 1]
-                hi_adr = datastream[ptr + 2]
+                lo_adr = self.gamemap.memory[ptr + 1]
+                hi_adr = self.gamemap.memory[ptr + 2]
                 # TODO: Implement adrtoacc1 logic
                 ptr += 3
             elif opcode == 19: # m_adrtoacc2(adr)
                 # Consumes 2 more bytes (lo(adr), hi(adr))
-                lo_adr = datastream[ptr + 1]
-                hi_adr = datastream[ptr + 2]
+                lo_adr = self.gamemap.memory[ptr + 1]
+                hi_adr = self.gamemap.memory[ptr + 2]
                 # TODO: Implement adrtoacc2 logic
                 ptr += 3
             elif opcode == 20: # m_setidx(adr)
                 # Consumes 2 more bytes (lo(adr), hi(adr))
-                lo_adr = datastream[ptr + 1]
-                hi_adr = datastream[ptr + 2]
+                lo_adr = self.gamemap.memory[ptr + 1]
+                hi_adr = self.gamemap.memory[ptr + 2]
                 # TODO: Implement setidx logic
                 ptr += 3
             elif opcode == 21: # m_addindexed(offset)
                 # Consumes 1 more byte (offset)
-                offset = datastream[ptr + 1]
+                offset = self.gamemap.memory[ptr + 1]
                 # TODO: Implement addindexed logic
                 ptr += 2
             elif opcode == 22: # m_mltacc(val)
                 # Consumes 1 more byte (val)
-                val = datastream[ptr + 1]
+                val = self.gamemap.memory[ptr + 1]
                 # TODO: Implement mltacc logic
                 ptr += 2
             elif opcode == 23: # m_mltacc2(val)
                 # Consumes 1 more byte (val)
-                val = datastream[ptr + 1]
+                val = self.gamemap.memory[ptr + 1]
                 # TODO: Implement mltacc2 logic
                 ptr += 2
             else:
                 nx, _ = self.print_char(opcode, self.gamemap.x(), self.gamemap.y())
                 self.gamemap.x(nx)
                 ptr += 1 # Advance to avoid infinite loop on unknown opcode
-
-        if not EOF_encountered:
-            self.parser_status_label.config(text=f"ERROR: STREAM WENT OOB WITHOUT EOF")
-        else:
-            self.parser_status_label.config(text=f"Emitted: '{datastream.hex()}'")
         return "break" # Prevents the default newline character from being inserted
 
 if __name__ == "__main__":

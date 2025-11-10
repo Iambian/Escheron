@@ -40,6 +40,12 @@ class LabelDef(NamedTuple):
     token:Token     #The token that stores this ident
     value:Token     #The token that this ident resolves to. Usually a NUM.
 
+class SegmentDef(NamedTuple):
+    name:str            # References. Default "__DEFAULT"
+    baseaddr: int       # Segment starting address
+    data: bytearray # Must stay contiguous. Enforce it or make more segments
+
+
 ERRMSG_RIGHT_ALIGN = True
 ERRMSG_RIGHT_ALIGN_COL = 40
 NEWLINE_TOKEN = Token("NEWLINE", "\n", 0, 0, "")
@@ -83,19 +89,24 @@ class Parser(object):
         self.tokens:list[Token] = tokens
         self.symtable: dict[str,MacroDef|Token] = dict()
         self.labels: dict[str,LabelDef] = dict()
-        self.binres:bytearray = bytearray()
+        #self.binres:bytearray = bytearray()
         self.origin:int = 0
         self.ifstack:list[IfDef] = list()
+        self.curseg:Optional[SegmentDef] = None
+        self.segments:dict[str, list[SegmentDef]] = dict()
         for passid in range(1,3):
-            self.binres = bytearray()
+            #self.binres = bytearray()
+            self.curseg = None
+            self.segments = dict()
             self.symtable = dict()
             self.symtable.update(oldsymtable)
+            self.origin = 0
             try:
                 self.parse(self.tokens, passid)
                 if len(self.ifstack):
                     err(self.ifstack[0].token, "Unbalanced #IF/ENDIF from here.")
                 print(f"Pass {passid} completed successfully.")
-                print(f"Output binary: {self.binres}")
+                print(f"Output binary: {self.read_data()}")
             except:
                 traceback.print_exc()
                 print(yellowmsg(f"Pass {passid} ended with error(s)."))
@@ -117,6 +128,19 @@ class Parser(object):
     @classmethod
     def from_filename(cls, filename):
         return cls(Tokenizer.from_filename(filename).tokens)
+    
+    def read_data(self, segname="__DEFAULT"):
+        ''' NOTE: To read data from currently-selected segment, you must
+            explicitly pass `None` into `segmentname`, otherwise it'll attempt
+            to read `__DEFAULT`. It is done this way to hide the concept of
+            segments when (in the majority of cases) it is not needed or wanted.
+        '''
+        if not self.curseg or self.curseg.name != segname:
+            if not segname in self.segments:
+                return bytearray()
+            self.curseg = self.segments[segname]
+        return self.curseg.data
+
     
     def parse(self, tokens:list[Token], passid=1, depth=1, nontrivial_expansion=True):
         cls = self.__class__
@@ -533,12 +557,25 @@ class Parser(object):
         self.sym_assign(tokv, newval)
 
     def write_data(self, extendable:bytes|bytearray):
-        #This is a simple routine for now. It exists because it's a single point
-        #of output. I intend to change this later to implement forms of
-        #alternate data outout, either to another file, or another segment.
-        #I suspect this sort of thing is how .seek might have been usable. idk.
-        #But it looks like a great idea for now. Keeping everything in one spot.
-        self.binres.extend(extendable)
+        #NOTE: self.origin will always point to the byte after the data would
+        #       be written. Do not waste your time trying to put it before.
+        #       Just calculate that here.
+        print("Writing data...")
+        calcorigin = self.origin-len(extendable)
+        if not self.curseg:
+            if "__DEFAULT" in self.segments:
+                self.curseg = self.segments["__DEFAULT"]
+            else:
+                self.curseg = SegmentDef("__DEFAULT", calcorigin, bytearray())
+                self.segments["__DEFAULT"] = self.curseg
+        if self.origin-(len(self.curseg.data)+len(extendable)) != self.curseg.baseaddr:
+            print(len(self.curseg.data))
+            print(len(extendable))
+            print(self.origin)
+            print(self.curseg.baseaddr)            
+            raise ValueError(redmsg(f"Noncontiguous segment \"{self.curseg.name}\" detected."))
+        self.curseg.data.extend(extendable)
+
 
     def parse_bytestream(self, tokenline:list[Token], bytewidth:Optional[int]) -> Optional[bytes]:
         #NOTE: if bytewidth is None, this outputs data to console.
@@ -553,17 +590,17 @@ class Parser(object):
                 raise ValueError(redmsg("Empty parameter in bytestream parsing is disallowed."))
             if len(param) == 1:
                 stringified = self.eval_to_string(param[0])
-                if isinstance(stringified, str) and bytewidth is not None:
-                    # Is string and is outputting data
-                    for c in stringified:
-                        charval = ord(c).to_bytes(16,"little", signed=False)[:bytewidth]
-                        self.origin += bytewidth
-                        result.extend(charval)
-                    continue
-                elif isinstance(stringified, str) and bytewidth is None:
-                    # Is string and is not outputtting data (.echo)
-                    encoded = stringified.encode("ASCII")
-                    result.extend(encoded)
+                if isinstance(stringified, str):
+                    if bytewidth:
+                        # Is string and is outputting data
+                        for c in stringified:
+                            charval = ord(c).to_bytes(16,"little", signed=False)[:bytewidth]
+                            self.origin += bytewidth
+                            result.extend(charval)
+                    else:
+                        # Is string and is not outputtting data (.echo)
+                        encoded = stringified.encode("ASCII")
+                        result.extend(encoded)
                     continue
             # If no string condition caught, process a number instead
             exprval = int(self.eval_expr(param).v)
@@ -1054,7 +1091,7 @@ class Tokenizer(object):
 
 if __name__ == "__main__":
     ts = Parser.from_filename("tools/macrotest.z80")
-    print(ts.binres)
+    print(ts.read_data())
     pass
     '''
     if len(sys.argv) != 2:

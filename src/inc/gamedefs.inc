@@ -12,8 +12,8 @@
 
 
 #define TEMPDATA_SIZE 16
-#define NEWLINE_HEIGHT 7
-#define BOX_MARGIN_TOP 3
+#define NEWLINE_HEIGHT 8
+#define BOX_MARGIN_TOP 4
 #define BOX_MARGIN_LEFT 4
 
 ;NOTE: Below is a bit of memory wrangling. If this location is altered, you
