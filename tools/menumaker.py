@@ -28,10 +28,10 @@ class GameMap(object):
         self.symtable = self.incparse.symtable
         self.memory = [0] * 65536
 
-    def get(self, sym):
-        return self.memory[int(self.symtable[sym].v)]
-    def set(self, sym, val):
-        self.memory[int(self.symtable[sym].v)] = val
+    def get(self, sym, offset=0):
+        return self.memory[int(self.symtable[sym].v)+offset]
+    def set(self, sym, val, offset=0):
+        self.memory[int(self.symtable[sym].v)+offset] = val&0xFF
     def get2(self, sym):
         adr = int(self.symtable[sym].v)
         return self.memory[adr] + (256* self.memory[adr+1])
@@ -91,8 +91,12 @@ class GameMap(object):
     
     def BML(self):
         return self.getval("BOX_MARGIN_LEFT")
+    
+    def flags(self, offset, set=None):
+        if set is not None:
+            self.set("gameflags", set, offset)
+        return self.get("gameflags", offset)
 
-        
 
     
 
@@ -471,7 +475,6 @@ class MenuMakerApp:
                 # Consumes 2 more bytes (x, y)
                 x = self.gamemap.memory[ptr + 1]
                 y = self.gamemap.memory[ptr + 2]
-                # TODO: Implement addxy logic
                 self.gamemap.x((self.gamemap.x()+x) & 0xFF)
                 self.gamemap.y((self.gamemap.y()+y) & 0xFF)
                 ptr += 3
@@ -479,31 +482,44 @@ class MenuMakerApp:
                 # Consumes 2 more bytes (lo(adr), hi(adr))
                 lo_adr = self.gamemap.memory[ptr + 1]
                 hi_adr = self.gamemap.memory[ptr + 2]
+                raise RuntimeError("OPCODE 3 (CALL) requires Z80 simulator or equivalent.")
                 # TODO: Implement call logic
                 ptr += 3
             elif opcode == 4: # m_print(adr)
                 # Consumes 2 more bytes (lo(adr), hi(adr))
                 lo_adr = self.gamemap.memory[ptr + 1]
                 hi_adr = self.gamemap.memory[ptr + 2]
+                raise RuntimeError("OPCODE 4 requires print stack or equivalent.")
                 # TODO: Implement print logic
                 ptr += 3
             elif opcode == 5: # m_printacc(flags)
                 # Consumes 1 more byte (flags)
                 flags = self.gamemap.memory[ptr + 1]
+                raise RuntimeError("OPCODE 5 requires that I stop being lazy about printing integers.")
                 # TODO: Implement printacc logic
                 ptr += 2
             elif opcode == 6: # m_jrfnz(flagid,rel)
                 # Consumes 2 more bytes (flagid, rel)
                 flagid = self.gamemap.memory[ptr + 1]
                 rel = self.gamemap.memory[ptr + 2]
-                # TODO: Implement jrfnz logic
-                ptr += 3
+                rel_int8 = rel if rel < 128 else rel-256
+                flagbyte = (flagid >> 3) & 0b00011111
+                flagmask = 1<<(flagid&7)
+                if self.gamemap.flags(flagbyte) & flagmask:
+                    ptr = ptr + 2 + rel_int8
+                else:
+                    ptr += 3
             elif opcode == 7: # m_jrfz(flagid,rel)
                 # Consumes 2 more bytes (flagid, rel)
                 flagid = self.gamemap.memory[ptr + 1]
                 rel = self.gamemap.memory[ptr + 2]
-                # TODO: Implement jrfz logic
-                ptr += 3
+                rel_int8 = rel if rel < 128 else rel-256
+                flagbyte = (flagid >> 3) & 0b00011111
+                flagmask = 1<<(flagid&7)
+                if not self.gamemap.flags(flagbyte) & flagmask:
+                    ptr = ptr + 2 + rel_int8
+                else:
+                    ptr += 3
             elif opcode == 8: # m_drawbox(x1,y1,x2,y2)
                 # Consumes 4 more bytes (x1, y1, x2, y2)
                 x1 = self.gamemap.memory[ptr + 1]
@@ -521,33 +537,33 @@ class MenuMakerApp:
                 ptr += 1
             elif opcode == 10: # m_newline()
                 # Consumes 0 more bytes
-                # TODO: Implement newline logic
                 self.gamemap.x(self.gamemap.cr())
                 self.gamemap.y((self.gamemap.NLH()+self.gamemap.y())&0xFF)
                 ptr += 1
             elif opcode == 11: # m_setflag(flagid)
                 # Consumes 1 more byte (flagid)
                 flagid = self.gamemap.memory[ptr + 1]
-                # TODO: Implement setflag logic
+                flagbyte = (flagid >> 3) & 0b00011111
+                flagmask = 1<<(flagid&7)
+                self.gamemap.flags(flagbyte, self.gamemap.flags(flagbyte) | flagmask)
                 ptr += 2
             elif opcode == 12: # m_togflag(flagid)
                 # Consumes 1 more byte (flagid)
                 flagid = self.gamemap.memory[ptr + 1]
-                # TODO: Implement togflag logic
+                flagbyte = (flagid >> 3) & 0b00011111
+                flagmask = 1<<(flagid&7)
+                self.gamemap.flags(flagbyte, self.gamemap.flags(flagbyte) ^ flagmask)
                 ptr += 2
             elif opcode == 13: # m_setleftmargin()
                 # Consumes 0 more bytes
-                # TODO: Implement setleftmargin logic
                 self.gamemap.cr(self.gamemap.x())
                 ptr += 1
             elif opcode == 14: # m_clracc()
                 # Consumes 0 more bytes
-                # TODO: Implement clracc logic
                 self.gamemap.acc(0)
                 ptr += 1
             elif opcode == 15: # m_exacc()
                 # Consumes 0 more bytes
-                # TODO: Implement exacc logic
                 temp_acc = self.gamemap.acc()
                 temp_shad = self.gamemap.accshad()
                 self.gamemap.acc(temp_shad)
@@ -556,46 +572,58 @@ class MenuMakerApp:
             elif opcode == 16: # m_setacc1(val1b)
                 # Consumes 1 more byte (val1b)
                 val1b = self.gamemap.memory[ptr + 1]
-                # TODO: Implement setacc1 logic
+                self.gamemap.acc1(val1b)
                 ptr += 2
             elif opcode == 17: # m_setacc2(val2b)
                 # Consumes 2 more bytes (lo(val2b), hi(val2b))
                 lo_val2b = self.gamemap.memory[ptr + 1]
                 hi_val2b = self.gamemap.memory[ptr + 2]
-                # TODO: Implement setacc2 logic
+                self.gamemap.acc(lo_val2b+(256*hi_val2b))
                 ptr += 3
             elif opcode == 18: # m_adrtoacc1(adr)
                 # Consumes 2 more bytes (lo(adr), hi(adr))
                 lo_adr = self.gamemap.memory[ptr + 1]
                 hi_adr = self.gamemap.memory[ptr + 2]
-                # TODO: Implement adrtoacc1 logic
+                addr = (hi_adr*256)+lo_adr
+                self.gamemap.acc1(self.gamemap.memory[addr])
                 ptr += 3
             elif opcode == 19: # m_adrtoacc2(adr)
                 # Consumes 2 more bytes (lo(adr), hi(adr))
                 lo_adr = self.gamemap.memory[ptr + 1]
                 hi_adr = self.gamemap.memory[ptr + 2]
-                # TODO: Implement adrtoacc2 logic
+                addr = (hi_adr*256)+lo_adr
+                lo_val = self.gamemap.memory[addr]
+                hi_val = self.gamemap.memory[addr+1]
+                self.gamemap.acc((hi_val*256)+lo_val)
                 ptr += 3
             elif opcode == 20: # m_setidx(adr)
                 # Consumes 2 more bytes (lo(adr), hi(adr))
                 lo_adr = self.gamemap.memory[ptr + 1]
                 hi_adr = self.gamemap.memory[ptr + 2]
-                # TODO: Implement setidx logic
+                self.gamemap.idx(lo_adr+(256*hi_adr))
                 ptr += 3
             elif opcode == 21: # m_addindexed(offset)
                 # Consumes 1 more byte (offset)
+                # NOTE: Documentation says this: memory1[IDX+offset]+ACC -> ACC
+                #       Documentation does not specify signedness at any stage
+                #       other than offset, nor does it specify size.
+                # NOTE: Assuming uint8_t retrieval, value sum, and storage.
                 offset = self.gamemap.memory[ptr + 1]
-                # TODO: Implement addindexed logic
+                offset_int8 = offset if offset < 128 else offset-256
+                memlookup = self.gamemap.memory[self.gamemap.idx()+offset_int8]
+                self.gamemap.acc1(self.gamemap.acc1()+memlookup)
                 ptr += 2
             elif opcode == 22: # m_mltacc(val)
                 # Consumes 1 more byte (val)
+                # NOTE: This saves full result into acc.
                 val = self.gamemap.memory[ptr + 1]
-                # TODO: Implement mltacc logic
+                self.gamemap.acc(self.gamemap.acc() * val)
                 ptr += 2
             elif opcode == 23: # m_mltacc2(val)
                 # Consumes 1 more byte (val)
+                # NOTE: This saves only upper byte of result into acc.
                 val = self.gamemap.memory[ptr + 1]
-                # TODO: Implement mltacc2 logic
+                self.gamemap.acc(((self.gamemap.acc() * val) >> 8) & 0xFF)
                 ptr += 2
             else:
                 nx, _ = self.print_char(opcode, self.gamemap.x(), self.gamemap.y())
