@@ -20,13 +20,32 @@ class GameMap(object):
     #include "src/inc/macros.inc"
     #include "src/inc/osdefs.inc"
     #include "src/inc/gamedefs.inc"
+    #include "src/xdefs/items.z80"
+    #include "src/xdefs/spells.z80"
+    '''
+    defaultsave = '''
+    .org $C000  ;Placeholder location that's sufficiently out of the way
+    #include "src/data/defaultsave.z80"
     '''
     def __init__(self):
         cls = self.__class__
-        tokenstream = parser.TokenStream.from_str(cls.symfile)
-        self.incparse = parser.Parser(tokenstream.tokens)
-        self.symtable = self.incparse.symtable
         self.memory = [0] * 65536
+        # Definitions
+        tokens = parser.Tokenizer.from_str(cls.symfile).tokens
+        self.incparse = parser.Parser(tokens)
+        self.symtable = self.incparse.symtable
+        #Default data
+        tokens = parser.Tokenizer.from_str(cls.defaultsave).tokens
+        parserobj = parser.Parser(tokens, self.symtable)
+        segment = parserobj.curseg
+        segorg = segment.baseaddr
+        seglen = len(segment.data)
+        self.memory[segorg:segorg+seglen] = list(segment.data)
+        self.symtable = parserobj.symtable  #Updating symtable for new labels
+
+
+
+
 
     def get(self, sym, offset=0):
         return self.memory[int(self.symtable[sym].v)+offset]
@@ -482,20 +501,20 @@ class MenuMakerApp:
                 # Consumes 2 more bytes (lo(adr), hi(adr))
                 lo_adr = self.gamemap.memory[ptr + 1]
                 hi_adr = self.gamemap.memory[ptr + 2]
-                raise RuntimeError("OPCODE 3 (CALL) requires Z80 simulator or equivalent.")
+                raise NotImplementedError("OPCODE 3 (CALL) requires Z80 simulator or equivalent.")
                 # TODO: Implement call logic
                 ptr += 3
             elif opcode == 4: # m_print(adr)
                 # Consumes 2 more bytes (lo(adr), hi(adr))
                 lo_adr = self.gamemap.memory[ptr + 1]
                 hi_adr = self.gamemap.memory[ptr + 2]
-                raise RuntimeError("OPCODE 4 requires print stack or equivalent.")
+                raise NotImplementedError("OPCODE 4 requires print stack or equivalent.")
                 # TODO: Implement print logic
                 ptr += 3
             elif opcode == 5: # m_printacc(flags)
                 # Consumes 1 more byte (flags)
                 flags = self.gamemap.memory[ptr + 1]
-                raise RuntimeError("OPCODE 5 requires that I stop being lazy about printing integers.")
+                raise NotImplementedError("OPCODE 5 requires that I stop being lazy about printing integers.")
                 # TODO: Implement printacc logic
                 ptr += 2
             elif opcode == 6: # m_jrfnz(flagid,rel)
@@ -534,6 +553,7 @@ class MenuMakerApp:
             elif opcode == 9: # m_menuopt()
                 # Consumes 0 more bytes
                 # TODO: Implement menuopt logic
+                raise NotImplementedError("OPCODE 9 requires that I have an actual menu system.")
                 ptr += 1
             elif opcode == 10: # m_newline()
                 # Consumes 0 more bytes

@@ -77,7 +77,7 @@ def tokline2mini(tokenline:list[Token]):
 
 class Parser(object):
     DEBUGMODE = False
-    SHOW_SYMTABLE = False
+    SHOW_SYMTABLE = True
     SHOW_SYMTABLE_MODE = "SYM"       #None|"SYM"|"MAC"
     SHOW_PARSE_LINESTART = True
     MAX_RECURSION_DEPTH = 12
@@ -105,12 +105,19 @@ class Parser(object):
                 self.parse(self.tokens, passid)
                 if len(self.ifstack):
                     err(self.ifstack[0].token, "Unbalanced #IF/ENDIF from here.")
-                print(f"Pass {passid} completed successfully.")
-                print(f"Output binary: {self.read_data()}")
+                #print(f"Pass {passid} completed successfully.")
+                #print(f"Output binary: {self.read_data()}")
             except:
                 traceback.print_exc()
                 print(yellowmsg(f"Pass {passid} ended with error(s)."))
                 break
+        else:
+            if not self.curseg:
+                #Because it is possible we're assembling just for the symtable.
+                outlen = 0
+            else:
+                outlen = len(self.curseg.data)
+            print(f"Two-pass assembly completed. Output {outlen} bytes, {len(self.symtable)} symbols.")
         if self.__class__.DEBUGMODE and self.__class__.SHOW_SYMTABLE:
             mode = self.__class__.SHOW_SYMTABLE_MODE
             print("--Symbol Table--")
@@ -155,8 +162,8 @@ class Parser(object):
                 continue
             token0, token0v, token0t = (line[0], line[0].v.upper(), line[0].type)
             if cls.DEBUGMODE and cls.SHOW_PARSE_LINESTART:
-                #print(errmsg(line[0], f"LSTRT: {'·'*(depth-1)} {tokline2str(line)}"))
-                print(errmsg(line[0], f"LSTRT: {'·'*(depth-1)} {tokline2mini(line)}"))
+                #print(errmsg(line[0], f"LNSTRT: {'·'*(depth-1)} {tokline2str(line)}"))
+                print(errmsg(line[0], f"LNSTRT: {'·'*(depth-1)} {tokline2mini(line)}"))
             lineiter = iter(line)   #Doing this eases parameter extraction
             if len(line) > 128:
                 err(token0, "Line exceeds reasonable length")
@@ -427,7 +434,7 @@ class Parser(object):
                     # Limits: Warn if byte < -128 or > 255
                     data = self.parse_bytestream(line[diridx+1:], 1)
                     self.write_data(data)
-                    print(f"Processing DB directives. Retrieved [{data}]")
+                    #print(f"Processing DB directives. Retrieved [{data}]")
                     pass
                 elif dirid in (".DW", ".WORD"):
                     # Data word (16 bit) support
@@ -560,7 +567,7 @@ class Parser(object):
         #NOTE: self.origin will always point to the byte after the data would
         #       be written. Do not waste your time trying to put it before.
         #       Just calculate that here.
-        print("Writing data...")
+        #print("Writing data...")
         calcorigin = self.origin-len(extendable)
         if not self.curseg:
             if "__DEFAULT" in self.segments:
