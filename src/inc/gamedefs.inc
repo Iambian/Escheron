@@ -12,7 +12,9 @@
 
 
 #define TEMPDATA_SIZE 16
-#define NEWLINE_HEIGHT 7
+#define NEWLINE_HEIGHT 8
+#define BOX_MARGIN_TOP 4
+#define BOX_MARGIN_LEFT 4
 
 ;NOTE: Below is a bit of memory wrangling. If this location is altered, you
 ;   must account for the fact that an interrupt vector table and its routine
@@ -247,7 +249,7 @@ dhl_fetch_long_values 	.equ 7
 #define mf_SIGNED_SHOW_POS (1<<dhl_show_pos_sign)
 #define mf_USE_LONG_VALUES (1<<dhl_fetch_long_values)
 
-#define m_eof 0
+#define m_eof .db 0
 #define m_setxy(x,y) .db 1,x,y
 #define m_addxy(x,y) .db 2,x,y
 #define m_call(adr) .db 3,lo(adr),hi(adr)

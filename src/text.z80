@@ -385,6 +385,7 @@ printChar_thinVertSkip:
 	;Preserving size before it is destroyed
 	ld	a,c
 	and $0F
+	ret z	;Cancel render if width is zero.
 	push af		;**
 		ld  b,2
 printChar_thinLoop:

@@ -1,5 +1,9 @@
-# Second revision of the parser/assembler simulating SPASM-ng. Mostly.
-#
+# Third revision of the parser/assembler simulating SPASM-ng. Mostly.
+# Full two-pass support is not implemented. As long as what you wrote can
+# operate with only a single pass, or you segment the compilation as needed.
+# The operation is fairly brittle.
+# This doesn't process any actual z80 instructions. Only the bare minimum needed
+# to parse macros and use the .ORG and .DB/W/L directives.
 #
 
 import os, sys, random, copy, re, colorama
@@ -24,6 +28,7 @@ class Token(NamedTuple):
     col: int
     row: int
     file: str
+
 
 class IfStackEntry(NamedTuple):
     ''' `token` for traceback. `cond` means the following:
@@ -55,10 +60,21 @@ class MacroDef(NamedTuple):
     params: tuple[Token]    # Only one token per param, each an IDENT type.
     body: "TokenStream"     # Yeah. This tracks.
 
+class LabelDef(NamedTuple):
+    #It's a label token. it resolves to either a NUM or STRING token.
+    token:Token
+    value:int
+
+
 def redmsg(msg):
     return f"{Fore.RED}{msg}{Style.RESET_ALL}"
 def yellowmsg(msg):
     return f"{Fore.YELLOW}{msg}{Style.RESET_ALL}"
+def warnmsg(token:Token, msg:str):
+    prerun = f"[{token.file}: LN {token.row}, COL {token.col}]"
+    if ERRMSG_RIGHT_ALIGN and len(prerun) < ERRMSG_RIGHT_ALIGN_COL:
+        prerun = ' '*(ERRMSG_RIGHT_ALIGN_COL-len(prerun)) + prerun
+    return yellowmsg(f"{prerun} {msg}")
 def errmsg(token:Token, msg:str):
     prerun = f"[{token.file}: LN {token.row}, COL {token.col}]"
     if ERRMSG_RIGHT_ALIGN and len(prerun) < ERRMSG_RIGHT_ALIGN_COL:
@@ -70,39 +86,49 @@ def printerr(token:Token, msg:str):
     print(errmsg(token, msg))
 
 
+
 class Parser(object):
     DEBUGMODE = True
     SHOW_SYMTABLE = True
     SHOW_SYMTABLE_MODE = None    #None|"SYM"|"MAC"
     SHOW_PARSE_LINESTART = True
     SHOW_PARSE_AFTER_PREOP = False
+    SHOW_EXPANSION_TOKENS = False
+    SHOW_EXPANSION_ACTIONS = True
     SHOW_RESUBMISSIONS = False
-    SHOW_RESULTS_RETURN = True
+    SHOW_RESULTS_RETURN = False
     MAX_RECURSION_DEPTH = 8
     MATH_OPS = ('+','-','*','/','&','|','^','<<','>>','==','!=','<','>','<=','>=','&&','||')
-    def __init__(self, tokendata:"TokenStream"):
+    Z80INST = {'ADC', 'ADD', 'AND', 'BIT', 'CALL', 'CCF', 'CP', 'CPD', 'CPI', 'CPIR', 'CPL', 'DAA', 'DEC', 'DI', 'DJNZ', 'EI', 'EX', 'EXX', 'HALT', 'IM', 'IN', 'INC', 'IND', 'INDR', 'INI', 'INIR', 'JP', 'JR', 'LD', 'LDD', 'LDI', 'NEG', 'NOP', 'OR',  'OTDR', 'OTIR', 'OUT', 'OUTD', 'OUTI', 'POP', 'PUSH', 'RES', 'RET', 'RETI', 'RETN' 'RL', 'RLA', 'RLC', 'RLCA', 'RLD', 'RR', 'RRA', 'RRCA', 'RRD', 'RST', 'SBC', 'SCF', 'SET', 'SLA', 'SLL', 'SRA', 'SRL', 'SUB', 'XOR'}
+
+    def __init__(self, tokendata:"TokenStream", importsymtable=None):
         ''' NOTE: self.parse() should, when complete, outputs binary data from
             data directives and instructions to self.binres during pass 2
             and depth 1.
         '''
-        print("Starting...")
         self.tokens = tokendata
+        # symtable resets each pass. Goddamned include guards.
         self.symtable:dict[str, int|str|MacroDef] = dict()
+        # labeltable should persist.
+        self.labeltable:dict[str, LabelDef] = dict()
         self.origin = 0
-        self.binres:bytearray = bytearray()
         self.if_stack:list[IfStackEntry] = []
-        try:
-            self.parse(self.tokens, 1)
+        for passid in range(1,3):
+            self.binres:bytearray = bytearray()
+            self.symtable = dict()
+            if importsymtable:
+                self.symtable.update(importsymtable)
+            try:
+                self.parse(self.tokens, passid)
+                if len(self.if_stack):
+                    baseentry = self.if_stack[0]
+                    err(baseentry.token, "Unbalanced #IF/#ENDIF statements starting here")
+            except Exception as e:
+                print(Fore.RED)
+                traceback.print_exc()
+                print(Style.RESET_ALL)
+            print(self.binres)
 
-            if len(self.if_stack):
-                baseentry = self.if_stack[0]
-                err(baseentry.token, "Unbalanced #IF/#ENDIF statements starting here")
-        except Exception as e:
-            print(Fore.RED)
-            traceback.print_exc()
-            print(Style.RESET_ALL)
-
-        #self.parse(self.tokens, 2)
         if self.__class__.DEBUGMODE and self.__class__.SHOW_SYMTABLE:
             mode = self.__class__.SHOW_SYMTABLE_MODE
             print("--Symbol Table--")
@@ -121,18 +147,19 @@ class Parser(object):
     def from_filename(cls, filename):
         return cls(TokenStream.from_filename(filename))
 
-    def parse(self, tokens:"TokenStream", passid=1, depth=1, trace=False, expandbuiltins=True) -> list[Token]:
-        #All parsed lines must be executed immediately
+    def parse(self, tokens:"TokenStream", passid=1, depth=1, trace=False, nontrival_expand=True) -> list[Token]:
         cls = self.__class__
         if depth > cls.MAX_RECURSION_DEPTH:
             raise ValueError(redmsg("Maximum recursion depth reached."))
+        tokens.reset()
         iterator = tokens.getline()
         results:list[Token] = []
         for lidx,line in enumerate(iterator):
             if len(line) < 1:
                 continue
             if cls.DEBUGMODE and cls.SHOW_PARSE_LINESTART:
-                print(errmsg(line[0], f"LSTRT: {'·'*(depth-1)} {tokline2str(line)}"))
+                #print(errmsg(line[0], f"LSTRT: {'·'*(depth-1)} {tokline2str(line)}"))
+                print(errmsg(line[0], f"LSTRT: {'·'*(depth-1)} {tokline2minitok(line)}"))
             if len(tokline2str(line)) > 128:
                 err(line[0],"Line buffer exceeded reasonable length.")
             lineiter = iter(line)
@@ -141,6 +168,7 @@ class Parser(object):
             if cls.DEBUGMODE:
                 print(yellowmsg(f"DEBUG: Line before macro expansion: {tokline2str(line)}"))
             #
+            #-------------------------------------------------------------------
             # Begin handling flow control preops
             #
             if token0t == "PREOP":
@@ -173,7 +201,7 @@ class Parser(object):
                         # Otherwise, (True/None) now becomes stuck to None
                         self.if_stack[-1] = IfStackEntry(token0, None)
                     continue
-            #
+            #-------------------------------------------------------------------
             # Perform flow control, then handle other preops
             #
             if len(self.if_stack) and not self.if_stack[-1].cond:
@@ -196,6 +224,8 @@ class Parser(object):
                     self.if_stack.append(IfStackEntry(token0, ifresult))
                     continue
                 if token0v in ("#UNDEF", "#UNDEFINE"):
+                    if token1v in self.labeltable:
+                        err(token1,"You may not undefine a label assigned outside of #DEFINE")
                     if token1v in self.symtable:
                         del self.symtable[token1v]
                     if token1v + '(' in self.symtable:
@@ -203,7 +233,7 @@ class Parser(object):
                     continue
                 if token0v == "#ENDMACRO":
                     err(token0, "#ENDMACRO used without corresponding #MACRO.")
-                #
+                #---------------------------------------------------------------
                 # The macro definitions start here.
                 #
                 if token0v in ("#DEFINE", "#MACRO"):
@@ -227,26 +257,33 @@ class Parser(object):
                     #Either way, the macrobody is afterward. If it's a #DEFINE.
                     macrobody = [t for t in lineiter if t.type != "NEWLINE"]
                     if token0v == "#DEFINE":
-                        # First, expand any nested macros within the body
-                        expanded_macrobody = self.parse(TokenStream(macrobody), passid, depth+1, trace, True)
-                        
-                        # If the expanded body is a single IDENT token (likely from concat), store its value as a string.
-                        if len(expanded_macrobody) == 1 and expanded_macrobody[0].type == "IDENT":
-                            macrodef = expanded_macrobody[0].v # Store the string value directly
-                        elif self._is_evaluatable_expression(expanded_macrobody):
-                            # If it's an evaluatable expression, evaluate it.
-                            try:
-                                evaluated_value = self.eval_expr(expanded_macrobody, passid)
-                                macrodef = evaluated_value
-                            except Exception as e:
-                                # Should not happen if _is_evaluatable_expression is accurate,
-                                # but as a safeguard, store as TokenStream if evaluation fails.
-                                traceback.print_exc()
-                                macrodef = MacroDef(token1, paramlist, TokenStream(macrobody))
+                        # Perform macro expansion and then evaluate it.
+                        # The expansion here should NOT expand eval( and concat(
+                        # Otherwise, proceed with evaluation as before
+                        try:
+                            macrobody = self.parse(TokenStream(macrobody), passid, depth+1, trace, False)
+                            if len(paramlist):
+                                raise Exception("This exception is just to prevent eval if macro has parameters.")
+                            macrobody = self.eval_expr(macrobody, 2)
+
+                        except Exception as e:
+                            s = traceback.format_exc()
+                            #raise e
+                            # Passthrough. macrobody will always have a valid result.
+                            pass
+                        if isinstance(macrobody, int):
+                            # Simple define
+                            macrodef = macrobody
+                        elif isinstance(macrobody, str):
+                            # Also simple define, but resolves to string.
+                            macrodef = macrobody
+                        elif isinstance(macrobody, Token):
+                            err(token0, "This error should not be reachable. Output macrobody in #DEFINE is not supposed to be a Token type.")
                         else:
                             # If not evaluatable, store the original macrobody as a TokenStream
                             macrodef = MacroDef(token1, paramlist, TokenStream(macrobody))
-                        self.symtable[token1v] = macrodef
+                        self.sym_assign(token1v, macrodef)
+                        #self.symtable[token1v] = macrodef
                     if token0v == "#MACRO":
                         # Ignore contents of macrobody here. Anything following
                         # the signature on same line is ignored.
@@ -270,10 +307,11 @@ class Parser(object):
                                     break
                             macrobody.extend(macroline+[NEWLINE_TOKEN])
                         macrodef = MacroDef(token1, paramlist, TokenStream(macrobody))
-                        self.symtable[token1.v] = macrodef
+                        self.sym_assign(token1.v, macrodef)
+                        #self.symtable[token1.v] = macrodef
                     continue
                 pass    #End of preops
-            #
+            #-------------------------------------------------------------------
             # Macro expansion code.
             # Perform as few evalulations here as possible.
             # Eval is supposed to be done in the next section.
@@ -285,12 +323,28 @@ class Parser(object):
             resubmit:list[Token] = []
             lineiter = iter(line)
             for token in lineiter:
+
+                if cls.DEBUGMODE and cls.SHOW_EXPANSION_TOKENS:
+                    if token.type == "IDENT" and token.v in self.symtable:
+                        symobj = self.symtable[token.v]
+                        if isinstance(symobj, MacroDef):
+                            print(f"{token}, type {type(symobj)} : {symobj.body.tokens}")
+                        else:
+                            print(f"{token} type {type(symobj)} : {symobj}")
+                    print(token)
                 tokenv, tokent = (token.v, token.type)
-                if cls.DEBUGMODE:
-                    print(yellowmsg(f"DEBUG: Processing token: {token.v} ({token.type})"))
+                if tokenv == "VAR_STARTNAME":
+                    if "VAR_STARTNAME" in self.symtable:
+                        en = self.symtable["VAR_STARTNAME"]
+                        #print(yellowmsg(f"VAR_STARTNAME entry on iter {en}"))
+
                 if tokent in ("MACRO","IDENT","DIR_CALL","DIRECTIVE") and tokenv in self.symtable:
                     symentry = self.symtable[tokenv]
-                    if isinstance(symentry, MacroDef):
+                    if "VAR_STARTNAME" in self.symtable:
+                        en = self.symtable["VAR_STARTNAME"]
+                        #print(yellowmsg(f"VAR_STARTNAME entry accept {en}"))
+
+                    if isinstance(symentry, MacroDef) and nontrival_expand:
                         if tokenv.endswith('('):
                             invokelist = self.get_params_from_iter(lineiter)
                             if invokelist == [[]]:
@@ -315,22 +369,49 @@ class Parser(object):
                         # Attempt to further expand the macros inside macrobody
                         # Don't expand upon any eval() or concat() yet, tho.
                         try:
-                            macrobody = self.parse(TokenStream(macrobody), passid, depth+1, trace, False)
-                        except:
+                            macrobody = self.parse(TokenStream(macrobody), passid, depth+1, trace, True)
+                        except Exception as e:
+                            print(yellowmsg(e))
                             pass
                         if cls.DEBUGMODE:
                             print(yellowmsg(f"DEBUG: Expanding macro/symbol '{tokenv}'. Body: {tokline2str(macrobody)}"))
                         resubmit.extend(macrobody)
+                        if cls.DEBUGMODE and cls.SHOW_EXPANSION_ACTIONS:
+                            print(yellowmsg(f"Token [T:{token.type}]-{token.v} found, action: MACRO EXPANSION"))
+                        '''
+                    elif isinstance(symentry, MacroDef) and not tokenv.endswith("("):
+                        # A carveout in #DEFINE (nontrivial_expand set to False)
+                        # to expand trivial macros. These will not have args.
+                        try:
+                            macrobody = self.parse(symentry.body, passid, depth+1, trace, True)
+                        except Exception as e:
+                            print(yellowmsg(e))
+                        resubmit.extend(macrobody)
+                        if cls.DEBUGMODE and cls.SHOW_EXPANSION_ACTIONS:
+                            print(yellowmsg(f"Token [T:{token.type}]-{token.v} found, action: TRIVIAL MACRO EXPANSION"))
+                        '''
+                        
+                    elif isinstance(symentry, int):
+                        # Replace if resolves to an int.
+                        macrobody = [from_token(token, "NUM", symentry)]
+                        resubmit.extend(macrobody)
+                        pass
+                
                     else:
+                        if cls.DEBUGMODE and cls.SHOW_EXPANSION_ACTIONS:
+                            print(yellowmsg(f"Token [T:{token.type}]-{token.v} found, action: Macro-like passthrough"))
+                            print(f"Conditions check: instance={type(symentry)}")
                         # Any other token must be passed through as-is.
                         resubmit.append(token)
                 elif tokent == "MACRO" and tokenv.lower() in ("eval(", "concat("):
-                    if not expandbuiltins:
+                    '''
+                    if not nontrival_expand:
                         # Consume, reconstruct, then emit tokens to prevent
                         # any further expansions within.
                         t = self.joinparams(self.get_params_from_iter(lineiter))
                         resubmit.extend([token]+t)
                         continue
+                    '''
                     # Execute built-in macros.
                     # Add debug print before calling get_params_from_iter
                     if cls.DEBUGMODE:
@@ -365,7 +446,15 @@ class Parser(object):
                             evaluated_value = self.eval_expr(invokelist[0], passid)
                             newtoken = from_token(token, "NUM", str(evaluated_value)) # eval always results in a NUM
                         else:
-                            err(token, f"Built-in macro [{tokenv}] expects exactly one parameter.")
+                            newtoken = from_token(token, "IDENT", s)
+                        if cls.DEBUGMODE and cls.SHOW_EXPANSION_ACTIONS:
+                            print(yellowmsg(f"Token [T:{token.type}]-{token.v} found, action: STRING EVAL/CONCAT"))
+
+                    elif len(invokelist) == 1:
+                        reparsed = self.parse(TokenStream(invokelist[0]), passid, depth+1, trace, True)
+                        newtoken = from_token(token, "NUM", str(self.eval_expr(reparsed, 2)))
+                        if cls.DEBUGMODE and cls.SHOW_EXPANSION_ACTIONS:
+                            print(yellowmsg(f"Token [T:{token.type}]-{token.v} found, action: EXPRESSION EVAL"))
                     else:
                         if cls.DEBUGMODE:
                             print(yellowmsg(tokline2minitok(line)))
@@ -374,9 +463,13 @@ class Parser(object):
                         print(yellowmsg(f"DEBUG: Built-in macro '{tokenv}' invoked. Result: {newtoken.v} ({newtoken.type})"))
                     resubmit.append(newtoken)
                 else:
-                    # If it wasn't a macro, or if it was a built-in macro but expandbuiltins is False,
-                    # pass the token through and let the evalulators deal with it.
+                    # TODO: Write comment to describe this situation. Had to change
+                    # things so that nontrivial expansions are also excludable,
+                    # not just built-ins.
                     resubmit.append(token)
+                    if cls.DEBUGMODE and cls.SHOW_EXPANSION_ACTIONS:
+                        print(yellowmsg(f"Token [T:{token.type}]-{token.v} found, action: NO CONDITION MET. PASSING THROUGH."))
+
                 pass
             # If nothing expanded, line should be the same as resubmit.
             # If it did expand, append a newline as that would have been
@@ -386,7 +479,10 @@ class Parser(object):
                 if cls.DEBUGMODE and cls.SHOW_RESUBMISSIONS:
                     try:
                         print(errmsg(line[0],f"RESUB: [{tokline2str(line)}] to [{tokline2str(resubmit)}]"))
+                        print(f"RESUBIN : {tokline2minitok(line)}")
+                        print(f"RESUBOUT: {tokline2minitok(resubmit)}")
                     except:
+                        print("The debug line at resubmit encountered an error.")
                         print(line)
                         print(yellowmsg(resubmit))
                         pass
@@ -394,45 +490,154 @@ class Parser(object):
                     resubmit.append(NEWLINE_TOKEN)
                 tokens.resubmit_tokens(resubmit)
                 continue
-            #
+            #-------------------------------------------------------------------
             # Instruction and directive parsing goes here.
             # Do not worry about processing in depth > 2, not even .equ.
             # Since redefinition is disallowed with = or .equ, any macros that
             # would forward-reference such a thing would fail/pass through due
             # to missing symtable entries, or error out later due to redef.
             #
-            # More information to follow, copied from old source.
-            #
-            # Instruction and directive parsing goes here.
-            # NOTE: Standalone labels, with or with trailing colon, or the same
-            # except with instruction/directive afterward should alias to
-            # IDENTIFIER .equ $ \ [leftover line contents]
-            # and resubmit edited line to tokens.
-            # NOTE: If depth > 1, do not do any actual processing. Just let it
-            # pass through to results.
-            # NOTE: If depth == 1, advance .org as normal. On pass 2, output
-            # byte data to self.results (distinct to local results) and let
-            # local results be an empty list.
+
+            if len(line) > 1:
+                # The second token of the line if '=' is being used as .EQU will
+                # alias to .EQU; other possible uses may involve edge cases and
+                # are not to be handled here.
+                item = line[1]
+                if item.type == "OPER" and item.v == "=":
+                    line[1] = from_token(item, "DIRECTIVE", ".EQU")
+
             types = [i.type for i in line]
             values = [i.v for i in line]
             if "DIRECTIVE" in types and depth < 2:
-                #print(yellowmsg("HANDLE DIR ↑"))
                 if sum([1 if i=="DIRECTIVE" else 0 for i in types]) > 1:
                     err(line[0],"There may not be more than one directive on a single logical line.")
                 diridx = types.index("DIRECTIVE")
-                if values[diridx].upper() == ".EQU":
+                dirtok = line[diridx]
+                dirid = values[diridx].upper()
+                #print(f"idx:{diridx},id:{dirid} - Line: {tokline2minitok(line)}")
+                # Separate .EQU to allow processing leading labels separately
+                if dirid == ".EQU":
                     if diridx != 1:
                         err(line[0], "Directive .EQU must have only one token prior.")
                     if line[0].type != "IDENT":
                         err(line[0], "Token prior to .EQU must be an identifier.")
-                    exprval = self.eval_expr(line[2:], passid)
-                    # Add in check to prevent redefinition but only on same-pass
-                    self.symtable[line[0].v] = exprval
-                if values[diridx].upper() == ".ERROR":
+                    labeltok = line[0]
+                    #if labeltok.v == "VAR_STARTNAME":
+                    #    print(yellowmsg(f"{self.labeltable[labeltok.v]}"))
+                    #    err(labeltok, "DEBUG .EQU HALT CODE")
+                    try:
+                        exprval = self.eval_expr(line[2:], passid)
+                    except Exception as e:
+                        print(yellowmsg(f"DEBUG EQUATE TRAIL: {line[2:]}"))
+                        raise e
+                    self.label_inc_once(labeltok, exprval)
+                elif line[0].type == "IDENT":
+                    #If literally anything else, check the first token to see
+                    # if it's an identifier. If so, set label to value of origin
+                    labeltok = line[0]
+                    exprval = self.origin
+                    self.label_inc_once(labeltok, exprval)
+                # Any leading labels with a directive embedded should have been
+                # taken care of now.
+                if dirid == ".ERROR":
+                    # Red text echo, plus program halt.
                     print(yellowmsg("Warn: .error directive implementation incomplete."))
                     print(redmsg(".error directive encountered. Raising error using text available."))
                     err(token, f"{tokline2str(line)}")
+                elif dirid == ".ECHO":
+                    # You'll want to figure out how this is going to work.
+                    pass
+                elif dirid in (".DB", ".BYTE"):
+                    # Data byte (8 bit) support
+                    # Limits: Warn if byte < -128 or > 255
+                    data = self.parse_bytestream(line[diridx+1:], 1)
+                    self.write_data(data)
+                    print(f"Processing DB directives. Retrieved [{data}]")
+                    pass
+                elif dirid in (".DW", ".WORD"):
+                    # Data word (16 bit) support
+                    # Strings pad each char to 16 bit.
+                    # Limits apply. Warn if < INT16_MIN or > UINT16_MAX
+                    data = self.parse_bytestream(line[diridx+1:], 2)
+                    self.write_data(data)
+                    pass
+                elif dirid in (".DL", ".LONG"):
+                    # Data long (24 bit) support
+                    # Strings pad each char to 24 bit.
+                    # Limits apply. Warn if < INT24_MIN or > UINT24_MAX
+                    data = self.parse_bytestream(line[diridx+1:], 3)
+                    self.write_data(data)
+                    pass
+                elif dirid in (".BLOCK", ".FILL"):
+                    # They do the same thing in SPASM-ng.
+                    # First param is length. It must be positive.
+                    # Optional second param is byte to use. Defaults to 0.
 
+                    pass
+                elif dirid in (".LIST", ".NOLIST"):
+                    # Toggle list modes including or excluding this current
+                    # statement invocation.
+                    pass
+                elif dirid == ".ASSUME":
+                    # might have more than one use. reviewing source.
+                    pass
+                elif dirid == ".SHOW":
+                    # This presumably allows you to echo the contents of a
+                    # DEFINE'd object in some manner that an echo can't do.
+                    # You'll want to explore this one some more.
+                    pass
+                elif dirid == ".OPTION":
+                    # idk what this does. At all. Reviewing source.
+                    # After reviewing the source, I still don't know what
+                    # it does. All I know is that it reads an expression with
+                    # '=' as a delimiter, and that it creates a double-underscore
+                    # define. In source we see the following:
+                    # "set_define (define, expr, -1, false);
+                    # That... appears "normal". Still idk why this exists.
+                    pass
+                elif dirid == ".SEEK":
+                    # idk what this does. probably auxillary file I/O
+                    # It does unsafe things. Maybe we should just error if
+                    # we see it.
+                    pass
+                elif dirid == ".EXPORT":
+                    # Label exporting
+                    pass
+                elif dirid == ".ADDINSTR":
+                    #The syntax for this is very weird. See if it's resolvable.
+                    pass
+                elif dirid == ".WARN":
+                    # Yellow text echo.
+                    pass
+                elif dirid == ".ORG":
+                    # Sets self.origin
+                    # Must be a positive number.
+                    expres = self.eval_expr(line[diridx+1:])
+                    if expres < 0:
+                        err(dirtok, ".ORG expression must result in a positive number")
+                    if expres > (1<<24)-1:
+                        err(dirtok, ".ORG expressoin must be less than 01000000h")
+                    self.origin = expres
+                elif dirid == ".END":
+                    raise StopIteration
+                    # End source parsing. That is to say, simply stop.
+                    pass
+                elif dirid == ".EQU":
+                    # This has already been processed, but this needs to be
+                    # duplicated in this IF-ELIF-ELSE block to prevent
+                    # .EQU from hitting the unrecognized directive error.
+                    pass
+                else:
+                    err(dirtok, "Unrecognized directive")
+            elif depth < 2:
+                # If it's not a directive, then the only remaining thing left
+                # that it could be is an instruction. We'll detect a leading
+                # label and assign them accordingly, then figure out how to
+                # implement instruction detection logic later.
+                if line[0].type == "IDENT" and line[0].v.upper() not in cls.Z80INST:
+                    exprval = self.origin
+                    labeltok = line[0]
+                    self.label_inc_once(labeltok, exprval)
 
             # This final section is intended to collect emittable tokens during
             # a recursive call (macro expansion) and return them to complete
@@ -440,8 +645,7 @@ class Parser(object):
             # processed, executed and filtered out by now. What we should have
             # is directives, instructions, and possibly standalone expressions.
             if depth > 1 and line:
-                line.append(NEWLINE_TOKEN)
-                results.extend(line)
+                results.extend(line+[NEWLINE_TOKEN])
 
         # Strip final newline from results for macro expansion insertion
         if results:
@@ -450,18 +654,83 @@ class Parser(object):
                 results.pop()
 
         if cls.DEBUGMODE and cls.SHOW_RESULTS_RETURN:
-            if results:
-                print(errmsg(results[0], f"RERET: {'·'*(depth-1)} {tokline2str(results)}"))
-            else:
-                print(yellowmsg(f"DEBUG: RERET: {'·'*(depth-1)} (empty results)"))
+            print(errmsg(line[0], f"RERET: {'·'*(depth-1)} {tokline2str(results)}"))
 
         return results
     
+    def sym_assign(self, key, value):
+        # While this could've been a simple dict assignment, doing it this way
+        # puts it all in a single spot so I can easily debug it. Because boy
+        # howdy did I need to find out what got assigned where and when.
+        print(yellowmsg(f"Assigning [{key}] the value: {value}"))
+        self.symtable[key] = value
+
+    
+    def label_inc_once(self, token:Token, newval):
+        # If no error, assigns `newval` then returns. Passthrough if
+        # not valid label token. Only errors if doing a redef.
+        #NOTE: Today, it's self.labeltable that persists.
+        tokv, tokt = (token.v, token.type)
+        if tokt == "IDENT":
+            if tokv in self.symtable:
+                if tokv in self.labeltable:
+                    print(errmsg(token, f"[{token.v}] already defined. Initial definition follows."))
+                    err(self.labeltable[token.v].token, f"<-- Initial definition for [{token.v}] here")
+                else:
+                    err(token, f"[{token.v}] already defined. Initial definition either #DEFINE'd or imported from elsewhere.")
+        self.labeltable[tokv] = LabelDef(token, newval)
+        self.sym_assign(tokv, newval)
+        #self.symtable[tokv] = newval
+
+    def write_data(self, extendable:bytes|bytearray):
+        #This is a simple routine for now. It exists because it's a single point
+        #of output. I intend to change this later to implement forms of
+        #alternate data outout, either to another file, or another segment.
+        #I suspect this sort of thing is how .seek might have been usable. idk.
+        #But it looks like a great idea for now. Keeping everything in one spot.
+        self.binres.extend(extendable)
+
+
+    def parse_bytestream(self, tokenline:list[Token], bytewidth:Optional[int]) -> Optional[bytes]:
+        #NOTE: if bytewidth is None, this outputs data to console.
+        #NOTE: Extended echo syntax is not available.
+        iterline = iter(tokenline)
+        paramlist = self.get_params_from_iter(iterline, True)
+        result = bytearray()
+        if not paramlist or paramlist == [[]]:
+            raise ValueError(redmsg("Empty expression in bytestream parsing is disallowed."))
+        for param in paramlist:
+            if not param:
+                raise ValueError(redmsg("Empty parameter in bytestream parsing is disallowed."))
+            if len(param) == 1:
+                stringified = self.eval_to_string(param[0])
+                if isinstance(stringified, str) and bytewidth is not None:
+                    for c in stringified:
+                        charval = ord(c).to_bytes(16,"little", signed=False)[:bytewidth]
+                        self.origin += bytewidth
+                        result.extend(charval)
+                    continue
+                elif isinstance(stringified, str) and bytewidth is None:
+                    encoded = stringified.encode("ASCII")
+                    self.origin += len(encoded)
+                    result.extend(encoded)
+            exprval = self.eval_expr(param)
+            if bytewidth is None:
+                result.extend(str(exprval).encode("ASCII"))
+            else:
+                int_min = -(1 << ((8*bytewidth)-1))
+                int_max = (1 << (8*bytewidth)-1)-1
+                if exprval < int_min or exprval > int_max:
+                    print(warnmsg(param[0],f"Expression evalulates outside bounds. Value {exprval} is being truncated."))
+                #exprval = max(exprval, int_min)
+                #exprval = min(exprval, int_max)
+                result.extend(exprval.to_bytes(16,"little",signed= True if exprval<0 else False)[:bytewidth])
+        return result
+
     def strip_token_meta(self, tokenin:Token|list[Token]):
         if isinstance(tokenin, Token):
             return [(tokenin.type, tokenin.v)]
         return list(zip([t.type for t in tokenin], [t.v for t in tokenin]))
-
 
     def joinparams(self, paramlist:list[list[Token]]):
         tokenlist = []
@@ -483,8 +752,8 @@ class Parser(object):
                     return symentry
         return None
 
-    def get_params_from_iter(self, iterable:Iterator[Token]) -> list[list[Token]]:
-        parenlevel = 1 # Start with 1 because the opening parenthesis is part of the MACRO token
+    def get_params_from_iter(self, iterable:Iterator[Token], omit_close_paren:bool = False) -> list[list[Token]]:
+        parenlevel = 0
         paramlist = []
         tokens = []
         item = None # Initialize item to None
@@ -496,10 +765,16 @@ class Parser(object):
                     parenlevel += 1
                 elif item.v == ")":
                     parenlevel -= 1
-                    if parenlevel == 0: # Found the matching closing parenthesis for the initial MACRO token
+                    if parenlevel < 0:
+                        if omit_close_paren:
+                            err(item, "Too many close parentheses found.")
+                        if not tokens and paramlist:
+                            err(item, "[TRAILING] Empty parameters are disallowed.")
                         paramlist.append(tokens)
                         break
-            if item.type == "COMMA" and parenlevel == 1: # Only split parameters at the top level of the macro's arguments
+            if item.type == "COMMA" and parenlevel == 0:
+                if not tokens:
+                    err(item, "[INNER] Empty parameters are disallowed.")
                 paramlist.append(tokens)
                 tokens = []
                 continue
@@ -509,10 +784,12 @@ class Parser(object):
             # If 'item' is still None, it means the iterable was empty.
             if item is None:
                 raise ValueError(redmsg("No tokens after expansion invocation."))
-            # If 'item' is not None, it means the loop ran but didn't find a matching closing parenthesis.
-            err(item, "Macro invocation has a no matching closing parenthesis.")
-        if self.__class__.DEBUGMODE:
-            print(yellowmsg(f"DEBUG: get_params_from_iter - Generated paramlist: {[[t.v for t in p] for p in paramlist]}"))
+            if not tokens:
+                err(item, "[TRAILING] Empty parameters are disallowed.")
+            paramlist.append(tokens)
+            tokens = []
+            if not omit_close_paren:
+                err(item, "Macro invocation has no matching closing parenthesis.")
         return paramlist
 
     def is_macro_defined(self, name_without_open_paren) -> bool:
@@ -669,6 +946,7 @@ class Parser(object):
                     # Non-expression token, end of expression
                     break
         if operator is not None:
+            print(yellowmsg(tokens))
             err(operator, "Incomplete expression detected at around this position.")
         if baseval is None:
             err(token, "Malformed expression or expression does not yield a value at around this position.")
@@ -741,18 +1019,19 @@ class Parser(object):
                 else:
                     return int(v, 10)
         elif toktype == "IDENT":
+            symval = None
             if tokval not in self.symtable:
                 if passnum == 1:
                     return 0
                 else:
-                    err(token, f"Symbol [{tokval}] not found.")
-            else:
-                symval = self.symtable[tokval]
-                if not isinstance(symval, int):
-                    err(token, f"Symbol [{tokval}] type expected int, got {type(symval)}")
-                if self.__class__.DEBUGMODE:
-                    print(yellowmsg(f"DEBUG: eval_val - Resolving symbol '{tokval}': {symval}"))
-                return self.symtable[token.v]
+                    if tokval not in self.labeltable:
+                        err(token, f"Symbol [{tokval}] not found.")
+                    else:
+                        symval = self.labeltable[tokval].value
+            symval = self.symtable[tokval]
+            if not isinstance(symval, int):
+                err(token, f"Symbol [{tokval}] type expected int, got {type(symval)}")
+            return symval
         elif token.type == "OPER" and token.v == "$":
             return self.origin
         else:
@@ -763,8 +1042,6 @@ class TokenStream(object):
     def __init__(self, tokenlist:list[Token]):
         self.tokens = tokenlist
         self.reset()
-        #for tokenline in self.getline():
-        #    print(" ".join([t.v for t in tokenline]))
         pass
 
     def reset(self):
@@ -775,18 +1052,25 @@ class TokenStream(object):
     @classmethod
     def from_filename(cls, filename):
         return cls(Tokenizer.from_filename(filename).tokens)
+    
+    @classmethod
+    def from_str(cls, textdata):
+        tokenstream = cls(Tokenizer.from_str(textdata).tokens)
+        #print(tokenstream.tokens)
+        return tokenstream
 
     def resubmit_tokens(self, tokenlist:list[Token]):
         ''' Inserts tokens at the start of the stream so getline() next()
             can acquire them. Primary uses is to replay a recent line but
             with changes, which may include the results of a multiline macro.
         '''
-        print(yellowmsg(f"DEBUG: Resubmitting tokens: {tokline2str(tokenlist)}"))
-        self.resub_tokens.extend(tokenlist)
+        
+        self.resub_tokens.extendleft(list(reversed(tokenlist)))
         #
 
     def getline(self) -> Iterator[list[Token]]:
         def isnewline(token:Token, defining:bool=False) -> bool:
+            #print(f"token: {token}")
             if not defining and token.type == "OPER" and token.v == '\\':
                 return True
             if token.type == "NEWLINE":
@@ -869,13 +1153,20 @@ class Tokenizer(object):
     @classmethod
     def from_filename(cls, filename):
         return cls(cls.makestream(filename))
+    
+    @classmethod
+    def from_str(cls, textdata:str):
+        return cls(cls.makestream("NUL",1,textdata))
 
     @classmethod
-    def makestream(cls, filename, depth=1):
+    def makestream(cls, filename, depth=1, textdata:str=None):
         if depth > cls.MAX_INCLUDE_DEPTH:
             raise ValueError(redmsg("Include depth exceeded."))
         tokenstream = []
-        filedata = cls.readfile(filename)
+        if depth==1 and textdata is not None and filename=="NUL":
+            filedata = textdata.split('\n')
+        else:
+            filedata = cls.readfile(filename)
         if filedata is None:
             raise IOError(redmsg(f"File {filename} not found, depth {depth}"))
         for lineno, line in enumerate(filedata,1):
@@ -894,7 +1185,7 @@ class Tokenizer(object):
                 token1 = tokenline[1]
                 if token1.type != "STRING":
                     err(token1, f"Invalid #INCLUDE parameter :{token1.v}")
-                includefile = unescape_string(token1.v)
+                includefile = token1.v
                 try:
                     includestream = cls.makestream(includefile, depth+1)
                 except Exception as e:
@@ -919,6 +1210,8 @@ class Tokenizer(object):
             elif kind == "UNKNOWN":
                 raise SyntaxError(redmsg(f"Unexpected character {value!r} at position {pos}"))
             else:
+                if kind == "STRING":
+                    value = cls.unescape_string(value)
                 yield SubToken(kind, value, pos)
             pos = mo.end()
             mo = cls.get_token(code, pos)
@@ -964,53 +1257,50 @@ class Tokenizer(object):
         except FileNotFoundError:
             print(f"Failed to open {filename}")
             return None
-        except Exception as e:
-            print(f"An unexpected error occurred while reading {filename}: {e}")
-            raise e
-
-# Not sure who's supposed to own this yet, but I'm getting the feeling that
-# the answer is "everyone"
-def unescape_string(raw: str) -> str:
-    if len(raw) < 2 or raw[0] != raw[-1] or raw[0] not in ('"', "'"):
-        raise ValueError(f"Invalid string literal {raw!r}")
-    content = raw[1:-1]  # strip quotes
-    result = []
-    p = ''
-    for i,c in enumerate(content):
-        if c == '\\':
-            p = c
-            continue
-        if p == '\\':
-            tc = c.upper()
-            if tc == "N":
-                result.append('\n')
-            elif tc == "R":
-                result.append('\r')
-            elif tc == "T":
-                result.append('\t')
-            elif tc == "0":
-                result.append('\0')
-            elif tc == "\\":
-                result.append('\\')
-            elif tc == "\'":
-                result.append('\'')
-            elif tc == "\"":
-                result.append('\"')
-            elif tc == "#":     #random data byte, as per SPASM-ng spec.
-                result.append(chr(random.randint(0,255)))
+        
+    @staticmethod
+    def unescape_string(raw: str) -> str:
+        if len(raw) < 2 or raw[0] != raw[-1] or raw[0] not in ('"', "'"):
+            raise ValueError(f"Invalid string literal {raw!r}")
+        content = raw[1:-1]  # strip quotes
+        result = []
+        p = ''
+        for i,c in enumerate(content):
+            if c == '\\':
+                p = c
+                continue
+            if p == '\\':
+                tc = c.upper()
+                if tc == "N":
+                    result.append('\n')
+                elif tc == "R":
+                    result.append('\r')
+                elif tc == "T":
+                    result.append('\t')
+                elif tc == "0":
+                    result.append('\0')
+                elif tc == "\\":
+                    result.append('\\')
+                elif tc == "\'":
+                    result.append('\'')
+                elif tc == "\"":
+                    result.append('\"')
+                elif tc == "#":
+                    result.append(chr(random.randint(0,255)))
+                else:
+                    result.append(c)
+                p = ''
             else:
                 result.append(c)
-            p = ''
         else:
-            result.append(c)
-    else:
-        if p == '\\':
-            result.append(p)
-    return ''.join(c for c in result)
+            if p == '\\':
+                result.append(p)
+        return ''.join(c for c in result)
 
 
 if __name__ == "__main__":
     ts = Parser.from_filename("tools/macrotest.z80")
+    print(ts.binres)
     pass
     '''
     if MacroAssembler.DEBUG_MODE:
@@ -1026,3 +1316,8 @@ if __name__ == "__main__":
 
 
     '''
+#NOTE: This is how I invoke on the command line to output all that debug text
+#   to a separate output file. Keep because we may lose it.
+#
+# python tools/parser3.py tools/macrotest.z80 > parser_output.txt
+#

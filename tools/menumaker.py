@@ -1,5 +1,126 @@
 import tkinter as tk
 from tkinter import ttk
+import dcfreader
+import parser4 as parser
+
+# TODO: FIX SIGNED VS NONSIGNED ARITHMETIC IN SCRIPT SYSTEM. THIS BUG IS VISIBLE
+# WHEN TRYING TO PERFORM m_addxy() WITH NEGATIVE NUMBERS.
+
+
+class GameMap(object):
+    ''' This is a project-specific blurb. To be honest, the parse_input and
+        anything else touching the character renderer is also project-specific,
+        but that's a little easier to deal with than the real game-specific
+        abstractions that are happening in here. The only thing that can't be
+        abstracted away is the memory accesses, which should be done in
+        self.memory. App pagination is not supported; the entire 64KB memory
+        space is assumed to be (initialized-to-zero) RAM.
+    '''
+    symfile = '''
+    #include "src/inc/macros.inc"
+    #include "src/inc/osdefs.inc"
+    #include "src/inc/gamedefs.inc"
+    #include "src/xdefs/items.z80"
+    #include "src/xdefs/spells.z80"
+    '''
+    defaultsave = '''
+    .org $C000  ;Placeholder location that's sufficiently out of the way
+    #include "src/data/defaultsave.z80"
+    '''
+    def __init__(self):
+        cls = self.__class__
+        self.memory = [0] * 65536
+        # Definitions
+        tokens = parser.Tokenizer.from_str(cls.symfile).tokens
+        self.incparse = parser.Parser(tokens)
+        self.symtable = self.incparse.symtable
+        #Default data
+        tokens = parser.Tokenizer.from_str(cls.defaultsave).tokens
+        parserobj = parser.Parser(tokens, self.symtable)
+        segment = parserobj.curseg
+        segorg = segment.baseaddr
+        seglen = len(segment.data)
+        self.memory[segorg:segorg+seglen] = list(segment.data)
+        self.symtable = parserobj.symtable  #Updating symtable for new labels
+
+
+
+
+
+    def get(self, sym, offset=0):
+        return self.memory[int(self.symtable[sym].v)+offset]
+    def set(self, sym, val, offset=0):
+        self.memory[int(self.symtable[sym].v)+offset] = val&0xFF
+    def get2(self, sym):
+        adr = int(self.symtable[sym].v)
+        return self.memory[adr] + (256* self.memory[adr+1])
+    def set2(self, sym, val):
+        adr = int(self.symtable[sym].v)
+        self.memory[adr] = val & 0xFF
+        self.memory[adr+1] = (val >> 8) & 0xFF
+    def getval(self, label):
+        obj = self.symtable[label]
+        if isinstance(obj, parser.MacroDef):
+            value = int(self.incparse.eval_expr(obj.body, 2).v)
+        elif isinstance(obj, parser.Token):
+            value = int(obj.v)
+        else:
+            raise ValueError(f"Object [{label}] of unknown type")
+        return value
+    def x(self, set=None):
+        if set is not None:
+            self.set("textx", set)
+        return self.get("textx")
+
+    def y(self, set=None):
+        if set is not None:
+            self.set("texty", set)
+        return self.get("texty")
+    
+    def cr(self, set=None):
+        if set is not None:
+            self.set("textxstart", set)
+        return self.get("textxstart")
+    
+    def acc1(self, set=None):
+        if set is not None:
+            self.set("textacc", set)
+        return self.get("textacc")
+    
+    def acc(self, set=None):
+        if set is not None:
+            self.set2("textacc", set)
+        return self.get2("textacc")
+    
+    def idx(self, set=None):
+        if set is not None:
+            self.set2("textidx", set)
+        return self.get2("textidx")
+
+    def accshad(self, set=None):
+        if set is not None:
+            self.set2("textaccshadow", set)
+        return self.get2("textaccshadow")
+    
+    def NLH(self):
+        return self.getval("NEWLINE_HEIGHT")
+    
+    def BMT(self):
+        return self.getval("BOX_MARGIN_TOP")
+    
+    def BML(self):
+        return self.getval("BOX_MARGIN_LEFT")
+    
+    def flags(self, offset, set=None):
+        if set is not None:
+            self.set("gameflags", set, offset)
+        return self.get("gameflags", offset)
+
+
+    
+
+
+
 
 class MenuMakerApp:
     PIXEL_COLS = 96
@@ -8,8 +129,11 @@ class MenuMakerApp:
     PIXEL_OFF_COLOR = "white"
 
     def __init__(self, master):
+        self.gamemap = GameMap()
         self.master = master
+        self.dcf_reader = dcfreader.DCFReader("tools/escheron.dcf")
         master.title("Application Title")
+        master.state('zoomed')
 
         # Configure grid to be resizable
         master.grid_rowconfigure(0, weight=1)
@@ -32,7 +156,7 @@ class MenuMakerApp:
         self._create_pixel_grid(self.PIXEL_COLS * 5, self.PIXEL_ROWS * 5)
         # Bind the resize event to the frame, not the canvas itself
         self.pixel_grid_frame.bind("<Configure>", self._on_canvas_resize)
-        self._draw_border_pattern() # Call the border test pattern
+        self.pixel_grid_welcome_message()
         self.pixel_grid_canvas.update_idletasks() # Force canvas update
 
         # Set a minimum size for the main window to ensure pixels are visible (1x1 pixel minimum)
@@ -64,91 +188,74 @@ class MenuMakerApp:
         self.text_input.config(yscrollcommand=self.text_input_scrollbar.set)
 
         # Bind Enter key to parse_input method
-        self.text_input.bind("<Return>", self.parse_input)
+        self.text_input.bind("<F5>", self.parse_input)
 
-    def _draw_border_pattern(self):
-        print("--- Drawing Border Pattern ---")
-        border_thickness = 2
-        for row in range(self.PIXEL_ROWS):
-            for col in range(self.PIXEL_COLS):
-                # Check if pixel is within the border region
-                if (row < border_thickness or row >= self.PIXEL_ROWS - border_thickness or
-                    col < border_thickness or col >= self.PIXEL_COLS - border_thickness):
-                    if (row + col) % 2 == 0:
-                        self.pixelOn(col, row)
+    def pixel_grid_welcome_message(self):
+        # Prints a welcome message on the freshly-initialized pixel grid
+        self.print_str("Display field initialized", 10, 23)
+        self.print_str("Please input menu code", 10, 31)
+        self.print_str("for simulation.", 20, 39)
+        pass
+        
+
+    def print_str(self, string, x, y):
+        for c in string:
+            if c == '\n':
+                y += 8
+                continue
+            cdat = self.dcf_reader.get_char(ord(c))
+            self.render_char(cdat, x, y)
+            x += cdat.width
+
+    def print_char(self, char_code, x, y):
+        """
+        Prints a specified character from the DCF font to the virtual screen
+        at the given starting coordinates.
+        """
+        char_data = self.dcf_reader.get_char(char_code)
+        self.render_char(char_data, x, y)
+        x += char_data.width
+        return (x,y)
+
+    def render_char(self, char_data:dcfreader.DCFchar, x, y):
+        for rowidx, rowdat in enumerate(char_data.disparr):
+            for colidx, pixel in enumerate(rowdat):
+                tx = x + colidx
+                ty = y + rowidx
+                try:
+                    if pixel == dcfreader.Colors.BLACK:
+                        self.pixelOff(tx, ty)
                     else:
-                        self.pixelOff(col, row)
-                else:
-                    # Ensure inner pixels are black (default 'on' state)
-                    self.pixelOn(col, row)
-        print("--- Border Pattern Complete ---")
-
-    def _draw_checkerboard_pattern(self):
-        print("--- Drawing Checkerboard Pattern ---")
-        for row in range(self.PIXEL_ROWS):
-            for col in range(self.PIXEL_COLS):
-                if (row + col) % 2 == 0:
-                    self.pixelOn(col, row)
-                else:
-                    self.pixelOff(col, row)
-        print("--- Checkerboard Pattern Complete ---")
-
-    def _draw_test_pattern(self):
-        print("--- Running Pixel Grid Tests ---")
-
-        # Test pixelOn
-        self.pixelOn(0, 0) # Top-left
-        self.pixelOn(self.PIXEL_COLS - 1, 0) # Top-right
-        self.pixelOn(0, self.PIXEL_ROWS - 1) # Bottom-left
-        self.pixelOn(self.PIXEL_COLS - 1, self.PIXEL_ROWS - 1) # Bottom-right
-        self.pixelOn(self.PIXEL_COLS // 2, self.PIXEL_ROWS // 2) # Center
-
-        # Test pixelOff
-        self.pixelOff(1, 0)
-        self.pixelOff(self.PIXEL_COLS - 2, 0)
-        self.pixelOff(1, self.PIXEL_ROWS - 1)
-        self.pixelOff(self.PIXEL_COLS - 2, self.PIXEL_ROWS - 1)
-
-        # Test pixelChange (toggle)
-        self.pixelChange(2, 0) # Should turn white (from initial black)
-        self.pixelChange(2, 0) # Should turn black again
-
-        # Test getPixel
-        print(f"Pixel (0,0) state: {self.getPixel(0, 0)} (Expected: 1)")
-        print(f"Pixel (1,0) state: {self.getPixel(1, 0)} (Expected: 0)")
-        print(f"Pixel (2,0) state: {self.getPixel(2, 0)} (Expected: 1)")
-        print(f"Pixel ({self.PIXEL_COLS // 2},{self.PIXEL_ROWS // 2}) state: {self.getPixel(self.PIXEL_COLS // 2, self.PIXEL_ROWS // 2)} (Expected: 1)")
-
-        # Test out of bounds exception
-        try:
-            self.getPixel(-1, 0)
-        except IndexError as e:
-            print(f"Caught expected error for (-1,0): {e}")
-        try:
-            self.pixelOn(self.PIXEL_COLS, 0)
-        except IndexError as e:
-            print(f"Caught expected error for ({self.PIXEL_COLS},0): {e}")
-
-        print("--- Pixel Grid Tests Complete ---")
+                        self.pixelOn(tx, ty)
+                except:
+                    pass
 
     def _create_pixel_grid(self, canvas_width, canvas_height):
-        self.pixel_grid_canvas.delete("all") # Clear any existing drawings
-        self.pixels = []
-
         # Calculate pixel dimensions based on integer pixel size
         pixel_width = canvas_width / self.PIXEL_COLS
         pixel_height = canvas_height / self.PIXEL_ROWS
 
-        for row in range(self.PIXEL_ROWS):
-            for col in range(self.PIXEL_COLS):
-                x1 = col * pixel_width
-                y1 = row * pixel_height
-                x2 = x1 + pixel_width
-                y2 = y1 + pixel_height
-                pixel_id = self.pixel_grid_canvas.create_rectangle(x1, y1, x2, y2,
-                                                                   fill=self.PIXEL_ON_COLOR,
-                                                                   outline="") # Borderless
-                self.pixels.append(pixel_id)
+        if not self.pixels: # If pixels list is empty, create them for the first time
+            self.pixel_grid_canvas.delete("all") # Clear any existing drawings
+            for row in range(self.PIXEL_ROWS):
+                for col in range(self.PIXEL_COLS):
+                    x1 = col * pixel_width
+                    y1 = row * pixel_height
+                    x2 = x1 + pixel_width
+                    y2 = y1 + pixel_height
+                    pixel_id = self.pixel_grid_canvas.create_rectangle(x1, y1, x2, y2,
+                                                                       fill=self.PIXEL_ON_COLOR,
+                                                                       outline="") # Borderless
+                    self.pixels.append(pixel_id)
+        else: # Otherwise, update the coordinates of existing pixels
+            for row in range(self.PIXEL_ROWS):
+                for col in range(self.PIXEL_COLS):
+                    x1 = col * pixel_width
+                    y1 = row * pixel_height
+                    x2 = x1 + pixel_width
+                    y2 = y1 + pixel_height
+                    index = row * self.PIXEL_COLS + col
+                    self.pixel_grid_canvas.coords(self.pixels[index], x1, y1, x2, y2)
 
     def _perform_redraw(self, new_canvas_width, new_canvas_height, current_pixel_size):
         # Only redraw if the pixel size has actually changed to a new integer value
@@ -158,7 +265,6 @@ class MenuMakerApp:
             # Configure canvas size
             self.pixel_grid_canvas.place_configure(width=new_canvas_width, height=new_canvas_height)
             self._create_pixel_grid(new_canvas_width, new_canvas_height)
-            self._draw_border_pattern()
             self.pixel_grid_canvas.update_idletasks()
 
             # Adjust the width of both frames to match the canvas width
@@ -223,13 +329,326 @@ class MenuMakerApp:
         current_color = self.pixel_grid_canvas.itemcget(self.pixels[index], "fill")
         return 1 if current_color == self.PIXEL_ON_COLOR else 0
 
+    def _drawFilledBlackBoxRoutine(self, x1, y1, x2, y2):
+        """
+        Fills a rectangular area with black pixels.
+        (x1, y1) is the top-left corner, (x2, y2) is the bottom-right corner.
+        """
+        for y in range(y1, y2 + 1):
+            for x in range(x1, x2 + 1):
+                self.pixelOn(x, y)
+
+    def _drawBlackBoxWithBordersRoutine(self, x1, y1, x2, y2):
+        """
+        Draws a stylized box with a black fill and a 1-pixel white border
+        based on the provided Z80 routine logic.
+        (x1, y1) is the top-left corner, (x2, y2) is the bottom-right corner
+        of the overall black box.
+        """
+        # 1. Fill the entire box with black
+        x2 = x2 - 1
+        y2 = y2 - 1
+        self._drawFilledBlackBoxRoutine(x1, y1, x2, y2)
+
+        # 2. Calculate inner dimensions for border drawing (Z80 logic)
+        # E = x2 - x1 - 4
+        # D = y2 - y1 - 4
+        # These represent the number of pixels to draw for the horizontal/vertical segments
+        # of the inner border, excluding the corners.
+        width_inner_segment = x2 - x1 - 4 + 1
+        height_inner_segment = y2 - y1 - 4 + 1
+
+        # If the box is too small to draw a border, return
+        if width_inner_segment < 0 or height_inner_segment < 0:
+            return
+
+        # Initialize current drawing coordinates (L, H in Z80)
+        current_x = x1
+        current_y = y1
+
+        # Z80: inc h, inc L, inc h, inc L
+        current_y += 1 # H = y1 + 1
+        current_x += 1 # L = x1 + 1
+        current_y += 1 # H = y1 + 2
+        current_x += 1 # L = x1 + 2
+        # Current (x, y) is now (x1 + 2, y1 + 2)
+
+        # Z80: call drawWhitePoint
+        self.pixelOff(current_x, current_y) # Draws (x1+2, y1+2)
+
+        # Z80: dec h
+        current_y -= 1 # Current (x, y) is now (x1 + 2, y1 + 1)
+
+        # Draw Top Border (Z80: ld b,e; loop call drawWhitePoint, inc L)
+        for _ in range(width_inner_segment):
+            self.pixelOff(current_x, current_y)
+            current_x += 1
+
+        # Z80: dec L
+        current_x -= 1
+
+        # Z80: inc H
+        current_y += 1
+
+        # Z80: call drawWhitePoint
+        self.pixelOff(current_x, current_y) # Draws (x2-2, y1+2)
+
+        # Z80: inc L
+        current_x += 1 # Current (x, y) is now (x2 - 2, y1 + 2)
+
+        # Draw Right Border (Z80: ld b,d; loop call drawWhitePoint, inc h)
+        for _ in range(height_inner_segment):
+            self.pixelOff(current_x, current_y)
+            current_y += 1
+
+        # Z80: dec h
+        current_y -= 1
+
+        # Z80: dec L
+        current_x -= 1
+
+        # Z80: call drawWhitePoint
+        self.pixelOff(current_x, current_y) # Draws (x2-3, y2-2)
+
+        # Z80: inc h
+        current_y += 1 # Current (x, y) is now (x2 - 3, y2 - 2)
+
+        # Draw Bottom Border (Z80: ld b,e; loop call drawWhitePoint, dec L)
+        for _ in range(width_inner_segment):
+            self.pixelOff(current_x, current_y)
+            current_x -= 1
+
+        # Z80: inc L
+        current_x += 1
+
+        # Z80: dec h
+        current_y -= 1
+
+        # Z80: call drawWhitePoint
+        self.pixelOff(current_x, current_y) # Draws (x1+2, y2-3)
+
+        # Z80: dec L
+        current_x -= 1 # Current (x, y) is now (x1 + 1, y2 - 3)
+
+        # Draw Left Border (Z80: ld b,d; loop call drawWhitePoint, dec h)
+        for _ in range(height_inner_segment):
+            self.pixelOff(current_x, current_y)
+            current_y -= 1
+
     def parse_input(self, event=None):
+        # Reset the entire pixel grid to black
+        for row in range(self.PIXEL_ROWS):
+            for col in range(self.PIXEL_COLS):
+                self.pixelOn(col, row)
+
         input_text = self.text_input.get("1.0", tk.END).strip()
-        print(f"Input received: {input_text}") # For debugging
-        # Placeholder for parsing logic and updating pixel grid/status
-        self.parser_status_label.config(text=f"Parsed: '{input_text}'")
-        # Clear the text input after processing
-        self.text_input.delete("1.0", tk.END)
+        #print(f"Input received: {input_text}") # For debugging
+        tokenstream = parser.TokenStream.from_str(input_text)
+        try:
+            exception = None
+            parseobj = parser.Parser(tokenstream.tokens, self.gamemap.symtable)
+            segment:parser.SegmentDef = parseobj.segments["__DEFAULT"]
+            origin = segment.baseaddr
+            data = segment.data
+        except Exception as e:
+            exception = e
+            origin = 0
+            data = bytearray([0])
+
+        self.gamemap.memory[origin:origin+len(data)] = data
+        if len(self.gamemap.memory) != 65536:
+            raise ValueError("BAD OBJECT REPLACEMENT IN GAMEMAP MEMORY.")
+        ptr = origin
+        counter = 0
+        bound_start = origin
+        bound_end = origin+len(data)
+        EOF_encountered = None
+        while True:
+            if EOF_encountered:
+                if exception:
+                    self.parser_status_label.config(text=f"Exc: {exception}")
+                else:
+                    self.parser_status_label.config(text=f"{len(data)} bytes at {origin:04x} ran successfully.")
+                break
+            if (ptr < bound_start or ptr >= bound_end) or EOF_encountered:
+                self.parser_status_label.config(text=f"ERR: Stream exited bounds without EOF.")
+                break
+            counter += 1
+            if counter > 1000:
+                self.parser_status_label.config(text=f"Possible infinite loop detected. Halted.")
+                return "break"
+            opcode = self.gamemap.memory[ptr]
+            if opcode == 0: # m_eof
+                # Consumes 0 more bytes
+                ptr += 1
+                EOF_encountered = True
+                continue    #Hit EOF handler at top of routine.
+            elif opcode == 1: # m_setxy(x,y)
+                # Consumes 2 more bytes (x, y)
+                x = self.gamemap.memory[ptr + 1]
+                y = self.gamemap.memory[ptr + 2]
+                self.gamemap.x(x)
+                self.gamemap.y(y)
+                ptr += 3
+            elif opcode == 2: # m_addxy(x,y)
+                # Consumes 2 more bytes (x, y)
+                x = self.gamemap.memory[ptr + 1]
+                y = self.gamemap.memory[ptr + 2]
+                self.gamemap.x((self.gamemap.x()+x) & 0xFF)
+                self.gamemap.y((self.gamemap.y()+y) & 0xFF)
+                ptr += 3
+            elif opcode == 3: # m_call(adr)
+                # Consumes 2 more bytes (lo(adr), hi(adr))
+                lo_adr = self.gamemap.memory[ptr + 1]
+                hi_adr = self.gamemap.memory[ptr + 2]
+                raise NotImplementedError("OPCODE 3 (CALL) requires Z80 simulator or equivalent.")
+                # TODO: Implement call logic
+                ptr += 3
+            elif opcode == 4: # m_print(adr)
+                # Consumes 2 more bytes (lo(adr), hi(adr))
+                lo_adr = self.gamemap.memory[ptr + 1]
+                hi_adr = self.gamemap.memory[ptr + 2]
+                raise NotImplementedError("OPCODE 4 requires print stack or equivalent.")
+                # TODO: Implement print logic
+                ptr += 3
+            elif opcode == 5: # m_printacc(flags)
+                # Consumes 1 more byte (flags)
+                flags = self.gamemap.memory[ptr + 1]
+                raise NotImplementedError("OPCODE 5 requires that I stop being lazy about printing integers.")
+                # TODO: Implement printacc logic
+                ptr += 2
+            elif opcode == 6: # m_jrfnz(flagid,rel)
+                # Consumes 2 more bytes (flagid, rel)
+                flagid = self.gamemap.memory[ptr + 1]
+                rel = self.gamemap.memory[ptr + 2]
+                rel_int8 = rel if rel < 128 else rel-256
+                flagbyte = (flagid >> 3) & 0b00011111
+                flagmask = 1<<(flagid&7)
+                if self.gamemap.flags(flagbyte) & flagmask:
+                    ptr = ptr + 2 + rel_int8
+                else:
+                    ptr += 3
+            elif opcode == 7: # m_jrfz(flagid,rel)
+                # Consumes 2 more bytes (flagid, rel)
+                flagid = self.gamemap.memory[ptr + 1]
+                rel = self.gamemap.memory[ptr + 2]
+                rel_int8 = rel if rel < 128 else rel-256
+                flagbyte = (flagid >> 3) & 0b00011111
+                flagmask = 1<<(flagid&7)
+                if not self.gamemap.flags(flagbyte) & flagmask:
+                    ptr = ptr + 2 + rel_int8
+                else:
+                    ptr += 3
+            elif opcode == 8: # m_drawbox(x1,y1,x2,y2)
+                # Consumes 4 more bytes (x1, y1, x2, y2)
+                x1 = self.gamemap.memory[ptr + 1]
+                y1 = self.gamemap.memory[ptr + 2]
+                x2 = self.gamemap.memory[ptr + 3]
+                y2 = self.gamemap.memory[ptr + 4]
+                self._drawBlackBoxWithBordersRoutine(x1, y1, x2, y2)
+                self.gamemap.cr((self.gamemap.BML()+x1)&0xFF)
+                self.gamemap.x(self.gamemap.cr())
+                self.gamemap.y((y1+self.gamemap.BMT())&0xFF)
+                ptr += 5
+            elif opcode == 9: # m_menuopt()
+                # Consumes 0 more bytes
+                # TODO: Implement menuopt logic
+                raise NotImplementedError("OPCODE 9 requires that I have an actual menu system.")
+                ptr += 1
+            elif opcode == 10: # m_newline()
+                # Consumes 0 more bytes
+                self.gamemap.x(self.gamemap.cr())
+                self.gamemap.y((self.gamemap.NLH()+self.gamemap.y())&0xFF)
+                ptr += 1
+            elif opcode == 11: # m_setflag(flagid)
+                # Consumes 1 more byte (flagid)
+                flagid = self.gamemap.memory[ptr + 1]
+                flagbyte = (flagid >> 3) & 0b00011111
+                flagmask = 1<<(flagid&7)
+                self.gamemap.flags(flagbyte, self.gamemap.flags(flagbyte) | flagmask)
+                ptr += 2
+            elif opcode == 12: # m_togflag(flagid)
+                # Consumes 1 more byte (flagid)
+                flagid = self.gamemap.memory[ptr + 1]
+                flagbyte = (flagid >> 3) & 0b00011111
+                flagmask = 1<<(flagid&7)
+                self.gamemap.flags(flagbyte, self.gamemap.flags(flagbyte) ^ flagmask)
+                ptr += 2
+            elif opcode == 13: # m_setleftmargin()
+                # Consumes 0 more bytes
+                self.gamemap.cr(self.gamemap.x())
+                ptr += 1
+            elif opcode == 14: # m_clracc()
+                # Consumes 0 more bytes
+                self.gamemap.acc(0)
+                ptr += 1
+            elif opcode == 15: # m_exacc()
+                # Consumes 0 more bytes
+                temp_acc = self.gamemap.acc()
+                temp_shad = self.gamemap.accshad()
+                self.gamemap.acc(temp_shad)
+                self.gamemap.accshad(temp_acc)
+                ptr += 1
+            elif opcode == 16: # m_setacc1(val1b)
+                # Consumes 1 more byte (val1b)
+                val1b = self.gamemap.memory[ptr + 1]
+                self.gamemap.acc1(val1b)
+                ptr += 2
+            elif opcode == 17: # m_setacc2(val2b)
+                # Consumes 2 more bytes (lo(val2b), hi(val2b))
+                lo_val2b = self.gamemap.memory[ptr + 1]
+                hi_val2b = self.gamemap.memory[ptr + 2]
+                self.gamemap.acc(lo_val2b+(256*hi_val2b))
+                ptr += 3
+            elif opcode == 18: # m_adrtoacc1(adr)
+                # Consumes 2 more bytes (lo(adr), hi(adr))
+                lo_adr = self.gamemap.memory[ptr + 1]
+                hi_adr = self.gamemap.memory[ptr + 2]
+                addr = (hi_adr*256)+lo_adr
+                self.gamemap.acc1(self.gamemap.memory[addr])
+                ptr += 3
+            elif opcode == 19: # m_adrtoacc2(adr)
+                # Consumes 2 more bytes (lo(adr), hi(adr))
+                lo_adr = self.gamemap.memory[ptr + 1]
+                hi_adr = self.gamemap.memory[ptr + 2]
+                addr = (hi_adr*256)+lo_adr
+                lo_val = self.gamemap.memory[addr]
+                hi_val = self.gamemap.memory[addr+1]
+                self.gamemap.acc((hi_val*256)+lo_val)
+                ptr += 3
+            elif opcode == 20: # m_setidx(adr)
+                # Consumes 2 more bytes (lo(adr), hi(adr))
+                lo_adr = self.gamemap.memory[ptr + 1]
+                hi_adr = self.gamemap.memory[ptr + 2]
+                self.gamemap.idx(lo_adr+(256*hi_adr))
+                ptr += 3
+            elif opcode == 21: # m_addindexed(offset)
+                # Consumes 1 more byte (offset)
+                # NOTE: Documentation says this: memory1[IDX+offset]+ACC -> ACC
+                #       Documentation does not specify signedness at any stage
+                #       other than offset, nor does it specify size.
+                # NOTE: Assuming uint8_t retrieval, value sum, and storage.
+                offset = self.gamemap.memory[ptr + 1]
+                offset_int8 = offset if offset < 128 else offset-256
+                memlookup = self.gamemap.memory[self.gamemap.idx()+offset_int8]
+                self.gamemap.acc1(self.gamemap.acc1()+memlookup)
+                ptr += 2
+            elif opcode == 22: # m_mltacc(val)
+                # Consumes 1 more byte (val)
+                # NOTE: This saves full result into acc.
+                val = self.gamemap.memory[ptr + 1]
+                self.gamemap.acc(self.gamemap.acc() * val)
+                ptr += 2
+            elif opcode == 23: # m_mltacc2(val)
+                # Consumes 1 more byte (val)
+                # NOTE: This saves only upper byte of result into acc.
+                val = self.gamemap.memory[ptr + 1]
+                self.gamemap.acc(((self.gamemap.acc() * val) >> 8) & 0xFF)
+                ptr += 2
+            else:
+                nx, _ = self.print_char(opcode, self.gamemap.x(), self.gamemap.y())
+                self.gamemap.x(nx)
+                ptr += 1 # Advance to avoid infinite loop on unknown opcode
         return "break" # Prevents the default newline character from being inserted
 
 if __name__ == "__main__":

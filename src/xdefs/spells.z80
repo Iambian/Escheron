@@ -10,10 +10,10 @@
         #define X_IDX eval(idx)
         #define X_NAME concat(varname)
         X_NAME  .equ X_IDX
+        #if X_IDX > 63
+            .error "Indices for spells may not be greater than 63"
+        #endif
     #endmacro
-    #if X_IDX > 63
-        .error "Indices for spells may not be greater than 63"
-    #endif
 #endif
 
 ;index, spell cost, displayname, varname
