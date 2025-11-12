@@ -273,6 +273,7 @@ dhl_fetch_long_values 	.equ 7
 #define m_addindexed(offset) .db 21, offset
 #define m_mltacc(val) .db 22,val
 #define m_mltacc2(val) .db 23,val
+#define m_signext() .db 24
 
 ;==============================================================================
 ; Higher level game equates. These pertain to constants and flags as used

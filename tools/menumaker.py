@@ -128,6 +128,19 @@ class MenuMakerApp:
     PIXEL_ON_COLOR = "black"
     PIXEL_OFF_COLOR = "white"
 
+    # Display flags
+    dhl_show_lead_zeroes  = 3
+    dhl_right_align_num   = 4
+    dhl_indic_neg_sign    = 5
+    dhl_show_pos_sign     = 6
+    dhl_fetch_long_values = 7
+
+    mf_SHOW_LEAD_ZEROES = (1 << dhl_show_lead_zeroes)
+    mf_RIGHT_ALIGN = (1 << dhl_right_align_num)
+    mf_SIGNED_SHOW_NEG = (1 << dhl_indic_neg_sign)
+    mf_SIGNED_SHOW_POS = (1 << dhl_show_pos_sign)
+    mf_USE_LONG_VALUES = (1 << dhl_fetch_long_values)
+
     def __init__(self, master):
         self.gamemap = GameMap()
         self.master = master
@@ -189,6 +202,74 @@ class MenuMakerApp:
 
         # Bind Enter key to parse_input method
         self.text_input.bind("<F5>", self.parse_input)
+
+    def _print_number(self, number, flags):
+        # Extract digit limit (first three bits)
+        digit_limit = flags & 0b00000111 # mf_1DIGIT to mf_7DIGIT, mf_8DIGIT is 0
+
+        # Determine signedness
+        is_signed = (flags & self.mf_SIGNED_SHOW_NEG) or (flags & self.mf_SIGNED_SHOW_POS)
+
+        # Convert 16-bit unsigned to signed if necessary for internal logic
+        original_number = number
+        if is_signed and (number & 0x8000):
+            original_number = -(0x10000 - number)
+
+        # Calculate max/min values based on digit_limit
+        max_val = (10 ** digit_limit) - 1 if digit_limit > 0 else 0
+        min_val = -(10 ** digit_limit) + 1 if digit_limit > 0 else 0 # For signed, e.g., -99 for 2 digits
+        print(f"Given {number} flags {flags}, min: {min_val}, max: {max_val}")
+
+        # Clamp the number
+        if is_signed:
+            if original_number > max_val:
+                number_to_print = max_val
+            elif original_number < min_val:
+                number_to_print = min_val
+            else:
+                number_to_print = original_number
+        else: # Unsigned
+            if original_number < 0: # Unsigned numbers cannot be negative
+                number_to_print = 0
+            elif original_number > max_val:
+                number_to_print = max_val
+            else:
+                number_to_print = original_number
+
+        # Format the number string
+        num_str = str(abs(number_to_print)) # Start with absolute value for padding/zfill
+
+        # Apply leading zeroes
+        if flags & self.mf_SHOW_LEAD_ZEROES:
+            num_str = num_str.zfill(digit_limit)
+
+        # Add sign if necessary
+        if is_signed:
+            if number_to_print < 0:
+                num_str = "-" + num_str
+            elif number_to_print > 0 and (flags & self.mf_SIGNED_SHOW_POS):
+                num_str = "+" + num_str
+        
+        # Handle right alignment
+        if flags & self.mf_RIGHT_ALIGN:
+            # The total width for right alignment should account for the digit limit
+            # plus one for the sign if present.
+            actual_display_width = digit_limit
+            if is_signed and (number_to_print < 0 or (number_to_print > 0 and (flags & self.mf_SIGNED_SHOW_POS))):
+                actual_display_width += 1 # Account for the sign character
+
+            # Pad with spaces to the calculated display width
+            num_str = num_str.rjust(actual_display_width)
+            # Space-doubling because spaces in this font is only half a number's width
+            num_str = ''.join(["  " if i == ' ' else i for i in num_str])
+
+
+        # Print the formatted string
+        current_x = self.gamemap.x()
+        current_y = self.gamemap.y()
+        for char_code in num_str:
+            current_x, current_y = self.print_char(ord(char_code), current_x, current_y)
+        self.gamemap.x(current_x) # Update gamemap's x position
 
     def pixel_grid_welcome_message(self):
         # Prints a welcome message on the freshly-initialized pixel grid
@@ -463,15 +544,23 @@ class MenuMakerApp:
         bound_start = origin
         bound_end = origin+len(data)
         EOF_encountered = None
+        print_stack = []
         while True:
             if EOF_encountered:
+                if len(print_stack):
+                    ptr = print_stack.pop()
+                    EOF_encountered = False
+                    continue
                 if exception:
                     self.parser_status_label.config(text=f"Exc: {exception}")
                 else:
                     self.parser_status_label.config(text=f"{len(data)} bytes at {origin:04x} ran successfully.")
                 break
             if (ptr < bound_start or ptr >= bound_end) or EOF_encountered:
-                self.parser_status_label.config(text=f"ERR: Stream exited bounds without EOF.")
+                if exception:
+                    self.parser_status_label.config(text=f"Exc: {exception}")
+                else:
+                    self.parser_status_label.config(text=f"ERR: Stream exited bounds without EOF.")
                 break
             counter += 1
             if counter > 1000:
@@ -508,14 +597,14 @@ class MenuMakerApp:
                 # Consumes 2 more bytes (lo(adr), hi(adr))
                 lo_adr = self.gamemap.memory[ptr + 1]
                 hi_adr = self.gamemap.memory[ptr + 2]
-                raise NotImplementedError("OPCODE 4 requires print stack or equivalent.")
-                # TODO: Implement print logic
-                ptr += 3
+                print_stack.append(ptr+3)
+                ptr = (hi_adr*256)+lo_adr
+                continue
             elif opcode == 5: # m_printacc(flags)
                 # Consumes 1 more byte (flags)
                 flags = self.gamemap.memory[ptr + 1]
-                raise NotImplementedError("OPCODE 5 requires that I stop being lazy about printing integers.")
-                # TODO: Implement printacc logic
+                number = self.gamemap.acc()
+                self._print_number(number, flags)
                 ptr += 2
             elif opcode == 6: # m_jrfnz(flagid,rel)
                 # Consumes 2 more bytes (flagid, rel)
@@ -645,6 +734,12 @@ class MenuMakerApp:
                 val = self.gamemap.memory[ptr + 1]
                 self.gamemap.acc(((self.gamemap.acc() * val) >> 8) & 0xFF)
                 ptr += 2
+            elif opcode == 24: # m_signext()
+                # Consumes 0 more bytes
+                # NOTE: Sign extends into upper byte of acc, assuming int8_t
+                val = self.gamemap.acc1()
+                val = val if not (val & 0x80) else val | 0xFF00
+                self.gamemap.acc(val)
             else:
                 nx, _ = self.print_char(opcode, self.gamemap.x(), self.gamemap.y())
                 self.gamemap.x(nx)

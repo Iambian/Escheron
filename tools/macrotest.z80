@@ -39,6 +39,28 @@ m_eof
 
 
 
+.org $9D95
+m_setxy(10,10)
+m_setacc2($FFFF) ; -1
+m_printacc((1<<5)|1) ; mf_SIGNED_SHOW_NEG, 1 digit -> -9
+m_newline()
+m_setacc2($000A) ; 10
+m_printacc((1<<5)|(1<<6)|1) ; mf_SIGNED_SHOW_NEG | mf_SIGNED_SHOW_POS, 1 digit -> +9
+m_newline()
+m_setacc2($000A) ; 10
+m_printacc((1<<3)|3) ; mf_SHOW_LEAD_ZEROES, 3 digits -> 010
+m_newline()
+m_setacc2($000A) ; 10
+m_printacc((1<<4)|3) ; mf_RIGHT_ALIGN, 3 digits -> " 10"
+m_newline()
+m_setacc2($0064) ; 100
+m_printacc((1<<5)|2) ; mf_SIGNED_SHOW_NEG, 2 digits -> 99 (clamped)
+m_newline()
+m_setacc2($FF9C) ; -100 (0xFF9C is -100 as 16-bit signed)
+m_printacc((1<<5)|2) ; mf_SIGNED_SHOW_NEG, 2 digits -> -99 (clamped)
+m_eof
+
+
 ;m_setxy($05,5)    ;this is a comment
 ;.db "Welcome \rto Americana.\nPlease make your\nselection, followed\nby the pound\nsign now.\n"
 ;m_setacc2(%11110000)
