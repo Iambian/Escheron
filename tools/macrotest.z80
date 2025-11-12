@@ -39,8 +39,9 @@ m_eof
 
 
 
-.org $9D95
+;.org $9D95
 m_setxy(10,10)
+.db "\r"
 m_setacc2($FFFF) ; -1
 m_printacc((1<<5)|1) ; mf_SIGNED_SHOW_NEG, 1 digit -> -9
 m_newline()
@@ -59,6 +60,33 @@ m_newline()
 m_setacc2($FF9C) ; -100 (0xFF9C is -100 as 16-bit signed)
 m_printacc((1<<5)|2) ; mf_SIGNED_SHOW_NEG, 2 digits -> -99 (clamped)
 m_eof
+
+
+
+
+
+.org $4000
+ m_drawbox(0,0,96,64)    ;mainbox
+ m_drawbox(60,45,92,63)  ;moneybox
+ m_addxy(0,2)
+ m_setidx(defaultSaveFile)
+ m_clracc()
+ m_addindexed(gold_stash+1)
+ m_swapaccbytes()
+ m_addindexed(gold_stash+0)
+ m_printacc(mf_5DIGIT|mf_RIGHT_ALIGN)
+.db "G"
+ m_drawbox(60,0,92,46)   ;statusbox
+.db "Item\nMagic\nEquip\nStatus\nSave"
+m_eof
+
+
+
+
+
+
+
+
 
 
 ;m_setxy($05,5)    ;this is a comment

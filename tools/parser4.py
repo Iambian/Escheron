@@ -83,7 +83,9 @@ class Parser(object):
     MAX_RECURSION_DEPTH = 12
     MATH_OPS = ('+','-','*','/','&','|','^','<<','>>','==','!=','<','>','<=','>=','&&','||')
     Z80INST = {'ADC', 'ADD', 'AND', 'BIT', 'CALL', 'CCF', 'CP', 'CPD', 'CPI', 'CPIR', 'CPL', 'DAA', 'DEC', 'DI', 'DJNZ', 'EI', 'EX', 'EXX', 'HALT', 'IM', 'IN', 'INC', 'IND', 'INDR', 'INI', 'INIR', 'JP', 'JR', 'LD', 'LDD', 'LDI', 'NEG', 'NOP', 'OR',  'OTDR', 'OTIR', 'OUT', 'OUTD', 'OUTI', 'POP', 'PUSH', 'RES', 'RET', 'RETI', 'RETN' 'RL', 'RLA', 'RLC', 'RLCA', 'RLD', 'RR', 'RRA', 'RRCA', 'RRD', 'RST', 'SBC', 'SCF', 'SET', 'SLA', 'SLL', 'SRA', 'SRL', 'SUB', 'XOR'}
-    def __init__(self, tokens: list[Token], oldsymtable=None):
+    def __init__(self, tokens: list[Token], oldsymtable=None, silent=False):
+        if silent:
+            self.__class__.DEBUGMODE = False
         if oldsymtable is None:
             oldsymtable = dict()
         self.tokens:list[Token] = tokens
@@ -117,7 +119,8 @@ class Parser(object):
                 outlen = 0
             else:
                 outlen = len(self.curseg.data)
-            print(f"Two-pass assembly completed. Output {outlen} bytes, {len(self.symtable)} symbols.")
+            if not silent:
+                print(f"Two-pass assembly completed. Output {outlen} bytes, {len(self.symtable)} symbols.")
         if self.__class__.DEBUGMODE and self.__class__.SHOW_SYMTABLE:
             mode = self.__class__.SHOW_SYMTABLE_MODE
             print("--Symbol Table--")

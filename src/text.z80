@@ -273,6 +273,32 @@ printF_skipmltacc1:
 	ld	(textacc),a
 	ret
 printF_skipmltacc2:
+	djnz printF_skipsignext
+	;24 - Sign-extend the signed 1 byte value in the text accumulator into
+	;	  the second byte of the text accumulator.
+	ld	a,(textacc)
+	add a,a  	;get sign into carry
+	sbc a,a   	;0 if no carry, $FF if carry
+	ld  (textacc),a
+	ret
+printF_skipsignext:
+	djnz printF_skipswapaccbytes
+	ld	hl,(textacc)
+	ld	a,l
+	ld	l,h
+	ld  h,a
+	ld	(textacc),hl
+	ret
+printF_skipswapaccbytes:
+;	djnz printF_skip
+;	ret
+;printF_skip:
+;	djnz printF_skip
+;	ret
+;printF_skip:
+;	djnz printF_skip
+;	ret
+;printF_skip:
 ;	djnz printF_skip
 ;	ret
 ;printF_skip:

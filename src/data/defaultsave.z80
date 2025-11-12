@@ -1,6 +1,6 @@
 defaultSaveFile:
 .db 1, 2, 3                       ;cur_party_table (points to slots) [1-7]
-.dw 00000                         ;gold_stash
+.dw 65000                         ;gold_stash
 .dw xy(33,3)                      ;player_posyx
 .db 0 ; ragnoth_mapid                 ;player_mapid
 .db -1,-1,-1                      ;ship1_posyx

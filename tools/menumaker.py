@@ -2,6 +2,8 @@ import tkinter as tk
 from tkinter import ttk
 import dcfreader
 import parser4 as parser
+import os
+import time
 
 # TODO: FIX SIGNED VS NONSIGNED ARITHMETIC IN SCRIPT SYSTEM. THIS BUG IS VISIBLE
 # WHEN TRYING TO PERFORM m_addxy() WITH NEGATIVE NUMBERS.
@@ -32,11 +34,11 @@ class GameMap(object):
         self.memory = [0] * 65536
         # Definitions
         tokens = parser.Tokenizer.from_str(cls.symfile).tokens
-        self.incparse = parser.Parser(tokens)
+        self.incparse = parser.Parser(tokens, silent=True)
         self.symtable = self.incparse.symtable
         #Default data
         tokens = parser.Tokenizer.from_str(cls.defaultsave).tokens
-        parserobj = parser.Parser(tokens, self.symtable)
+        parserobj = parser.Parser(tokens, self.symtable, silent=True)
         segment = parserobj.curseg
         segorg = segment.baseaddr
         seglen = len(segment.data)
@@ -141,12 +143,17 @@ class MenuMakerApp:
     mf_SIGNED_SHOW_POS = (1 << dhl_show_pos_sign)
     mf_USE_LONG_VALUES = (1 << dhl_fetch_long_values)
 
-    def __init__(self, master):
+    SHOW_PERFORMANCE_METRICS = False
+
+    def __init__(self, master:tk.Tk):
         self.gamemap = GameMap()
         self.master = master
         self.dcf_reader = dcfreader.DCFReader("tools/escheron.dcf")
         master.title("Application Title")
         master.state('zoomed')
+
+        self.input_history_file = "tools/menumaker_input.txt"
+        master.protocol("WM_DELETE_WINDOW", self._on_closing) # Handle window close event
 
         # Configure grid to be resizable
         master.grid_rowconfigure(0, weight=1)
@@ -200,8 +207,50 @@ class MenuMakerApp:
         self.text_input_scrollbar.grid(row=0, column=1, sticky="ns")
         self.text_input.config(yscrollcommand=self.text_input_scrollbar.set)
 
-        # Bind Enter key to parse_input method
-        self.text_input.bind("<F5>", self.parse_input)
+        self._load_input_history() # Load input history on startup
+
+        # Bind F5 key to parse_input method
+        self.text_input.bind("<F5>", self._reparse)
+        self.master.bind_all("<F6>", self._reinit_and_reparse)
+
+    def _reparse(self, *args, **kwargs):
+        time_start = time.time()
+        self.parse_input(*args, **kwargs)
+        if self.__class__.SHOW_PERFORMANCE_METRICS:
+            print(f"Time to execute reparse: {time.time()-time_start}")
+
+
+    def _reinit_and_reparse(self, *args, **kwargs):
+        time_start = time.time()
+        self.gamemap = GameMap()
+        self.parse_input()
+        if self.__class__.SHOW_PERFORMANCE_METRICS:
+            print(f"Time to execute reinit and reparse: {time.time()-time_start}")
+
+    def _on_closing(self):
+        """Handles the window closing event, saving the input history."""
+        self._save_input_history()
+        self.master.destroy()
+
+    def _save_input_history(self):
+        """Saves the current content of the text input field to a file."""
+        content = self.text_input.get("1.0", tk.END).strip()
+        try:
+            with open(self.input_history_file, "w", encoding="utf-8") as f:
+                f.write(content)
+        except IOError as e:
+            print(f"Error saving input history: {e}")
+
+    def _load_input_history(self):
+        """Loads the input history from a file and inserts it into the text input field."""
+        if os.path.exists(self.input_history_file):
+            try:
+                with open(self.input_history_file, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    self.text_input.delete("1.0", tk.END)
+                    self.text_input.insert("1.0", content)
+            except IOError as e:
+                print(f"Error loading input history: {e}")
 
     def _print_number(self, number, flags):
         # Extract digit limit (first three bits)
@@ -218,7 +267,7 @@ class MenuMakerApp:
         # Calculate max/min values based on digit_limit
         max_val = (10 ** digit_limit) - 1 if digit_limit > 0 else 0
         min_val = -(10 ** digit_limit) + 1 if digit_limit > 0 else 0 # For signed, e.g., -99 for 2 digits
-        print(f"Given {number} flags {flags}, min: {min_val}, max: {max_val}")
+        #print(f"Given {number} flags {flags}, min: {min_val}, max: {max_val}")
 
         # Clamp the number
         if is_signed:
@@ -527,7 +576,7 @@ class MenuMakerApp:
         tokenstream = parser.TokenStream.from_str(input_text)
         try:
             exception = None
-            parseobj = parser.Parser(tokenstream.tokens, self.gamemap.symtable)
+            parseobj = parser.Parser(tokenstream.tokens, self.gamemap.symtable, silent=True)
             segment:parser.SegmentDef = parseobj.segments["__DEFAULT"]
             origin = segment.baseaddr
             data = segment.data
@@ -740,6 +789,12 @@ class MenuMakerApp:
                 val = self.gamemap.acc1()
                 val = val if not (val & 0x80) else val | 0xFF00
                 self.gamemap.acc(val)
+                ptr += 1
+            elif opcode == 25: #m_swapaccbytes()
+                # Consumes 0 more bytes.
+                b0, b1 = self.gamemap.acc().to_bytes(2, byteorder="little")
+                self.gamemap.acc((b0*256)+b1)
+                ptr += 1
             else:
                 nx, _ = self.print_char(opcode, self.gamemap.x(), self.gamemap.y())
                 self.gamemap.x(nx)
