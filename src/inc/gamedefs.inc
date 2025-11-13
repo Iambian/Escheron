@@ -275,6 +275,9 @@ dhl_fetch_long_values 	.equ 7
 #define m_mltacc2(val) .db 23,val
 #define m_signext() .db 24
 #define m_swapaccbytes() .db 25
+#define m_addidxtoacc() .db 26
+#define m_exaccidx() .db 27
+#define m_addaccshad() .db 28
 
 ;==============================================================================
 ; Higher level game equates. These pertain to constants and flags as used

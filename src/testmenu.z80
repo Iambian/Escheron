@@ -1,0 +1,48 @@
+#define __REPARSE_INTERVAL 1000
+
+.org $4000
+ m_drawbox(0,0,96,64)    ;mainbox
+ m_drawbox(60,45,92,63)  ;moneybox
+ m_addxy(0,2)
+ m_setidx(defaultSaveFile)
+ m_clracc()
+ m_addindexed(gold_stash+1)
+ m_swapaccbytes()
+ m_addindexed(gold_stash+0)
+ m_printacc(mf_5DIGIT|mf_RIGHT_ALIGN)
+.db "G"
+ m_drawbox(60,0,92,46)   ;statusbox
+.db "Item\nMagic\nEquip\nStatus\nSave"
+m_print(CharacterSummaries)
+m_eof
+
+CharacterSummaries:
+m_setxy(8,4)
+m_setleftmargin()
+m_setacc2(0)
+m_print(CharSheet)
+m_setacc2(1)
+m_print(CharSheet)
+m_setacc2(2)
+m_print(CharSheet)
+m_eof
+
+CharSheet:
+;Print portrait placeholder
+.db "XXXX"
+m_addxy(-16,4)
+.db "XXXX"
+m_addxy(-16,4)
+.db "XXXX"
+m_addxy(-16,3)
+.db "XXXX"
+m_addxy(-16,5)
+m_addxy(0,-16)
+m_addxy(20,1)
+.db "Place-"
+m_newline()
+m_addxy(20,0)
+.db "holder"
+m_newline()
+m_addxy(0,2)
+m_eof

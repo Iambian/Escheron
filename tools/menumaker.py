@@ -148,9 +148,12 @@ class MenuMakerApp:
     def __init__(self, master:tk.Tk):
         self.gamemap = GameMap()
         self.master = master
+        self.interim_parseobj = None
+        self.update_interval = 0
         self.dcf_reader = dcfreader.DCFReader("tools/escheron.dcf")
         master.title("Application Title")
         master.state('zoomed')
+        master.after(1000, self.autoupdater)
 
         self.input_history_file = "tools/menumaker_input.txt"
         master.protocol("WM_DELETE_WINDOW", self._on_closing) # Handle window close event
@@ -212,6 +215,14 @@ class MenuMakerApp:
         # Bind F5 key to parse_input method
         self.text_input.bind("<F5>", self._reparse)
         self.master.bind_all("<F6>", self._reinit_and_reparse)
+
+    def autoupdater(self, *args, **kwargs):
+        if self.update_interval:
+            interval = self.update_interval
+            self.parse_input()
+        else:
+            interval = 1000
+        self.master.after(interval, self.autoupdater)
 
     def _reparse(self, *args, **kwargs):
         time_start = time.time()
@@ -577,10 +588,23 @@ class MenuMakerApp:
         try:
             exception = None
             parseobj = parser.Parser(tokenstream.tokens, self.gamemap.symtable, silent=True)
+            self.interim_parseobj = parseobj
             segment:parser.SegmentDef = parseobj.segments["__DEFAULT"]
             origin = segment.baseaddr
             data = segment.data
+            if "__REPARSE_INTERVAL"  in parseobj.symtable:
+                try:
+                    newinter = int(parseobj.symtable["__REPARSE_INTERVAL"].body[0].v)
+                    if newinter > 100 and newinter < 5000:
+                        self.update_interval = newinter
+                except Exception as e:
+                    print(e)
+                    pass
+                pass
+            else:
+                self.update_interval = 0
         except Exception as e:
+            self.interim_parseobj = None
             exception = e
             origin = 0
             data = bytearray([0])
@@ -794,6 +818,21 @@ class MenuMakerApp:
                 # Consumes 0 more bytes.
                 b0, b1 = self.gamemap.acc().to_bytes(2, byteorder="little")
                 self.gamemap.acc((b0*256)+b1)
+                ptr += 1
+            elif opcode == 26: # m_addixdtoacc()
+                # Consumes 0 more bytes.
+                res = (self.gamemap.acc() + self.gamemap.idx()) & 0xFFFF
+                self.gamemap.acc(res)
+                ptr += 1
+            elif opcode == 27: # m_exaccidx()
+                acc = self.gamemap.acc()
+                idx = self.gamemap.idx()
+                self.gamemap.acc(idx)
+                self.gamemap.idx(acc)
+                ptr += 1
+            elif opcode == 28: # m_addaccshad()
+                res = (self.gamemap.acc() + self.gamemap.accshad()) & 0xFFFF
+                self.gamemap.acc(res)
                 ptr += 1
             else:
                 nx, _ = self.print_char(opcode, self.gamemap.x(), self.gamemap.y())
