@@ -81,9 +81,9 @@ def tokline2mini(tokenline:list[Token]):
 
 
 class Parser(object):
-    DEBUGMODE = False
+    DEBUGMODE = True
     SHOW_SYMTABLE = True
-    SHOW_SYMTABLE_MODE = "SYM"       #None|"SYM"|"MAC"
+    SHOW_SYMTABLE_MODE = "ANON"       #None|"SYM"|"MAC"|"ANON"
     SHOW_PARSE_LINESTART = True
     MAX_RECURSION_DEPTH = 12
     MATH_OPS = ('+','-','*','/','&','|','^','<<','>>','==','!=','<','>','<=','>=','&&','||')
@@ -144,13 +144,17 @@ class Parser(object):
         print("--Symbol Table--")
         for k in self.symtable:
             v = self.symtable[k]
-            if not isinstance(v, MacroDef) and not mode=="MAC":
+            if not isinstance(v, MacroDef) and not mode in ("MAC", "ANON"):
                 print(f"Symdef [{k}]: {repr(v)}")
-            elif isinstance(v, MacroDef) and not mode=="SYM":
+            if isinstance(v, MacroDef) and not mode in ("SYM", "ANON"):
                 strparams = f"({', '.join([str(t.v) for t in v.params])})"
                 strbody = ' '.join([str(t.v) for t in v.body])
                 print(f"Macrodef [{k}] params: {strparams}")
                 print(f"{strbody}")        
+        if not mode in ("SYM", "MAC"):
+            print("--Anonymous Labels--")
+            for v in self.anonlabels:
+                print(f"ANON [{v.addr:08x}]")
 
     @classmethod
     def from_filename(cls, filename):
@@ -432,13 +436,13 @@ class Parser(object):
                     except Exception as e:
                         print(yellowmsg(f"DEBUG EQUATE TRAIL: {line[2:]}"))
                         raise e
-                    self.label_inc_once(labeltok, exprval)
+                    self.label_inc_once(labeltok, exprval, passid)
                 elif line[0].type == "IDENT":
                     #If literally anything else, check the first token to see
                     # if it's an identifier. If so, set label to value of origin
                     labeltok = line[0]
                     exprval = from_token(line[0], "NUM", str(self.origin))
-                    self.label_inc_once(labeltok, exprval)
+                    self.label_inc_once(labeltok, exprval, passid)
 
 
                 # Any leading labels with a directive embedded should have been
@@ -541,7 +545,7 @@ class Parser(object):
                 if line[0].type == "IDENT" and line[0].v.upper() not in cls.Z80INST:
                     exprval = from_token(line[0], "NUM", str(self.origin))
                     labeltok = line[0]
-                    self.label_inc_once(labeltok, exprval)
+                    self.label_inc_once(labeltok, exprval, passid)
 
             # This final section is intended to collect emittable tokens during
             # a recursive call (macro expansion) and return them to complete
@@ -570,43 +574,47 @@ class Parser(object):
         tokenlist[-1] = Token("OPER",")",0,0,'')
         return tokenlist
     
-    def label_inc_once(self, token:Token, newval:Token):
-        # If no error, assigns `newval` then returns. Passthrough if
-        # not valid label token. Only errors if doing a redef.
-        #NOTE: Today, it's self.labeltable that persists.
-        tokv, tokt = (token.v, token.type)
-        if tokt == "IDENT":
-            if tokv == self.anonchar:
-                if self.origin in self.anonset:
-                    prevtok = [d.token for d in self.anonlabels if d.token == self.origin]
-                    if len(prevtok) != 1:
-                        err(token, f"SERIOUS ERROR: Quick check anonymous label claims a duplicate label where there is either none or too many found. Instances found: {len(prevtok)}")
-                    prevtok = prevtok[0]
-                    print(errmsg(token, "This anonymous label is already defined for this address."))
-                    err(prevtok, "<-- Previous definition found here.")
-                self.anonset.add(self.origin)
-                if not len([d.token for d in self.anonlabels if d.token == self.origin]):
-                    self.anonindex += 1
-                    if len(self.anonlabels) > self.anonindex:
-                        # If this is true, we are not on the first pass.
-                        # self.anonindex should have been incremented so the
-                        # address we would have written to, so check to see if
-                        # it's the same address. If not, labels have shifted
-                        # around and we may need to implement a third pass.
-                        # For now, let's just raise an error.
-                        if self.origin != self.anonlabels[self.anonindex].addr:
-                            err(token, "Label shifting has been detected. 3rd pass unavailable to correct this condition.")
-                            self.labelshift = True
-                    else:
-                        self.anonlabels.append(AnonDef(token, self.origin))
-            elif tokv in self.symtable:
-                if tokv in self.labels:
-                    print(errmsg(token, f"[{token.v}] already defined. Initial definition follows."))
-                    err(self.labels[token.v].token, f"<-- Initial definition for [{token.v}] here")
+    def label_inc_once(self, token:Token, newval:Token, passid:int):
+        #token should be guaranteed to be an assignable label. If not, don't.
+        #symtable is temp. labeltable is persist.
+        #anonset is temp. anonlabels is persist.
+        tokenv, tokent = (token.v, token.type)
+        address = int(newval.v)
+        if tokent != "IDENT":
+            return
+        if tokenv == self.anonchar:
+            # Processing anonymous label
+            if address in self.anonset:
+                prevtok = [d.token for d in self.anonlabels if d.token == self.origin]
+                if len(prevtok) != 1:
+                    err(token, f"SERIOUS ERROR: Quick check anonymous label claims a duplicate label where there is either none or too many found. Instances found: {len(prevtok)}")
+                err(prevtok, "<-- Previous definition found here.")
+            else:
+                self.anonset.add(address)
+                self.anonindex += 1
+                if passid == 1:
+                    self.anonlabels.append(AnonDef(token, address))
                 else:
-                    err(token, f"[{token.v}] already defined. Initial definition either #DEFINE'd or imported from elsewhere.")
-        self.labels[tokv] = LabelDef(token, newval)
-        self.sym_assign(tokv, newval)
+                    if address != self.anonlabels[self.anonindex].addr:
+                        err(token, "Label shifting has been detected. 3rd pass unavailable to correct this condition.")
+                        self.labelshift = True
+        else:
+            # Processing standard label
+            if tokenv in self.symtable:
+                print(errmsg(token, f"[{token.v}] already defined. Initial definition follows."))
+                try:
+                    err(self.labels[token.v].token, f"<-- Initial definition for [{token.v}] here")
+                except:
+                    raise ValueError(redmsg(f"[{token.v}] already defined. Initial definition not locatable. Check macros."))
+            else:
+                self.sym_assign(tokenv, newval)
+                if passid == 1:
+                    self.labels[tokenv] = LabelDef(token, newval)
+                else:
+                    oldval = self.labels[tokenv].value
+                    if int(oldval.v) != address:
+                        err(token, "Label shifting has been detected. 3rd pass unavailable to correct this condition.")
+                        self.labelshift = True
 
     def write_data(self, extendable:bytes|bytearray):
         #NOTE: self.origin will always point to the byte after the data would
@@ -1142,16 +1150,13 @@ class Tokenizer(object):
 
 
 if __name__ == "__main__":
-    ts = Parser.from_filename("tools/macrotest.z80")
-    print(ts.read_data())
-    pass
-    '''
     if len(sys.argv) != 2:
         print("Usage: python macroparse.py <filename>")
         sys.exit(1)
+    ts = Parser.from_filename(sys.argv[1])
+    print(ts.read_data())
+    pass
     filename = sys.argv[1]
-    
-    '''
 
 #NOTE: This is how I invoke on the command line to output all that debug text
 #   to a separate output file. Keep because we may lose it.

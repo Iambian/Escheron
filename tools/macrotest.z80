@@ -12,12 +12,16 @@
 ; infinite loop with its own instruction should always evalulate to
 ; [negative][instruction-width]
 ;
-#define m_djnz(rel) .db 30, ($-rel)-1
 
-m_djnz(Hello_thar)
-.db 0,0,0
-Hello_thar:
 
+.org $8000
+_:  .db 0,0,0,0
+_:  .db 0,0,0,0,0,0,0,0
+_:  .db 0,0,0,0
+_:
+.db 0,0,0,0
+_:
+.dw 0,1,0
 
 
 ;m_setxy($05,5)    ;this is a comment
