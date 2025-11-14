@@ -1,122 +1,22 @@
-#include "src/inc/osdefs.inc"
-#include "src/inc/macros.inc"
-#include "src/inc/gamedefs.inc"
+;#include "src/inc/osdefs.inc"
+;#include "src/inc/macros.inc"
+;#include "src/inc/gamedefs.inc"
 
-#include "src/xdefs/items.z80"
-#include "src/xdefs/spells.z80"
-
-    ld a,10 \ ld b,20 \ ld c,30
-#define backslash_test .db 30 \ .dw label \.db "Seventeen"
-
-
-#define X 10 / X
-#define FOO(x) x + x / FOO(2)
-#macro TEST()
-    MOV A, B
-#endmacro
-#define A 1
-#define AA 2
-#define AA AA+AA
-#define AA AA+AA
-
-.org $9D95
-.dw FutureLabel
-.db AA
-FutureLabel:
-
-#define m_defbox(a,b,c,d) m_drawbox(a,b,c,d)
-#define m_addx(x) m_addxy(x,0)
-#define m_addy(y) m_addxy(0,y)
- m_defbox(0,0,96,64)    ;mainbox
- m_defbox(60,45,92,63)  ;moneybox
- m_addy(4)
-.db "65535"
-; mx_setHLtoVar(cur_gold)
-; m_dispHL(mf_5DIGIT,mf_RIGHT_ALIGN) m_("G")
- m_defbox(60,0,92,46)   ;statusbox
-.db "Item\nMagic\nEquip\nStatus\nSave"
-m_eof
+;#include "src/xdefs/items.z80"
+;#include "src/xdefs/spells.z80"
 
 
 
-;.org $9D95
-m_setxy(10,10)
-.db "\r"
-m_setacc2($FFFF) ; -1
-m_printacc((1<<5)|1) ; mf_SIGNED_SHOW_NEG, 1 digit -> -9
-m_newline()
-m_setacc2($000A) ; 10
-m_printacc((1<<5)|(1<<6)|1) ; mf_SIGNED_SHOW_NEG | mf_SIGNED_SHOW_POS, 1 digit -> +9
-m_newline()
-m_setacc2($000A) ; 10
-m_printacc((1<<3)|3) ; mf_SHOW_LEAD_ZEROES, 3 digits -> 010
-m_newline()
-m_setacc2($000A) ; 10
-m_printacc((1<<4)|3) ; mf_RIGHT_ALIGN, 3 digits -> " 10"
-m_newline()
-m_setacc2($0064) ; 100
-m_printacc((1<<5)|2) ; mf_SIGNED_SHOW_NEG, 2 digits -> 99 (clamped)
-m_newline()
-m_setacc2($FF9C) ; -100 (0xFF9C is -100 as 16-bit signed)
-m_printacc((1<<5)|2) ; mf_SIGNED_SHOW_NEG, 2 digits -> -99 (clamped)
-m_eof
+; Parse method for jumps make it so the pointer is incremented past the end
+; of the instruction BEFORE the relative address is added, therefore, an
+; infinite loop with its own instruction should always evalulate to
+; [negative][instruction-width]
+;
+#define m_djnz(rel) .db 30, ($-rel)-1
 
-
-
-
-
-.org $4000
- m_drawbox(0,0,96,64)    ;mainbox
- m_drawbox(60,45,92,63)  ;moneybox
- m_addxy(0,2)
- m_setidx(defaultSaveFile)
- m_clracc()
- m_addindexed(gold_stash+1)
- m_swapaccbytes()
- m_addindexed(gold_stash+0)
- m_printacc(mf_5DIGIT|mf_RIGHT_ALIGN)
-.db "G"
- m_drawbox(60,0,92,46)   ;statusbox
-.db "Item\nMagic\nEquip\nStatus\nSave"
-m_print(CharacterSummaries)
-m_eof
-
-CharacterSummaries:
-m_setxy(8,4)
-m_setleftmargin()
-m_setacc2(0)
-m_print(CharSheet)
-m_setacc2(1)
-m_print(CharSheet)
-m_setacc2(2)
-m_print(CharSheet)
-m_eof
-
-CharSheet:
-;Print portrait placeholder
-.db "XXXX"
-m_addxy(-16,4)
-.db "XXXX"
-m_addxy(-16,4)
-.db "XXXX"
-m_addxy(-16,3)
-.db "XXXX"
-m_addxy(-16,5)
-m_addxy(0,-16)
-m_addxy(20,1)
-.db "Place-"
-m_newline()
-m_addxy(20,0)
-.db "holder"
-m_newline()
-m_addxy(0,2)
-m_eof
-
-
-
-
-
-
+m_djnz(Hello_thar)
+.db 0,0,0
+Hello_thar:
 
 
 

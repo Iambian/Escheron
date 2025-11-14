@@ -40,6 +40,11 @@ class LabelDef(NamedTuple):
     token:Token     #The token that stores this ident
     value:Token     #The token that this ident resolves to. Usually a NUM.
 
+class AnonDef(NamedTuple):
+    token: Token    # The local label token. Using this for linepos 
+    addr: int       # The address value assigned to this anonymous label
+
+
 class SegmentDef(NamedTuple):
     name:str            # References. Default "__DEFAULT"
     baseaddr: int       # Segment starting address
@@ -90,7 +95,10 @@ class Parser(object):
             oldsymtable = dict()
         self.tokens:list[Token] = tokens
         self.symtable: dict[str,MacroDef|Token] = dict()
-        self.labels: dict[str,LabelDef] = dict()
+        self.labels: dict[str,LabelDef] = dict() # Persists
+        self.anonlabels: list[AnonDef] = list()  # Persists
+        self.anonset:set[int] = set()   #Not persist. Used for fast redef check
+        self.anonindex: int = -1     # Index of currently-found anonymous label
         #self.binres:bytearray = bytearray()
         self.origin:int = 0
         self.ifstack:list[IfDef] = list()
@@ -98,11 +106,15 @@ class Parser(object):
         self.segments:dict[str, list[SegmentDef]] = dict()
         for passid in range(1,3):
             #self.binres = bytearray()
+            self.labelshift = None  # If it ever becomes true, code has not stablized.
             self.curseg = None
+            self.anonchar = '_'
             self.segments = dict()
             self.symtable = dict()
             self.symtable.update(oldsymtable)
+            self.anonset = set()
             self.origin = 0
+            self.anonindex = -1
             try:
                 self.parse(self.tokens, passid)
                 if len(self.ifstack):
@@ -123,17 +135,22 @@ class Parser(object):
                 print(f"Two-pass assembly completed. Output {outlen} bytes, {len(self.symtable)} symbols.")
         if self.__class__.DEBUGMODE and self.__class__.SHOW_SYMTABLE:
             mode = self.__class__.SHOW_SYMTABLE_MODE
-            print("--Symbol Table--")
-            for k in self.symtable:
-                v = self.symtable[k]
-                if not isinstance(v, MacroDef) and not mode=="MAC":
-                    print(f"Symdef [{k}]: {repr(v)}")
-                elif isinstance(v, MacroDef) and not mode=="SYM":
-                    strparams = f"({', '.join([str(t.v) for t in v.params])})"
-                    strbody = ' '.join([str(t.v) for t in v.body])
-                    print(f"Macrodef [{k}] params: {strparams}")
-                    print(f"{strbody}")        
+            self.printsym(mode)
+
         return
+
+
+    def printsym(self, mode=None):
+        print("--Symbol Table--")
+        for k in self.symtable:
+            v = self.symtable[k]
+            if not isinstance(v, MacroDef) and not mode=="MAC":
+                print(f"Symdef [{k}]: {repr(v)}")
+            elif isinstance(v, MacroDef) and not mode=="SYM":
+                strparams = f"({', '.join([str(t.v) for t in v.params])})"
+                strbody = ' '.join([str(t.v) for t in v.body])
+                print(f"Macrodef [{k}] params: {strparams}")
+                print(f"{strbody}")        
 
     @classmethod
     def from_filename(cls, filename):
@@ -221,6 +238,8 @@ class Parser(object):
                 #---------------------------------------------------------------
                 # MACRO DEFINITIONS BEGIN HERE
                 if token0v in {"#DEFINE", "#DEF", "#MACRO"}:
+                    if token1v == self.anonchar:
+                        err(token1, "You may not define a macro anonymously.")
                     #Features common to both #define and #macro. Do first.
                     if token1t not in {"IDENT", "MACRO", "DIRECTIVE", "DIR_CALL"}:
                         err(token1, f"Invalid identifier {token1v} used as argument to {token0v}.")
@@ -435,7 +454,7 @@ class Parser(object):
                 elif dirid in (".DB", ".BYTE"):
                     # Data byte (8 bit) support
                     # Limits: Warn if byte < -128 or > 255
-                    data = self.parse_bytestream(line[diridx+1:], 1)
+                    data = self.parse_bytestream(line[diridx+1:], 1, passid)
                     self.write_data(data)
                     #print(f"Processing DB directives. Retrieved [{data}]")
                     pass
@@ -443,14 +462,14 @@ class Parser(object):
                     # Data word (16 bit) support
                     # Strings pad each char to 16 bit.
                     # Limits apply. Warn if < INT16_MIN or > UINT16_MAX
-                    data = self.parse_bytestream(line[diridx+1:], 2)
+                    data = self.parse_bytestream(line[diridx+1:], 2, passid)
                     self.write_data(data)
                     pass
                 elif dirid in (".DL", ".LONG"):
                     # Data long (24 bit) support
                     # Strings pad each char to 24 bit.
                     # Limits apply. Warn if < INT24_MIN or > UINT24_MAX
-                    data = self.parse_bytestream(line[diridx+1:], 3)
+                    data = self.parse_bytestream(line[diridx+1:], 3, passid)
                     self.write_data(data)
                     pass
                 elif dirid in (".BLOCK", ".FILL"):
@@ -557,7 +576,30 @@ class Parser(object):
         #NOTE: Today, it's self.labeltable that persists.
         tokv, tokt = (token.v, token.type)
         if tokt == "IDENT":
-            if tokv in self.symtable:
+            if tokv == self.anonchar:
+                if self.origin in self.anonset:
+                    prevtok = [d.token for d in self.anonlabels if d.token == self.origin]
+                    if len(prevtok) != 1:
+                        err(token, f"SERIOUS ERROR: Quick check anonymous label claims a duplicate label where there is either none or too many found. Instances found: {len(prevtok)}")
+                    prevtok = prevtok[0]
+                    print(errmsg(token, "This anonymous label is already defined for this address."))
+                    err(prevtok, "<-- Previous definition found here.")
+                self.anonset.add(self.origin)
+                if not len([d.token for d in self.anonlabels if d.token == self.origin]):
+                    self.anonindex += 1
+                    if len(self.anonlabels) > self.anonindex:
+                        # If this is true, we are not on the first pass.
+                        # self.anonindex should have been incremented so the
+                        # address we would have written to, so check to see if
+                        # it's the same address. If not, labels have shifted
+                        # around and we may need to implement a third pass.
+                        # For now, let's just raise an error.
+                        if self.origin != self.anonlabels[self.anonindex].addr:
+                            err(token, "Label shifting has been detected. 3rd pass unavailable to correct this condition.")
+                            self.labelshift = True
+                    else:
+                        self.anonlabels.append(AnonDef(token, self.origin))
+            elif tokv in self.symtable:
                 if tokv in self.labels:
                     print(errmsg(token, f"[{token.v}] already defined. Initial definition follows."))
                     err(self.labels[token.v].token, f"<-- Initial definition for [{token.v}] here")
@@ -587,7 +629,7 @@ class Parser(object):
         self.curseg.data.extend(extendable)
 
 
-    def parse_bytestream(self, tokenline:list[Token], bytewidth:Optional[int]) -> Optional[bytes]:
+    def parse_bytestream(self, tokenline:list[Token], bytewidth:Optional[int], passid=int) -> Optional[bytes]:
         #NOTE: if bytewidth is None, this outputs data to console.
         #NOTE: Extended echo syntax is not available.
         iterline = iter(tokenline)
@@ -613,11 +655,11 @@ class Parser(object):
                         result.extend(encoded)
                     continue
             # If no string condition caught, process a number instead
-            exprval = int(self.eval_expr(param).v)
+            exprval = int(self.eval_expr(param, passid).v)
             int_min = -(1 << (8*bytewidth-1))
             int_max = (1 << (8*bytewidth))-1
             #print(f"Boundaries: {int_min}, {int_max}")
-            if (exprval < int_min) or (exprval > int_max):
+            if ((exprval < int_min) or (exprval > int_max)) and passid > 1 and bytewidth:
                 print(warnmsg(param[0],f"Expression evalulates outside bounds. Value {exprval} is being truncated."))
             if bytewidth is None:
                 # Is a number but is not outputting data (.echo)

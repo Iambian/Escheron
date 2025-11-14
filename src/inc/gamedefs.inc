@@ -278,6 +278,8 @@ dhl_fetch_long_values 	.equ 7
 #define m_addidxtoacc() .db 26
 #define m_exaccidx() .db 27
 #define m_addaccshad() .db 28
+#define m_getaccind() .db 29
+#define m_djnz(rel) .db 30, rel-$-1
 
 ;==============================================================================
 ; Higher level game equates. These pertain to constants and flags as used

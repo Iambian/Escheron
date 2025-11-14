@@ -167,6 +167,7 @@ class DCFReader(object):
     def get_char(self, charid:int) -> DCFchar:
         try:
             char = self.codepoints[charid]
+            assert(isinstance(char, DCFchar))
         except:
             char = self.defaultchar
         return char

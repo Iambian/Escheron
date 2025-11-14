@@ -1,4 +1,4 @@
-#define __REPARSE_INTERVAL 1000
+#define __REPARSE_INTERVAL 0
 
 .org $4000
  m_drawbox(0,0,96,64)    ;mainbox
@@ -18,12 +18,43 @@ m_eof
 
 CharacterSummaries:
 m_setxy(8,4)
-m_setleftmargin()
-m_setacc2(0)
-m_print(CharSheet)
+m_setacc2(1)    ;Testing for this value
+;Testing for acc manipulation. Add 1 then djnz for looping.
+m_exacc()
 m_setacc2(1)
+m_addaccshad()
+m_djnz(charsummary_br1)
+.db "---",0
+charsummary_br1:
+m_djnz(charsummary_br2)
+.db "Galahad",0
+charsummary_br2:
+m_djnz(charsummary_br3)
+.db "Tristan",0
+charsummary_br3:
+m_djnz(charsummary_brn)
+.db "Maya",0
+charsummary_brn:
+.db "Unknown",0
+
+
+m_eof
+
+;m_addacc()
+.db "Hello world!"
+
+
+m_eof
+
+
+
+
+m_setleftmargin()
+m_setacc2(charslotid1)
 m_print(CharSheet)
-m_setacc2(2)
+m_setacc2(charslotid2)
+m_print(CharSheet)
+m_setacc2(charslotid3)
 m_print(CharSheet)
 m_eof
 
@@ -46,3 +77,30 @@ m_addxy(20,0)
 m_newline()
 m_addxy(0,2)
 m_eof
+
+CharLine1:
+;ACC=charslotidN
+m_addidxtoacc() ;address to charslot
+m_getaccind()   ;read charid
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

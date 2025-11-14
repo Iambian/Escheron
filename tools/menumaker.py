@@ -215,6 +215,7 @@ class MenuMakerApp:
         # Bind F5 key to parse_input method
         self.text_input.bind("<F5>", self._reparse)
         self.master.bind_all("<F6>", self._reinit_and_reparse)
+        self.master.bind_all("<F8>", self._debug_reparse)
 
     def autoupdater(self, *args, **kwargs):
         if self.update_interval:
@@ -223,6 +224,12 @@ class MenuMakerApp:
         else:
             interval = 1000
         self.master.after(interval, self.autoupdater)
+
+    def _debug_reparse(self, *args, **kwargs):
+        time_start = time.time()
+        self.parse_input(*args, showsym=True, **kwargs)
+        if self.__class__.SHOW_PERFORMANCE_METRICS:
+            print(f"Time to execute reparse: {time.time()-time_start}")
 
     def _reparse(self, *args, **kwargs):
         time_start = time.time()
@@ -576,7 +583,7 @@ class MenuMakerApp:
             self.pixelOff(current_x, current_y)
             current_y -= 1
 
-    def parse_input(self, event=None):
+    def parse_input(self, event=None, showsym=False):
         # Reset the entire pixel grid to black
         for row in range(self.PIXEL_ROWS):
             for col in range(self.PIXEL_COLS):
@@ -603,6 +610,8 @@ class MenuMakerApp:
                 pass
             else:
                 self.update_interval = 0
+            if showsym:
+                parseobj.printsym()
         except Exception as e:
             self.interim_parseobj = None
             exception = e
@@ -683,24 +692,20 @@ class MenuMakerApp:
                 # Consumes 2 more bytes (flagid, rel)
                 flagid = self.gamemap.memory[ptr + 1]
                 rel = self.gamemap.memory[ptr + 2]
-                rel_int8 = rel if rel < 128 else rel-256
                 flagbyte = (flagid >> 3) & 0b00011111
                 flagmask = 1<<(flagid&7)
+                ptr += 3
                 if self.gamemap.flags(flagbyte) & flagmask:
-                    ptr = ptr + 2 + rel_int8
-                else:
-                    ptr += 3
+                    ptr += rel if rel < 128 else rel-256
             elif opcode == 7: # m_jrfz(flagid,rel)
                 # Consumes 2 more bytes (flagid, rel)
                 flagid = self.gamemap.memory[ptr + 1]
                 rel = self.gamemap.memory[ptr + 2]
-                rel_int8 = rel if rel < 128 else rel-256
                 flagbyte = (flagid >> 3) & 0b00011111
                 flagmask = 1<<(flagid&7)
+                ptr += 3
                 if not self.gamemap.flags(flagbyte) & flagmask:
-                    ptr = ptr + 2 + rel_int8
-                else:
-                    ptr += 3
+                    ptr += rel if rel < 128 else rel-256
             elif opcode == 8: # m_drawbox(x1,y1,x2,y2)
                 # Consumes 4 more bytes (x1, y1, x2, y2)
                 x1 = self.gamemap.memory[ptr + 1]
@@ -834,6 +839,19 @@ class MenuMakerApp:
                 res = (self.gamemap.acc() + self.gamemap.accshad()) & 0xFFFF
                 self.gamemap.acc(res)
                 ptr += 1
+            elif opcode == 29: # m_getaccind()
+                # Consumes 0 more bytes
+                self.gamemap.acc1(self.gamemap.memory[self.gamemap.acc()])
+                ptr += 1
+                pass
+            elif opcode == 30: # m_djnz(rel)
+                # Consumes 1 more byte.
+                self.gamemap.acc((self.gamemap.acc()-1)&0xFFFF)
+                v = self.gamemap.acc() & 0xFF
+                rel = self.gamemap.memory[ptr + 1]
+                ptr += 2
+                if v != 0:
+                    ptr += rel if rel < 128 else rel-256
             else:
                 nx, _ = self.print_char(opcode, self.gamemap.x(), self.gamemap.y())
                 self.gamemap.x(nx)
