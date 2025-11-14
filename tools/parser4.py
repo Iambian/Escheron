@@ -44,7 +44,6 @@ class AnonDef(NamedTuple):
     token: Token    # The local label token. Using this for linepos 
     addr: int       # The address value assigned to this anonymous label
 
-
 class SegmentDef(NamedTuple):
     name:str            # References. Default "__DEFAULT"
     baseaddr: int       # Segment starting address
@@ -84,7 +83,7 @@ class Parser(object):
     DEBUGMODE = True
     SHOW_SYMTABLE = True
     SHOW_SYMTABLE_MODE = "ANON"       #None|"SYM"|"MAC"|"ANON"
-    SHOW_PARSE_LINESTART = True
+    SHOW_PARSE_LINESTART = False
     MAX_RECURSION_DEPTH = 12
     MATH_OPS = ('+','-','*','/','&','|','^','<<','>>','==','!=','<','>','<=','>=','&&','||')
     Z80INST = {'ADC', 'ADD', 'AND', 'BIT', 'CALL', 'CCF', 'CP', 'CPD', 'CPI', 'CPIR', 'CPL', 'DAA', 'DEC', 'DI', 'DJNZ', 'EI', 'EX', 'EXX', 'HALT', 'IM', 'IN', 'INC', 'IND', 'INDR', 'INI', 'INIR', 'JP', 'JR', 'LD', 'LDD', 'LDI', 'NEG', 'NOP', 'OR',  'OTDR', 'OTIR', 'OUT', 'OUTD', 'OUTI', 'POP', 'PUSH', 'RES', 'RET', 'RETI', 'RETN' 'RL', 'RLA', 'RLC', 'RLCA', 'RLD', 'RR', 'RRA', 'RRCA', 'RRD', 'RST', 'SBC', 'SCF', 'SET', 'SLA', 'SLL', 'SRA', 'SRL', 'SUB', 'XOR'}
@@ -126,11 +125,13 @@ class Parser(object):
                 print(yellowmsg(f"Pass {passid} ended with error(s)."))
                 break
         else:
-            if not self.curseg:
+            if self.curseg is None:
                 #Because it is possible we're assembling just for the symtable.
                 outlen = 0
-            else:
+            elif isinstance(self.curseg, SegmentDef):
                 outlen = len(self.curseg.data)
+            else:
+                raise ValueError(redmsg("Current segment variable was damaged. This error should not be possible."))
             if not silent:
                 print(f"Two-pass assembly completed. Output {outlen} bytes, {len(self.symtable)} symbols.")
         if self.__class__.DEBUGMODE and self.__class__.SHOW_SYMTABLE:
