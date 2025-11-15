@@ -1,9 +1,9 @@
-;#include "src/inc/osdefs.inc"
-;#include "src/inc/macros.inc"
-;#include "src/inc/gamedefs.inc"
+#include "src/inc/osdefs.inc"
+#include "src/inc/macros.inc"
+#include "src/inc/gamedefs.inc"
 
-;#include "src/xdefs/items.z80"
-;#include "src/xdefs/spells.z80"
+#include "src/xdefs/items.z80"
+#include "src/xdefs/spells.z80"
 
 
 

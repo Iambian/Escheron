@@ -83,9 +83,10 @@ class Parser(object):
     DEBUGMODE = True
     SHOW_SYMTABLE = True
     SHOW_SYMTABLE_MODE = "ANON"       #None|"SYM"|"MAC"|"ANON"
-    SHOW_PARSE_LINESTART = False
+    SHOW_PARSE_LINESTART = True
     MAX_RECURSION_DEPTH = 12
-    MATH_OPS = ('+','-','*','/','&','|','^','<<','>>','==','!=','<','>','<=','>=','&&','||')
+    MATH_OPS = {'+','-','*','/','&','|','^','<<','>>','==','!=','<','>','<=','>=','&&','||'}
+    UNARY_OPS = {'+','-','~'}
     Z80INST = {'ADC', 'ADD', 'AND', 'BIT', 'CALL', 'CCF', 'CP', 'CPD', 'CPI', 'CPIR', 'CPL', 'DAA', 'DEC', 'DI', 'DJNZ', 'EI', 'EX', 'EXX', 'HALT', 'IM', 'IN', 'INC', 'IND', 'INDR', 'INI', 'INIR', 'JP', 'JR', 'LD', 'LDD', 'LDI', 'NEG', 'NOP', 'OR',  'OTDR', 'OTIR', 'OUT', 'OUTD', 'OUTI', 'POP', 'PUSH', 'RES', 'RET', 'RETI', 'RETN' 'RL', 'RLA', 'RLC', 'RLCA', 'RLD', 'RR', 'RRA', 'RRCA', 'RRD', 'RST', 'SBC', 'SCF', 'SET', 'SLA', 'SLL', 'SRA', 'SRL', 'SUB', 'XOR'}
     def __init__(self, tokens: list[Token], oldsymtable=None, silent=False):
         if silent:
@@ -192,6 +193,10 @@ class Parser(object):
             lineiter = iter(line)   #Doing this eases parameter extraction
             if len(line) > 128:
                 err(token0, "Line exceeds reasonable length")
+                pass
+            if "VAR_STARTNAME" in self.symtable:
+                print(f"State of VAR_STARTNAME: {self.symtable['VAR_STARTNAME']}")
+
             #===================================================================
             # HANDLE FLOW CONTROL PREOPS AND FLOW CONTROL
             if token0t == "PREOP":
@@ -273,7 +278,7 @@ class Parser(object):
                         if token1v.endswith('('):
                             raise Exception("Do not show this error. This exists solely to cancel parse()/eval().")
                         macrobody = self.parse(macrobody, passid, depth+1)
-                        macrobody = self.eval_expr(macrobody, 2)
+                        macrobody = self.eval_expr(macrobody, -1)
                     except Exception as e:
                         s  = traceback.format_exc()
                     # Deal with expansion results
@@ -283,6 +288,7 @@ class Parser(object):
                         macrodef = MacroDef(token1, paramlist, macrobody)
                     else:
                         err(token0, f"Macrobody expansion failed with unknown result: {macrobody}")
+                    print(macrodef)
                     self.sym_assign(token1v, macrodef)
                 if token0v == "#MACRO":
                     macrobody:list[Token] = []
@@ -308,12 +314,18 @@ class Parser(object):
                     self.sym_assign(token1.v, macrodef)
                     pass
                 continue
+            #
+            # NOTE: You may need to move first token label initializations here
+            #   in case macro expansions needs to use that value in the same line.
+            #   Maybe this isn't a problem. Be on the lookout for this problem.
+            #
             #===================================================================
             # PERFORM MACRO EXPANSION BELOW
-
             if cls.DEBUGMODE:
                 pass
             resubmit:list[Token] = []
+
+            #'''
             for tokenidx, token in enumerate(lineiter):
                 tokenv, tokent = (token.v, token.type)
                 if tokent in {"MACRO","IDENT","DIR_CALL","DIRECTIVE"}:
@@ -329,8 +341,14 @@ class Parser(object):
                     if tokenv in self.symtable:
                         # Could be tokens or macrodefs.
                         symentry = self.symtable[tokenv]
+                        if isinstance(symentry, Token):
+                            # THis is a hail-mary addition.
+                            if "NUM" in symentry.type:
+                                # Do not expand variables.
+                                resubmit.append(token)
+                                continue
                         if isinstance(symentry, MacroDef):
-                            #print(f"SYMTABLE MACRODEF: {tokenv}")
+                            #print(f"SYMTABLE MACRODEF: {tokenv}, ENTRY: {symentry}")
                             paramlist = [i.v for i in symentry.params]
                             if len(paramlist) > len(invokelist):
                                 err(token, "Insufficient parameters passed to macro invocation.")
@@ -344,15 +362,18 @@ class Parser(object):
                             #print(f"SYMTABLE OTHER: {tokent}/{tokenv} -> {symentry}")
                             if invokelist:
                                 err(token, f"Illegal use of parameters used with a non-parameterized macro.")
-                            macrobody = [symentry]
+                            #macrobody = [symentry]
+                            resubmit.append(token)  #PASSTHROUGH
+                            continue
                         try:
-                            macrobody = self.parse(macrobody, passid, depth+1)
+                            #print(f"PUSH PARSE: {macrobody}")
+                            macrobody = self.parse(macrobody, 2, depth+1)
                         except Exception as e:
                             print(f"{tokenv} ; {symentry}")
                             print(errmsg(token, f"DEPTH [{depth}]: Error in recursive parse. Unwinding."))
                             raise e
                         if isinstance(macrobody, Token):
-                            ##print(f"append: {macrobody}")
+                            #print(f"append: {macrobody}")
                             resubmit.append(macrobody)
                         else:
                             #print(f"extend: {macrobody}")
@@ -360,6 +381,7 @@ class Parser(object):
                     elif tokenv in self.labels and tokenidx:
                         # A label that's been assigned a value directly by .EQU
                         # whether it's this pass or a prior one.
+                        #print(f"SYMTABLE NOFIRST REEVAL [{tokenv}] to {self.labels[tokenv].value}")
                         if tokenv.endswith('(') or tokent in {"MACRO","DIR_CALL","DIRECTIVE"}:
                             err(token, f"Macro expansion invalid type. Expected IDENT, found {tokent}")
                         resubmit.append(self.labels[tokenv].value)
@@ -399,8 +421,11 @@ class Parser(object):
                     #Not a token eligible for expansion
                     resubmit.append(token)
                 pass
+            #'''
+
 
             if [(i.v,i.type) for i in line] != [(i.v,i.type) for i in resubmit]:
+                print(redmsg(f"RESUBM: {resubmit}"))
                 if resubmit and resubmit[-1].type != "NEWLINE":
                     resubmit.append(NEWLINE_TOKEN)
                 if any([isinstance(i, list) for i in resubmit]):
@@ -547,7 +572,7 @@ class Parser(object):
                     exprval = from_token(line[0], "NUM", str(self.origin))
                     labeltok = line[0]
                     self.label_inc_once(labeltok, exprval, passid)
-
+            ''''''
             # This final section is intended to collect emittable tokens during
             # a recursive call (macro expansion) and return them to complete
             # that expansion. All preops passed into this level should have been
@@ -738,106 +763,83 @@ class Parser(object):
                     return symentry
         return None
     
-    def eval_expr(self, tokenline:list[Token], passnum:int=1) -> Token:
+    def eval_expr(self, tokenline:list[Token], passnum:int=1, depth=0) -> Token:
         ''' Parses an expression in `tokenline` unconditionally from left-to-right,
             excepting parentheses. Supports all major operators. Label resolution
             based on `passnum`. `$` oper resolves to `self.origin`
         '''
-        tokens = tokenline
-        if len(tokens) == 0:
-            raise ValueError(redmsg("eval_expr() called without any input tokens."))
-        
-        baseval:int = None
-        operator:Token = None
-        unary:Token = None
-
-        tokseg_idx = 0
-        while tokseg_idx < len(tokens):
-            token = tokens[tokseg_idx]
-
-            # Handle unary operators
-            if token.type == "OPER" and token.v in ('+', '-', '~') and (baseval is None or operator is not None):
-                if unary is not None: # Cannot have two unary operators in a row
-                    err(token, "Invalid unary operator sequence")
-                unary = token
-                tokseg_idx += 1
+        cls = self.__class__
+        if depth > cls.MAX_RECURSION_DEPTH:
+            raise ValueError(redmsg(f"Too many parentheses were used. Maximum depth is {cls.MAX_RECURSION_DEPTH}"))
+        tokens = iter(tokenline)
+        curval:int = None
+        oper:Token = None
+        unarystack:list[str] = list()
+        for token in tokens:
+            # Special case for expressions leading with unary operators.
+            # Special case ends on a value or value-yielding paren group.
+            #print(token)
+            if token.v in cls.UNARY_OPS and curval is None:
+                unarystack.append(token.v)
                 continue
-
-            current_value:int = None
-            #print(f"EVAL TOKEN: {token}")
-            if "NUM" in token.type or token.type == "IDENT" or (token.type == "OPER" and token.v == '$') or token.type == "IDENT":
-                #print(f"EVAL TOKEN: {token}")
-                current_value = self.eval_val(token, passnum)
-                tokseg_idx += 1
-            elif token.type == "OPER" and token.v == '(':
-                # Handle parenthesized expression
-                paren_level = 0
-                start_paren_pos = tokseg_idx
-                sub_expr_start_idx = tokseg_idx + 1
-                
-                # Find matching parenthesis
-                temp_idx = tokseg_idx
-                while temp_idx < len(tokens):
-                    temp_token = tokens[temp_idx]
-                    if temp_token.v == '(':
-                        paren_level += 1
-                    elif temp_token.v == ')':
-                        paren_level -= 1
-                    
-                    if paren_level == 0: # Found matching closing parenthesis
-                        sub_expr_end_idx = temp_idx - 1
-                        tokseg_idx = temp_idx + 1 # Advance main index past ')'
-                        break
-                    temp_idx += 1
-                else: # Loop finished without finding matching parenthesis
-                    err(temp_token, "Closing parenthesis not found.")
-
-                if sub_expr_start_idx > sub_expr_end_idx:
-                    current_value = 0 # Empty parenthesis sequence
+            elif token.v in cls.MATH_OPS and curval is None:
+                err(token, f"Illegal operator {token.v} used in leading unary stack.")
+            # Handle binary operators, and other unary operators after it.
+            if token.v in cls.MATH_OPS and isinstance(curval, int):
+                if not oper:
+                    oper = token
                 else:
-                    sub_tokline = tokens[sub_expr_start_idx:sub_expr_end_idx + 1] # +1 for exclusive end
-                    current_value = int(self.eval_expr(sub_tokline, passnum).v)  # Recursive call
-            else:
-                err(token, f"Unexpected token {token.v} of type {token.type}")
-
-            # Apply unary operator to current_value if present
-            if unary is not None:
-                if unary.v == "-":
-                    current_value = -current_value
-                elif unary.v == '~':
-                    current_value = ~current_value
-                unary = None
-
-            # Combine with baseval
-            if baseval is None:
-                baseval = current_value
-            elif operator is not None:
-                baseval = self.eval_pair(baseval, operator, current_value)
-                operator = None
-            else:
-                err(token, "Missing operator before value.")
-
-            if tokseg_idx < len(tokens):
-                next_token = tokens[tokseg_idx]
-                if next_token.type == "OPER" and next_token.v in self.MATH_OPS:
-                    if operator is not None: # Cannot have two binary operators in a row
-                        err(next_token, "Invalid operator sequence encountered.")
-                    operator = next_token
-                    tokseg_idx += 1
-                elif next_token.type == "OPER" and next_token.v in ('(', ')'):
-                    err(next_token, "Unexpected parenthesis encountered.")
-                elif next_token.type == "IDENT" or "NUM" in next_token.type:
-                    err(next_token, "Missing operator between values.")
+                    if token.v in cls.UNARY_OPS:
+                        unarystack.append(token.v)
+                    else:
+                        err(token, f"Illegal use of operator {token.v}")
+                continue
+            # Handle parethesis group, consuming all tokens inside the group.
+            # Parenthesis group must evalulate to a number token so it can
+            # be taken forward for further parsing. The overwrite is intended.
+            # Empty parentheses evaluate to Token NUM 0.
+            if token.v =='(':
+                paramlist = self.get_params_from_iter(tokens)
+                if paramlist == [] or paramlist == [[]]:
+                    token = from_token(token, "NUM", "0")
                 else:
-                    # Non-expression token, end of expression
-                    break
-        if operator is not None:
-            print(yellowmsg(tokens))
-            err(operator, "Incomplete expression detected at around this position.")
-        if baseval is None:
-            err(token, "Malformed expression or expression does not yield a value at around this position.")
-        #print(f"EVAL_EXPR: Returning baseval: {baseval}")
-        return from_token(tokenline[0], "NUM", str(baseval))
+                    if len(paramlist) != 1:
+                        err(token, "Illegal comma use in expression.")
+                    token = self.eval_expr(paramlist[0], passnum, depth+1)
+            # This one is also a passthrough to evalulate labels. Unary stack
+            # will be consumed to produce a Token NUM.
+            if token.type == "IDENT":
+                val = self.eval_val(token, passnum, unarystack)
+                unarystack = list()
+                token = from_token(token, "NUM", str(val))
+            # If we got to this point, we have a number to parse, either to set
+            # curval with or for binary expression evaluation. All valid paths
+            # will be met with a 'continue'. A passthrough here means we got
+            # something unparseable.
+            if "NUM" in token.type:
+                if curval is None:
+                    curval = self.eval_val(token, passnum, unarystack)
+                    unarystack = list()
+                    continue
+                if not oper:
+                    err(token, "Missing operator at around this location.")
+                else:
+                    newval = self.eval_val(token, passnum, unarystack)
+                    unarystack = list()
+                    curval = self.eval_pair(curval, oper, newval)
+                    oper = None
+                    continue
+            err(token, f"Unexpected token {token.v} at this location.")
+        # An empty expression yields 0. The legality of
+        # that operation is the caller's responsibility.
+        if curval is None:
+            curval = 0
+        if not len(tokenline):
+            returnval = Token("NUM", str(curval), 0, 0, '')
+        else:
+            returnval = from_token(tokenline[0], "NUM", str(curval))
+        return returnval
+    
     
     def eval_pair(self, base:int, oper:Token, nval:int) -> int:
         if oper.v == "+":
@@ -880,48 +882,85 @@ class Parser(object):
             err(oper, f"Unknown or unsupported operator '{oper.v}'")
         return base
     
-    def eval_val(self, token:Token, passnum=1):
-        toktype = token.type
-        tokval = token.v
-        if "NUM" in toktype:
-            if isinstance(tokval, int):
-                return tokval
-            tokval = str(tokval).upper()
-            if tokval.startswith("$"):
-                return int(tokval[1:], 16)
-            elif tokval.startswith("%"):
-                return int(tokval[1:], 2)
-            v = tokval
-            if tokval.endswith(('H','D','B')):
-                v = v[:-1]
-            if "HEX" in toktype:
-                return int(v, 16)
-            elif "BIN" in toktype:
-                return int(v, 2)
-            return int(v, 10)
-        elif toktype == "IDENT":
-            name = tokval
-            symval = None
-            if tokval not in self.symtable:
+
+    def eval_val(self, token:Token, passnum=1, unarystack=None):
+        if unarystack is None:
+            unarystack = []
+        tokenv = token.v
+        tokent = token.type
+        if "NUM" in tokent:
+            # Number string conditioning
+            if isinstance(tokenv, int):
+                tokenv = str(tokenv)
+            tokenv = str(tokenv).upper()
+            if tokenv.endswith(('H','D','B')):
+                tokenv = tokenv[:-1]
+            if tokenv.startswith(('$','%')):
+                tokenv = tokenv[1:]
+            # Number base conversion to type int
+            if "HEX" in tokent:
+                value = int(tokenv, 16)
+            elif "BIN" in tokent:
+                value = int(tokenv, 2)
+            elif "OCT" in tokent:
+                # Not supported, but it's here just in case we need it later.
+                value = int(tokenv, 8)
+            else:
+                value = int(tokenv, 10)
+            # Begin processing unary stack from end to start
+            for unary in reversed(unarystack):
+                if unary == '+':
+                    pass
+                if unary == '~':
+                    value = ~value
+                if unary == '-':
+                    value = -value
+        elif tokent == "OPER" and tokenv == "$":
+            # Doing it this way lets us use numeric unary operator processing.
+            origintoken = from_token(token, "NUM", str(self.origin))
+            value = self.eval_val(origintoken, passnum, unarystack)
+        elif tokent == "IDENT" and tokenv == self.anonchar:
+            # Anonymous label processing. Unary operators here have a very
+            # different meaning. Still, we'll want to filter out any '~' and
+            # carry that over to recursive numeric processing if any are found.
+            nextcount = unarystack.count("+")
+            prevcount = unarystack.count("-")
+            unarystack = "~" * unarystack.count("~")    #Consolidate remaining
+            # A single + is the same as nothing. So...
+            if not nextcount:
+                nextcount = 1
+            # Therefore a single - maths out to offset 0, which was the
+            # most current already-defined label.
+            offset = nextcount-prevcount
+            try:
+                anondef = self.anonlabels[self.anonindex+offset]
+                anontoken = from_token(token, "NUM", str(anondef.addr))
+            except:
                 if passnum == 1:
-                    return 0
+                    anontoken = from_token(token, "NUM", "0")
                 else:
-                    if tokval not in self.labels:
-                        err(token, f"Symbol [{tokval}] not found.")
+                    err(token, f"Anonymous label not found. Index attempted: [{self.anonindex + offset}]")
+            value = self.eval_val(anontoken, passnum, unarystack)
+        elif tokent == "IDENT":
+            # Normal label processing. Doing a recursive call on a token to
+            # take advantage of numeric unary operator processing.
+            symval:Token = None
+            if tokenv not in self.symtable:
+                if passnum == 1:
+                    symval = from_token(token, "NUM", "0")
+                elif passnum == -1:
+                    raise Exception("This error exists only to simulate a bug that allowed macrodef to work")
+                else:
+                    if tokenv not in self.labels:
+                        err(token, f"Symbol [{tokenv}] not found.")
                     else:
-                        symval = self.labels[tokval].value
-            symval = self.symtable[tokval]
-            if not isinstance(symval, Token) or "NUM" not in symval.type:
-                err(token, f"Symbol [{tokval}] type expected int, got {type(symval)}")
-            return self.eval_val(symval)
-        elif token.type == "OPER" and token.v == "$":
-            return self.origin
+                        symval = self.labels[tokenv].value
+            else:
+                symval = self.symtable[tokenv]
+            value = self.eval_val(symval, passnum, unarystack)
         else:
-            err(token, f"Illegal token type {toktype} of value {tokval}")
-
-
-
-
+            err(token, f"Illegal token type {tokent} of value {tokenv}")
+        return value
 
 
 class TokenStream(object):
