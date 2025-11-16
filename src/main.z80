@@ -85,14 +85,7 @@ otherTestString:
 .db "This is another string..",0
 
 fontTestString:
-m_setxy(5,5)
-.db "Welcome \rto Americana.\nPlease make your\nselection, followed\nby the pound\nsign now.\n"
-m_setacc2(111)
-m_printacc(mf_2DIGIT|mf_RIGHT_ALIGN|mf_SIGNED_SHOW_NEG|mf_SIGNED_SHOW_POS)
-.db " Hello."
-.db 0
-
-
+m_eof
 
 .db "\rthe quick brown fox\n"
 .db "jumped over the slow,\n"

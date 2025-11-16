@@ -52,6 +52,7 @@ menuoptionmask  .equ $3F
 textacc         .var(2)     ;text system accumulator
 textidx         .var(2)     ;text system index register
 textaccshadow   .var(2)     ;text system shadow accumulator
+textidxshadow   .var(2)     ;text system shadow index
 
 ; -- variables go here
 .varvalidate(saveSScreen_int-saveSScreen_mid)
@@ -295,7 +296,7 @@ dhl_fetch_long_values 	.equ 7
 #define m_drawbox(x1,y1,x2,y2) .db 3,x1,y1,x2,y2
 #define m_dispacc(flags) .db 4,flags    ;numeric display A given flags.
 #define m_printacc()    .db 5       ;prints at address A
-#define m_callz80(adr)  .db 6, lo(adr), hi(adr)
+#define m_call(adr)     .db 6, lo(adr), hi(adr)
 #define m_clra0()       .db 7       ; 0 -> a0
 #define m_seta0(v)      .db 8,v     ; v -> a0
 #define m_menuopt()     .db 9       ;CTRL CODE: TAB
@@ -306,7 +307,7 @@ dhl_fetch_long_values 	.equ 7
 #define m_exiip()       .db 14      ; I <-> IP
 #define m_exai()        .db 15      ; A <-> I
 #define m_addap()       .db 16      ; A + AP -> A
-#define m_addai()       .db 17      ; A + I -> A
+#define m_addi()        .db 17      ; A + I -> A
 #define m_sext()        .db 18      ; a0 sign-extends into a1
 #define m_addind(v)     .db 19      ; uint8_t([ I + v ]) + A -> A
 #define m_mltacc()      .db 20      ; a0 * a1 -> A
