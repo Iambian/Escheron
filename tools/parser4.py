@@ -80,10 +80,10 @@ def tokline2mini(tokenline:list[Token]):
 
 
 class Parser(object):
-    DEBUGMODE = True
+    DEBUGMODE = False
     SHOW_SYMTABLE = True
-    SHOW_SYMTABLE_MODE = "ANON"       #None|"SYM"|"MAC"|"ANON"
-    SHOW_PARSE_LINESTART = True
+    SHOW_SYMTABLE_MODE = None       #None|"SYM"|"MAC"|"ANON"
+    SHOW_PARSE_LINESTART = False
     MAX_RECURSION_DEPTH = 12
     MATH_OPS = {'+','-','*','/','&','|','^','<<','>>','==','!=','<','>','<=','>=','&&','||'}
     UNARY_OPS = {'+','-','~'}
@@ -194,8 +194,8 @@ class Parser(object):
             if len(line) > 128:
                 err(token0, "Line exceeds reasonable length")
                 pass
-            if "VAR_STARTNAME" in self.symtable:
-                print(f"State of VAR_STARTNAME: {self.symtable['VAR_STARTNAME']}")
+            #if "VAR_STARTNAME" in self.symtable:
+            #    print(f"State of VAR_STARTNAME: {self.symtable['VAR_STARTNAME']}")
 
             #===================================================================
             # HANDLE FLOW CONTROL PREOPS AND FLOW CONTROL
@@ -288,7 +288,7 @@ class Parser(object):
                         macrodef = MacroDef(token1, paramlist, macrobody)
                     else:
                         err(token0, f"Macrobody expansion failed with unknown result: {macrobody}")
-                    print(macrodef)
+                    #print(macrodef)
                     self.sym_assign(token1v, macrodef)
                 if token0v == "#MACRO":
                     macrobody:list[Token] = []
@@ -425,7 +425,7 @@ class Parser(object):
 
 
             if [(i.v,i.type) for i in line] != [(i.v,i.type) for i in resubmit]:
-                print(redmsg(f"RESUBM: {resubmit}"))
+                #print(redmsg(f"RESUBM: {resubmit}"))
                 if resubmit and resubmit[-1].type != "NEWLINE":
                     resubmit.append(NEWLINE_TOKEN)
                 if any([isinstance(i, list) for i in resubmit]):
@@ -644,8 +644,8 @@ class Parser(object):
 
     def write_data(self, extendable:bytes|bytearray):
         #NOTE: self.origin will always point to the byte after the data would
-        #       be written. Do not waste your time trying to put it before.
-        #       Just calculate that here.
+        #       be written. Do not waste your time modifying any other source
+        #       to put it before. We will simply calculate it here.
         #print("Writing data...")
         calcorigin = self.origin-len(extendable)
         if not self.curseg:
@@ -654,12 +654,17 @@ class Parser(object):
             else:
                 self.curseg = SegmentDef("__DEFAULT", calcorigin, bytearray())
                 self.segments["__DEFAULT"] = self.curseg
+        ''' 
+        # Don't bother with continuity checks for now. Origin's only role here
+        # is to inform start of segment. Origin's primary role is for address
+        # calculations, none of which is being done here.
         if self.origin-(len(self.curseg.data)+len(extendable)) != self.curseg.baseaddr:
             print(len(self.curseg.data))
             print(len(extendable))
             print(self.origin)
             print(self.curseg.baseaddr)            
             raise ValueError(redmsg(f"Noncontiguous segment \"{self.curseg.name}\" detected."))
+        '''
         self.curseg.data.extend(extendable)
 
 
@@ -704,7 +709,9 @@ class Parser(object):
                 # Value clamping logic is here in case of future feature.
                 #exprval = max(exprval, int_min)
                 #exprval = min(exprval, int_max)
-                result.extend(exprval.to_bytes(16,"little",signed= True if exprval<0 else False)[:bytewidth])
+                v = exprval.to_bytes(16,"little",signed= True if exprval<0 else False)[:bytewidth]
+                result.extend(v)
+                #print(v.hex())
                 self.origin += bytewidth
         return result
 
@@ -808,7 +815,7 @@ class Parser(object):
                     token = self.eval_expr(paramlist[0], passnum, depth+1)
             # This one is also a passthrough to evalulate labels. Unary stack
             # will be consumed to produce a Token NUM.
-            if token.type == "IDENT":
+            if token.type == "IDENT" or (token.type == "OPER" and token.v == "$"):
                 val = self.eval_val(token, passnum, unarystack)
                 unarystack = list()
                 token = from_token(token, "NUM", str(val))

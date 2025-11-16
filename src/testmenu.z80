@@ -21,21 +21,13 @@ m_setxy(8,4)
 m_setacc2(1)    ;Testing for this value
 ;Testing for acc manipulation. Add 1 then djnz for looping.
 m_exacc()
-m_setacc2(1)
+m_setacc2(99)
 m_addaccshad()
-m_djnz(charsummary_br1)
-.db "---",0
-charsummary_br1:
-m_djnz(charsummary_br2)
-.db "Galahad",0
-charsummary_br2:
-m_djnz(charsummary_br3)
-.db "Tristan",0
-charsummary_br3:
-m_djnz(charsummary_brn)
-.db "Maya",0
-charsummary_brn:
-.db "Unknown",0
+m_djnz(_) \ .db "---",0
+_: m_djnz(_) \ .db "Galahad",0
+_: m_djnz(_) \ .db "Tristan",0
+_: m_djnz(_) \ .db "Maya",0
+_: .db "Unknown",0
 
 
 m_eof
