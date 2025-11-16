@@ -249,37 +249,82 @@ dhl_fetch_long_values 	.equ 7
 #define mf_SIGNED_SHOW_POS (1<<dhl_show_pos_sign)
 #define mf_USE_LONG_VALUES (1<<dhl_fetch_long_values)
 
-#define m_eof .db 0
-#define m_setxy(x,y) .db 1,x,y
-#define m_addxy(x,y) .db 2,x,y
-#define m_call(adr) .db 3,lo(adr),hi(adr)
-#define m_print(adr) .db 4,lo(adr),hi(adr)
-#define m_printacc(flags) .db 5,flags
-#define m_jrfnz(flagid,rel) .db 6,flagid,rel-$-2
-#define m_jrfz(flagid,rel) .db 7,flagid,rel-$-2
-#define m_drawbox(x1,y1,x2,y2) .db 8,x1,y1,x2,y2
-#define m_menuopt() .db 9
-#define m_newline() .db 10
-#define m_setflag(flagid) .db 11,flagid
-#define m_togflag(flagid) .db 12,flagid
-#define m_setleftmargin() .db 13
-#define m_clracc() .db 14
-#define m_exacc() .db 15
-#define m_setacc1(val1b) .db 16,val1b
-#define m_setacc2(val2b) .db 17,lo(val2b),hi(val2b)
-#define m_adrtoacc1(adr) .db 18,lo(adr),hi(adr)
-#define m_adrtoacc2(adr) .db 19,lo(adr),hi(adr)
-#define m_setidx(adr) .db 20,lo(adr),hi(adr)
-#define m_addindexed(offset) .db 21, offset
-#define m_mltacc(val) .db 22,val
-#define m_mltacc2(val) .db 23,val
-#define m_signext() .db 24
-#define m_swapaccbytes() .db 25
-#define m_addidxtoacc() .db 26
-#define m_exaccidx() .db 27
-#define m_addaccshad() .db 28
-#define m_getaccind() .db 29
-#define m_djnz(rel) .db 30, rel-$-1
+
+;#define m_eof .db 0
+;#define m_setxy(x,y) .db 1,x,y
+;#define m_addxy(x,y) .db 2,x,y
+;#define m_call(adr) .db 3,lo(adr),hi(adr)
+;#define m_print(adr) .db 4,lo(adr),hi(adr)
+;#define m_printacc(flags) .db 5,flags
+;#define m_jrfnz(flagid,rel) .db 6,flagid,rel-$-2
+;#define m_jrfz(flagid,rel) .db 7,flagid,rel-$-2
+;#define m_drawbox(x1,y1,x2,y2) .db 8,x1,y1,x2,y2
+;#define m_menuopt() .db 9
+;#define m_newline() .db 10
+;#define m_setflag(flagid) .db 11,flagid
+;#define m_togflag(flagid) .db 12,flagid
+;#define m_setleftmargin() .db 13
+;#define m_clracc() .db 14
+;#define m_exacc() .db 15
+;#define m_setacc1(val1b) .db 16,val1b
+;#define m_setacc2(val2b) .db 17,lo(val2b),hi(val2b)
+;#define m_adrtoacc1(adr) .db 18,lo(adr),hi(adr)
+;#define m_adrtoacc2(adr) .db 19,lo(adr),hi(adr)
+;#define m_setidx(adr) .db 20,lo(adr),hi(adr)
+;#define m_addindexed(offset) .db 21, offset
+;#define m_mltacc(val) .db 22,val
+;#define m_mltacc2(val) .db 23,val
+;#define m_signext() .db 24
+;#define m_swapaccbytes() .db 25
+;#define m_addidxtoacc() .db 26
+;#define m_exaccidx() .db 27
+;#define m_addaccshad() .db 28
+;#define m_getaccind() .db 29
+;#define m_djnz(rel) .db 30, rel-$-1
+
+; BEGIN TRANSITIONING TO NEW BYTECODES 
+; (a few of these are non-negotiably the same)
+;
+; ACC (A) = A0:A1, ACC PRIME (AP) = AP
+; IDX (I) = IDX, IDX PRIME (IP) = IP
+;
+
+#define m_eof           .db 0
+#define m_setxy(x,y)    .db 1,x,y
+#define m_addxy(x,y)    .db 2,x,y
+#define m_drawbox(x1,y1,x2,y2) .db 3,x1,y1,x2,y2
+#define m_dispacc(flags) .db 4,flags    ;numeric display A given flags.
+#define m_printacc()    .db 5       ;prints at address A
+#define m_callz80(adr)  .db 6, lo(adr), hi(adr)
+#define m_clra0()       .db 7       ; 0 -> a0
+#define m_seta0(v)      .db 8,v     ; v -> a0
+#define m_menuopt()     .db 9       ;CTRL CODE: TAB
+#define m_newline()     .db 10      ;CTRL CODE: LF
+#define m_swap()        .db 11      ; a0 <-> a1
+#define m_exaap()       .db 12      ; A <-> AP
+#define m_setleft()     .db 13      ;CTRL CODE: CR
+#define m_exiip()       .db 14      ; I <-> IP
+#define m_exai()        .db 15      ; A <-> I
+#define m_addap()       .db 16      ; A + AP -> A
+#define m_addai()       .db 17      ; A + I -> A
+#define m_sext()        .db 18      ; a0 sign-extends into a1
+#define m_addind(v)     .db 19      ; uint8_t([ I + v ]) + A -> A
+#define m_mltacc()      .db 20      ; a0 * a1 -> A
+#define m_djnz(rel)     .db 21, rel-$-1 ;A--, `JR rel` if A != 0
+#define m_write()       .db 22      ; a0 -> [I]
+;Recipes
+#define m_seta(v) m_seta0((v<<8)&$FF) \ m_swap() \ m_seta0(v&$FF)
+#define m_seti(v) m_exai() \ m_seta(v) \ m_exai()
+#define m_print(adr) m_seta(adr) \ m_printacc()
+#define m_printidx() m_exai() \ m_printacc() \ m_exai()
+#define m_mltacc1(v) m_swap() \ m_seta0(v) \ m_mltacc() \ m_swap() \ m_clra0() \ m_swap()
+#define m_mltacc2(v) m_swap() \ m_seta0(v) \ m_mltacc() \ m_clra0() \ m_swap()
+#define m_clra() m_clra0() \ m_swap() \ m_clra0()
+#define m_clri() m_exai() \ m_clra() \ m_exai()
+#define m_add(v) m_exaap() \ m_seta(v) \ m_addap()
+
+
+;  #define something()
 
 ;==============================================================================
 ; Higher level game equates. These pertain to constants and flags as used
