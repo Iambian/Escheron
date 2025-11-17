@@ -207,22 +207,27 @@ class Parser(object):
                     self.ifstack.pop()
                     continue
                 if token0v == "#ELSE":
-                    current_entry = self.ifstack[-1]
-                    self.ifstack[-1].cond = True if current_entry.cond is False else None
+                    cur_entry = self.ifstack[-1]
+                    newcond = True if cur_entry.cond is False else None
+                    self.ifstack[-1] = IfDef(cur_entry.token, newcond)
                     continue
                 if token0v == "#ELIF":
                     if len(line) < 2:
                         err(token0, f"Missing parameters for preop {token0.v}")
                     ifexpr = self.parse(TokenStream(line[1:]), 2, depth+1)
                     ifresult = True if self.eval_expr(ifexpr, 2) != 0 else False
-                    current_entry = self.ifstack[-1]
-                    if current_entry.cond is False:
+                    newcond = self.ifstack[-1].cond
+                    if newcond is False:
                         if ifresult is True:
-                            self.ifstack[-1].cond = True
+                            newcond = True
                     else:
-                        self.ifstack[-1].cond = None
+                        newcond = None
+                    self.ifstack[-1] = IfDef(self.ifstack[-1].token, newcond)
                     continue
             if len(self.ifstack) and not self.ifstack[-1].cond:
+                #print(f"SKIPPING: {line}")
+                if token0v in {"#IF", "#IFDEF", "#IFNDEF"}:
+                    self.ifstack.append(IfDef(token0, None))
                 continue
             # HANDLE OTHER PREOPERATORS.
             if token0t == "PREOP" and token0v in noflow_preop_tokenvals:
@@ -230,9 +235,12 @@ class Parser(object):
                     err(token0, f"Missing parameters for preop {token0.v}")
                 token1, token1v, token1t = (line[1], line[1].v, line[1].type)
                 if token0v in {"#IFDEF", "#IFNDEF"}:
-                    b = True if token1v in self.symtable or token1v+'(' in self.symtable else False
+                    b = True if (token1v in self.symtable) or (token1v+'(' in self.symtable) else False
+                    #print(f"IF(N)DEF TOK: {token1v} location verify: {b}")
                     b = b if token0v != "#IFNDEF" else not b
+                    #print(f"IF(N)DEF reverified {b}")
                     self.ifstack.append(IfDef(token0, b))
+                    continue
                 if token0v == "#IF":
                     ifexpr = self.parse(line[1:], 2, depth+1)
                     ifres = True if self.eval_val(self.eval_expr(ifexpr,2)) != 0 else False

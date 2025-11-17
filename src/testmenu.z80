@@ -23,13 +23,13 @@ menu_dispCharslots:
     m_addind(charslotid1)
     m_exaap()
     m_print(dispCharslots_subchar)
-    ;m_clra()
-    ;m_addind(charslotid2)
-    ;m_exaap()
+    m_clra()
+    m_addind(charslotid2)
+    m_exaap()
     ;m_print(dispCharslots_subchar)
-    ;m_clra()
-    ;m_addind(charslotid3)
-    ;m_exaap()
+    m_clra()
+    m_addind(charslotid3)
+    m_exaap()
     ;m_print(dispCharslots_subchar)
     m_eof
 
@@ -39,25 +39,18 @@ dispCharslots_subchar:
     m_swap()
     m_seta0(1)
     m_addap()
-    m_debug
+    m_djnz(_)
+    m_addxy(0,20)
     m_eof
-    ;m_djnz(_)
-    ;m_addxy(0,20)
-    ;m_eof
-_:  m_exaap()   ;save A
-    m_printacc(mf_5DIGIT)
-    m_eof
-    m_clra0()
-    m_swap()
-    m_clra0()
+_:  m_clra()
     m_addi()
     m_exiip()   ;preserve default save file in IP
     m_exai()    ;default save file duplicated
+    .assert((player0-playerobj) < 128, "Distance to first charslot must be int8.")
     m_clra0()
     m_swap()
-    .assert((player0-playerobj) < 128, "Distance to first charslot must be int8.")
-    m_seta0(player0-playerobj)  ;
-    m_sext()
+    m_seta0(player0-playerobj)
+    m_sext()                    ;A=fileoffset minus one slot.
     m_addi()    
     m_exai()    ;idx points to start of player object section minus one slot width.
     m_clra0()
@@ -67,9 +60,9 @@ _:  m_exaap()   ;save A
     m_mltacc()
     m_addi()
     m_exai()    ;idx now points to character slot in question.
-
-
     ;Print portrait placeholder
+    ;NOTE: You'll want to use an external routine to perform this function
+    ;       or dedicate a command for this feature. Again. You don't want to.
     .db "XXXX"  \ m_addxy(-16,4)
     .db "XXXX"  \ m_addxy(-16,4)
     .db "XXXX"  \ m_addxy(-16,3)
@@ -77,22 +70,35 @@ _:  m_exaap()   ;save A
     m_addxy(0,-16)
     m_addxy(20,1)
     ; First line
-    .db "Place-\n"  \ m_addxy(20,0)
+    m_clra()
+    m_addind(p_id)  ;sets A to character ID
+    m_swap()
+    m_seta0(8)  ;characters 8-wide
+    m_mltacc()
+    m_exaap()
+    m_seta(dispCharslots_temp_chartable)
+    m_addap()
+    m_printacc()
+    m_newline()
+    m_addxy(20,-1)
+
+    m_debug
+
+
+
+
+    ;.db "Place-\n"  \ m_addxy(20,-1)
     ; Second line
-    .db "holder\n"  \ m_addxy(0,3)
+    .db "STATDATA\n"  \ m_addxy(0,4)
     m_exiip()   ;restores index
     m_eof
 
-;input: 
-dispCharslots_line1:
 
-CharLine1:
-;ACC=charslotidN
-;m_addidxtoacc() ;address to charslot
-;m_getaccind()   ;read charid
-
-
-
+dispCharslots_temp_chartable:
+#macro X(idx, gender, dispname, varname)
+    .db dispname
+#endmacro
+#include "src/xdefs/players.z80"
 
 
 

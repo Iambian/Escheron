@@ -9,6 +9,7 @@
 ; to define basic variables.
 #include "src/xdefs/spells.z80"
 #include "src/xdefs/items.z80"
+#include "src/xdefs/players.z80"
 
 
 
@@ -85,7 +86,7 @@ otherTestString:
 .db "This is another string..",0
 
 fontTestString:
-m_eof
+    m_eof
 
 .db "\rthe quick brown fox\n"
 .db "jumped over the slow,\n"
@@ -126,6 +127,13 @@ address_test .equ $
 
 #include "src/base.z80"
 #include "src/text.z80"
+
+dispCharslots_temp_chartable:
+#macro X(idx, gender, dispname, varname)
+    .db dispname
+#endmacro
+#include "src/xdefs/players.z80"
+
 
 
 

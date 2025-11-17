@@ -1,5 +1,5 @@
 defaultSaveFile:
-.db 6, 5, 4                       ;cur_party_table (points to slots) [1-7]
+.db 2, 3, 4                       ;cur_party_table (points to slots) [1-7]
 .dw 64000                         ;gold_stash
 .dw xy(33,3)                      ;player_posyx
 .db 0 ; ragnoth_mapid                 ;player_mapid
@@ -17,7 +17,7 @@ defaultSaveFile:
 .db $11,$22,$33,$44               ;prng seed (1/2) for underdeep map gen
 .db $55,$66,$77,$88               ;prng seed (2/2) for underdeep map gen
 ;player1
-.db 0 ; CID_MAYA     ;p_id
+.db CID_MAYA     ;p_id
 .db 0            ;p_status
 .db 1            ;p_lvl
 .db 0            ;p_exp
@@ -46,7 +46,7 @@ defaultSaveFile:
 .db 0            ;11
 .db 0            ;12
 ;player2
-.db 0 ; CID_EDMUND   ;p_id
+.db CID_EDMUND   ;p_id
 .db 0            ;p_status
 .db 1            ;p_lvl
 .db 0            ;p_exp
@@ -75,7 +75,7 @@ defaultSaveFile:
 .db 0            ;11
 .db 0            ;12
 ;player3
-.db 0 ; CID_GLENN    ;p_id
+.db CID_GLENN    ;p_id
 .db 0            ;p_status
 .db 1            ;p_lvl
 .db 0            ;p_exp
@@ -104,7 +104,7 @@ defaultSaveFile:
 .db 0            ;11
 .db 0            ;12
 ;player4
-.db 0 ; CID_ROSE     ;p_id
+.db CID_ROSE     ;p_id
 .db 0            ;p_status
 .db 1            ;p_lvl
 .db 0            ;p_exp
@@ -133,7 +133,7 @@ defaultSaveFile:
 .db 0            ;11
 .db 0            ;12
 ;player5
-.db 0 ; CID_BARIUS   ;p_id
+.db CID_BARIUS   ;p_id
 .db 0            ;p_status
 .db 1            ;p_lvl
 .db 0            ;p_exp
@@ -162,7 +162,7 @@ defaultSaveFile:
 .db 0            ;11
 .db 0            ;12
 ;player6
-.db 0 ; CID_KYRIE    ;p_id
+.db CID_KYRIE    ;p_id
 .db 0            ;p_status
 .db 1            ;p_lvl
 .db 0            ;p_exp
@@ -191,7 +191,7 @@ defaultSaveFile:
 .db 0            ;11
 .db 0            ;12
 ;npc
-.db 0 ; CID_NULL     ;p_id
+.db CID_NULL     ;p_id
 .db 0            ;p_status
 .db 1            ;p_lvl
 .db 0            ;p_exp

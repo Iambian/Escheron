@@ -24,6 +24,7 @@ class GameMap(object):
     #include "src/inc/gamedefs.inc"
     #include "src/xdefs/items.z80"
     #include "src/xdefs/spells.z80"
+    #include "src/xdefs/players.z80"
     '''
     defaultsave = '''
     .org $C000  ;Placeholder location that's sufficiently out of the way

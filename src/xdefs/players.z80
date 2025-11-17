@@ -1,0 +1,86 @@
+; X-DEF file for player characters (and recruitable NPCs)
+; Default X declares CID/GENDER equates, then do nothing subsequently.
+; Default Y verifies that all Y-DEFs are sequential.
+;
+; Only X or Y (but not both) may be defined per invocation, unless you don't
+; need to access the Y table (which by default does not generate data).
+;
+
+
+
+#ifndef X
+    ;This contains a redefinition guard to allow either Y or X to be defined
+    ;independent of each other. 
+    #ifndef X_PLAYERS
+        #macro X(idx, gender, dispname, varname)
+            #ifndef X_PLAYERS
+                #define X_PLAYERS -1
+            #endif
+            #define X_IDX eval(idx)
+            #define X_GEN eval(gender)
+            #define X_CID concat("CID_", varname)
+            #define X_GID concat("GENDERID_", varname)
+            #if X_PLAYERS + 1 != X_IDX
+                .error "Players must be consecutively defined. See xdefs/players.z80"
+            #endif
+            X_CID   .equ X_IDX
+            X_GID   .equ X_GEN
+            #define X_PLAYERS eval(X_IDX)
+            #if X_IDX > 15
+                .error "Indices for player characters may not be greater than 15"
+            #endif
+        #endmacro
+    #else
+        #macro X(idx, gender, dispname, varname)
+            #define X_PLAYERS
+        #endmacro
+    #endif
+#endif
+
+X(00, GENDER_NONE  , "Null   \0","NULL")
+X(01, GENDER_FEMALE, "Maya   \0","MAYA")
+X(02, GENDER_MALE  , "Edmund \0","EDMUND")
+X(03, GENDER_MALE  , "Glenn  \0","GLENN")
+X(04, GENDER_BOTH  , "Rose   \0","ROSE")
+X(05, GENDER_MALE  , "Barius \0","BARIUS")
+X(06, GENDER_FEMALE, "Kyrie  \0","KYRIE")
+X(07, GENDER_NONE  , "Talos  \0","TALOS")
+X(08, GENDER_MALE  , "Lars   \0","LARS")
+X(09, GENDER_MALE  , "????   \0","UNK")
+
+#ifndef Y
+    #undef X_PLAYERS
+    #macro Y(id, cc)
+        #ifndef X_PLAYERS
+            #define X_PLAYERS -1
+        #endif
+        #if X_PLAYERS + 1 != id
+            .error "Indices for players must grow consecutively."
+        #endif
+        #define X_PLAYERS eval(X_PLAYERS + 1)
+    #endmacro
+#endif
+
+Y(CID_NULL  ,0)
+Y(CID_MAYA  ,0)
+Y(CID_EDMUND,0)
+Y(CID_GLENN ,0)
+Y(CID_ROSE  ,0)
+Y(CID_BARIUS,0)
+Y(CID_KYRIE ,0)
+Y(CID_TALOS ,0)
+Y(CID_LARS  ,0)
+Y(CID_UNK   ,0)
+
+
+
+
+
+
+
+
+
+
+
+#undef X
+#undef Y
