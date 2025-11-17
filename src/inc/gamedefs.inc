@@ -309,21 +309,24 @@ dhl_fetch_long_values 	.equ 7
 #define m_addap()       .db 16      ; A + AP -> A
 #define m_addi()        .db 17      ; A + I -> A
 #define m_sext()        .db 18      ; a0 sign-extends into a1
-#define m_addind(v)     .db 19      ; uint8_t([ I + v ]) + A -> A
+#define m_addind(v)     .db 19,v    ; uint8_t([ I + v ]) + A -> A
 #define m_mltacc()      .db 20      ; a0 * a1 -> A
 #define m_djnz(rel)     .db 21, rel-$-1 ;A--, `JR rel` if A != 0
 #define m_write()       .db 22      ; a0 -> [I]
 ;Recipes
-#define m_seta(v) m_seta0((v<<8)&$FF) \ m_swap() \ m_seta0(v&$FF)
+#define m_seta(v) m_seta0((v>>8)&$FF) \ m_swap() \ m_seta0(v&$FF)
 #define m_seti(v) m_exai() \ m_seta(v) \ m_exai()
 #define m_print(adr) m_seta(adr) \ m_printacc()
+#define m_printsafe(adr) m_exaap() \ m_print(adr) \ m_exaap()
 #define m_printidx() m_exai() \ m_printacc() \ m_exai()
 #define m_mltacc1(v) m_swap() \ m_seta0(v) \ m_mltacc() \ m_swap() \ m_clra0() \ m_swap()
 #define m_mltacc2(v) m_swap() \ m_seta0(v) \ m_mltacc() \ m_clra0() \ m_swap()
 #define m_clra() m_clra0() \ m_swap() \ m_clra0()
 #define m_clri() m_exai() \ m_clra() \ m_exai()
 #define m_add(v) m_exaap() \ m_seta(v) \ m_addap()
+#define m_setap0(v) m_exaap() \ m_seta0(v) \ m_exaap()
 
+#define m_debug .db 31
 
 ;  #define something()
 

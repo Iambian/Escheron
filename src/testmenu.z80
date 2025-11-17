@@ -1,79 +1,95 @@
 #define __REPARSE_INTERVAL 0
 
 .org $4000
- m_drawbox(0,0,96,64)    ;mainbox
- m_drawbox(60,45,92,63)  ;moneybox
- m_addxy(0,2)
- m_setidx(defaultSaveFile)
- m_clracc()
- m_addindexed(gold_stash+1)
- m_swapaccbytes()
- m_addindexed(gold_stash+0)
- m_printacc(mf_5DIGIT|mf_RIGHT_ALIGN)
-.db "G"
- m_drawbox(60,0,92,46)   ;statusbox
-.db "Item\nMagic\nEquip\nStatus\nSave"
-m_print(CharacterSummaries)
-m_eof
+    m_drawbox(0,0,96,64)    ;mainbox
+    m_drawbox(60,45,92,63)  ;moneybox
+    m_addxy(0,2)
+    m_clra()
+    m_seti(defaultSaveFile)
+    m_addind(gold_stash+1)
+    m_swap()
+    m_addind(gold_stash+0)
+    m_dispacc(mf_5DIGIT|mf_RIGHT_ALIGN) \ .db "G"
+    m_drawbox(60,0,92,46)   ;statusbox
+    .db "Item\nMagic\nEquip\nStatus\nSave"
+    m_print(menu_dispCharslots)
+    m_eof
 
-CharacterSummaries:
-m_setxy(8,4)
-m_setacc2(1)    ;Testing for this value
-;Testing for acc manipulation. Add 1 then djnz for looping.
-m_exacc()
-m_setacc2(99)
-m_addaccshad()
-m_djnz(_) \ .db "---",0
-_: m_djnz(_) \ .db "Galahad",0
-_: m_djnz(_) \ .db "Tristan",0
-_: m_djnz(_) \ .db "Maya",0
-_: .db "Unknown",0
+menu_dispCharslots:
+    m_setxy(8,4)    ;main screen homeup
+    m_setleft()
+    ;chr 1
+    m_clra()
+    m_addind(charslotid1)
+    m_exaap()
+    m_print(dispCharslots_subchar)
+    ;m_clra()
+    ;m_addind(charslotid2)
+    ;m_exaap()
+    ;m_print(dispCharslots_subchar)
+    ;m_clra()
+    ;m_addind(charslotid3)
+    ;m_exaap()
+    ;m_print(dispCharslots_subchar)
+    m_eof
+
+;input:  I= default save file, AP0 = slot position in data file (0=empty)
+dispCharslots_subchar:
+    m_clra0()
+    m_swap()
+    m_seta0(1)
+    m_addap()
+    m_debug
+    m_eof
+    ;m_djnz(_)
+    ;m_addxy(0,20)
+    ;m_eof
+_:  m_exaap()   ;save A
+    m_printacc(mf_5DIGIT)
+    m_eof
+    m_clra0()
+    m_swap()
+    m_clra0()
+    m_addi()
+    m_exiip()   ;preserve default save file in IP
+    m_exai()    ;default save file duplicated
+    m_clra0()
+    m_swap()
+    .assert((player0-playerobj) < 128, "Distance to first charslot must be int8.")
+    m_seta0(player0-playerobj)  ;
+    m_sext()
+    m_addi()    
+    m_exai()    ;idx points to start of player object section minus one slot width.
+    m_clra0()
+    m_addap()   ;retrieve slotindex
+    m_swap()
+    m_seta0(playerobj)
+    m_mltacc()
+    m_addi()
+    m_exai()    ;idx now points to character slot in question.
 
 
-m_eof
+    ;Print portrait placeholder
+    .db "XXXX"  \ m_addxy(-16,4)
+    .db "XXXX"  \ m_addxy(-16,4)
+    .db "XXXX"  \ m_addxy(-16,3)
+    .db "XXXX"  \ m_addxy(-16,5)
+    m_addxy(0,-16)
+    m_addxy(20,1)
+    ; First line
+    .db "Place-\n"  \ m_addxy(20,0)
+    ; Second line
+    .db "holder\n"  \ m_addxy(0,3)
+    m_exiip()   ;restores index
+    m_eof
 
-;m_addacc()
-.db "Hello world!"
-
-
-m_eof
-
-
-
-
-m_setleftmargin()
-m_setacc2(charslotid1)
-m_print(CharSheet)
-m_setacc2(charslotid2)
-m_print(CharSheet)
-m_setacc2(charslotid3)
-m_print(CharSheet)
-m_eof
-
-CharSheet:
-;Print portrait placeholder
-.db "XXXX"
-m_addxy(-16,4)
-.db "XXXX"
-m_addxy(-16,4)
-.db "XXXX"
-m_addxy(-16,3)
-.db "XXXX"
-m_addxy(-16,5)
-m_addxy(0,-16)
-m_addxy(20,1)
-.db "Place-"
-m_newline()
-m_addxy(20,0)
-.db "holder"
-m_newline()
-m_addxy(0,2)
-m_eof
+;input: 
+dispCharslots_line1:
 
 CharLine1:
 ;ACC=charslotidN
-m_addidxtoacc() ;address to charslot
-m_getaccind()   ;read charid
+;m_addidxtoacc() ;address to charslot
+;m_getaccind()   ;read charid
 
 
 

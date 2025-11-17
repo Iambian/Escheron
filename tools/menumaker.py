@@ -749,7 +749,7 @@ class MenuMakerApp:
                 self.gamemap.acc1(self.gamemap.acc1()+memlookup)
                 ptr += 2
             elif opcode == 20:  # 1b: m_mltacc()
-                a, b = self.gamemap.acc().to_bytes()
+                a, b = self.gamemap.acc().to_bytes(2, "little")
                 self.gamemap.acc(a*b)
                 ptr += 1
             elif opcode == 21:  # 2b: m_djnz(rel)
@@ -759,9 +759,16 @@ class MenuMakerApp:
                 ptr += 2
                 if v != 0:
                     ptr += rel if rel < 128 else rel-256
-            elif opcode == 22: # m_write()  : a0 -> [I]
+            elif opcode == 22:  # 1b: m_write()  : a0 -> [I]
                 adr = self.gamemap.idx()
                 self.gamemap.memory[adr] = self.gamemap.acc1()
+                ptr += 1
+            elif opcode == 31:  # 1b: m_debug  : prints debug info to console
+                a = self.gamemap.acc().to_bytes(2, 'big').hex()
+                ap = self.gamemap.accshad().to_bytes(2, 'big').hex()
+                i = self.gamemap.idx().to_bytes(2, 'big').hex()
+                ip = self.gamemap.idxshad().to_bytes(2, 'big').hex()
+                print(f"ACC: ${a}, ACP: ${ap}, IDX: ${i}, IDP: ${ip}")
                 ptr += 1
             else:
                 nx, _ = self.print_char(opcode, self.gamemap.x(), self.gamemap.y())

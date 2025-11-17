@@ -83,7 +83,7 @@ class Parser(object):
     DEBUGMODE = False
     SHOW_SYMTABLE = True
     SHOW_SYMTABLE_MODE = None       #None|"SYM"|"MAC"|"ANON"
-    SHOW_PARSE_LINESTART = False
+    SHOW_PARSE_LINESTART = True
     MAX_RECURSION_DEPTH = 12
     MATH_OPS = {'+','-','*','/','&','|','^','<<','>>','==','!=','<','>','<=','>=','&&','||'}
     UNARY_OPS = {'+','-','~'}
@@ -135,6 +135,7 @@ class Parser(object):
                 raise ValueError(redmsg("Current segment variable was damaged. This error should not be possible."))
             if not silent:
                 print(f"Two-pass assembly completed. Output {outlen} bytes, {len(self.symtable)} symbols.")
+                print(f"Output data: {self.read_data().hex()}")
         if self.__class__.DEBUGMODE and self.__class__.SHOW_SYMTABLE:
             mode = self.__class__.SHOW_SYMTABLE_MODE
             self.printsym(mode)
