@@ -12,7 +12,7 @@
     ;This contains a redefinition guard to allow either Y or X to be defined
     ;independent of each other. 
     #ifndef X_PLAYERS
-        #macro X(idx, gender, dispname, varname)
+        #macro X(idx, portraitid, gender, dispname, varname)
             #ifndef X_PLAYERS
                 #define X_PLAYERS -1
             #endif
@@ -37,16 +37,16 @@
     #endif
 #endif
 
-X(00, GENDER_NONE  , "Null   \0","NULL")
-X(01, GENDER_FEMALE, "Maya   \0","MAYA")
-X(02, GENDER_MALE  , "Edmund \0","EDMUND")
-X(03, GENDER_MALE  , "Glenn  \0","GLENN")
-X(04, GENDER_BOTH  , "Rose   \0","ROSE")
-X(05, GENDER_MALE  , "Barius \0","BARIUS")
-X(06, GENDER_FEMALE, "Kyrie  \0","KYRIE")
-X(07, GENDER_NONE  , "Talos  \0","TALOS")
-X(08, GENDER_MALE  , "Lars   \0","LARS")
-X(09, GENDER_MALE  , "????   \0","UNK")
+X(00, 7 ,GENDER_NONE  , "Null   \0","NULL")
+X(01, 0 ,GENDER_FEMALE, "Maya   \0","MAYA")
+X(02, 1 ,GENDER_MALE  , "Edmund \0","EDMUND")
+X(03, 2 ,GENDER_MALE  , "Glenn  \0","GLENN")
+X(04, 4 ,GENDER_BOTH  , "Rose   \0","ROSE")
+X(05, 5 ,GENDER_MALE  , "Barius \0","BARIUS")
+X(06, 6 ,GENDER_FEMALE, "Kyrie  \0","KYRIE")
+X(07, 7 ,GENDER_NONE  , "Talos  \0","TALOS")
+X(08, 3 ,GENDER_MALE  , "Lars   \0","LARS")
+X(09, 7 ,GENDER_MALE  , "????   \0","UNK")
 
 #ifndef Y
     #undef X_PLAYERS
@@ -84,3 +84,32 @@ Y(CID_UNK   ,0)
 
 #undef X
 #undef Y
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

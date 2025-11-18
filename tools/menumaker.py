@@ -301,10 +301,36 @@ class FontReader(object):
             self.dcf_reader.update(dcfreader.BigBigchar(idx, data, str(idx)), idx)
         return
 
-
-
     def get_char(self, charid):
         return self.dcf_reader.get_char(charid)
+
+class PortraitData(object):
+    PORTRAIT_DATA = '''
+        .db $11,$A2,$BC,$C0,$FC,$EC,$88,$80,$02,$3D,$05,$1C,$2D,$0C,$00,$00,$00,$80,$80,$80,$41,$20,$50,$4C,$01,$00,$C0,$02,$64,$06,$0E,$14
+        .db $84,$18,$E1,$0E,$02,$FC,$14,$F0,$91,$A1,$B1,$AD,$61,$32,$02,$02,$20,$A0,$40,$40,$60,$70,$A8,$36,$02,$02,$0E,$70,$10,$20,$30,$28
+        .db $86,$40,$E0,$3C,$6E,$18,$80,$82,$41,$02,$07,$3C,$2E,$58,$40,$41,$80,$02,$41,$C0,$60,$F3,$70,$38,$20,$41,$C1,$02,$02,$C7,$07,$0E
+        .db $10,$C0,$80,$07,$3F,$E7,$7F,$3F,$B7,$B7,$83,$F0,$FE,$F3,$FF,$FE,$00,$22,$06,$00,$00,$C0,$E0,$70,$81,$BF,$BF,$BE,$BC,$BB,$B7,$A7
+        .db $40,$80,$78,$F0,$D8,$B0,$80,$80,$09,$39,$FC,$6E,$1F,$03,$01,$01,$82,$43,$40,$40,$A3,$B0,$B9,$F4,$03,$03,$03,$06,$86,$0E,$1D,$3F
+        .db $8E,$49,$40,$B0,$6C,$AF,$82,$8C,$59,$8A,$02,$8D,$B4,$F4,$40,$31,$04,$80,$60,$48,$48,$2B,$59,$0E,$20,$00,$03,$09,$09,$CA,$8D,$58
+        .db $90,$3C,$42,$DC,$AC,$80,$80,$C0,$01,$1F,$21,$1F,$2D,$01,$01,$01,$C0,$C0,$60,$63,$71,$B8,$BC,$B7,$02,$82,$02,$C5,$8D,$1D,$2C,$DF
+        .db $11,$13,$13,$77,$87,$3E,$FC,$FC,$F5,$F4,$F4,$F6,$F1,$1C,$0F,$0F,$FC,$FC,$FE,$FF,$3F,$87,$F7,$B3,$0F,$0F,$1F,$FE,$F9,$E7,$EA,$EB
+    '''
+    def __init__(self):
+        cls = self.__class__
+        tokens = parser.Tokenizer.from_str(cls.PORTRAIT_DATA).tokens
+        self.parseobj = parser.Parser(tokens, silent=True)
+        imgdata = self.parseobj.read_data()
+        imgdata = [self.bin2arr(i, 8) for i in imgdata]
+        listing = [imgdata[i:i+8] for i in range(0, len(imgdata), 8)]
+        self.imgdata = [listing[i:i+4] for i in range(0, len(listing), 4)]
+
+    def bin2arr(self, bytedata:int, width:int):
+        if width == 0:
+            return [dcfreader.Colors.WHITE]  #Something must be displayable, even if nothing.
+        arr = []
+        for idx in range(7,7-width,-1):
+            arr.append(dcfreader.Colors.BLACK if (1<<idx) & bytedata else dcfreader.Colors.WHITE)
+        return arr
 
 
 class MenuMakerApp:
@@ -334,6 +360,7 @@ class MenuMakerApp:
         self.interim_parseobj = None
         self.update_interval = 0
         self.dcf_reader = FontReader(self.gamemap)
+        self.portraits = PortraitData()
         master.title("Application Title")
         master.state('zoomed')
         master.after(1000, self.autoupdater)
@@ -560,6 +587,26 @@ class MenuMakerApp:
                         self.pixelOn(tx, ty)
                 except:
                     pass
+
+    def render_portrait(self, portraitid:int):
+        imgdata = self.portraits.imgdata[portraitid]
+        basex = self.gamemap.x()
+        basey = self.gamemap.y()
+        for tiley in range(2):
+            for tilex in range(2):
+                sprite = imgdata[tilex+2*tiley]
+                for spry, rowdata in enumerate(sprite):
+                    for sprx, pixel in enumerate(rowdata):
+                        tx = basex + 8*tilex + sprx
+                        ty = basey + 8*tiley + spry
+                        try:
+                            if pixel == dcfreader.Colors.BLACK:
+                                self.pixelOn(tx, ty)
+                            else:
+                                self.pixelOff(tx, ty)
+                        except:
+                            pass
+
 
     def _create_pixel_grid(self, canvas_width, canvas_height):
         # Calculate pixel dimensions based on integer pixel size
@@ -942,6 +989,9 @@ class MenuMakerApp:
                 ptr += 3
                 if res:
                     ptr += rel if rel < 128 else rel-256
+            elif opcode == 30:  # 1b: m_portrait : A=pid. Temporary command.
+                self.render_portrait(self.gamemap.acc())
+                ptr += 1
             elif opcode == 31:  # 1b: m_debug  : prints debug info to console
                 a = self.gamemap.acc().to_bytes(2, 'big').hex()
                 ap = self.gamemap.accshad().to_bytes(2, 'big').hex()

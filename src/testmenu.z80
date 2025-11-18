@@ -12,11 +12,14 @@
     m_dispacc(mf_5DIGIT|mf_RIGHT_ALIGN) \ .db "G"
     m_drawbox(60,0,92,46)   ;statusbox
     .db "Item\nMagic\nEquip\nStatus\nSave"
+    m_clra()
+    m_seta0(2)
+    m_setxy(8,4)
     m_print(menu_dispCharslots)
     m_eof
 
 menu_dispCharslots:
-    m_setxy(8,4)    ;main screen homeup
+    m_setxy(8,6)    ;main screen homeup
     m_setleft()
     ;chr 1
     m_clra()
@@ -40,7 +43,7 @@ dispCharslots_subchar:
     m_seta0(1)
     m_addap()
     m_djnz(_)
-    m_addxy(0,20)
+    m_addxy(0,19)
     m_eof
 _:  m_clra()
     m_addi()
@@ -60,16 +63,21 @@ _:  m_clra()
     m_mltacc()
     m_addi()
     m_exai()    ;idx now points to character slot in question.
-    ;Print portrait placeholder
-    ;NOTE: You'll want to use an external routine to perform this function
-    ;       or dedicate a command for this feature. Again. You don't want to.
-    m_addxy(0,-1)
-    .db "XXXX"  \ m_addxy(-16,4)
-    .db "XXXX"  \ m_addxy(-16,4)
-    .db "XXXX"  \ m_addxy(-16,3)
-    .db "XXXX"  \ m_addxy(-16,5)
-    m_addxy(0,-16)
-    m_addxy(20,2)
+    ;Start portrait render
+    m_clra()
+    m_addind(p_id)  ;sets A to character ID
+    m_exaap()
+    m_seta(dispCharslots_temp_portraittable)
+    m_addap()   ;address to byte holding portraitid
+    m_exai()    ;portraitid to index
+    m_exaap()   ;store old index to AP
+    m_clra()
+    m_addind(0) ;retrieve portraitid
+    m_exaap()
+    m_exai()    ;restore index
+    m_exaap()   ;awesome.
+    m_portrait
+    m_addxy(20,0)
     ; First line
     m_clra()
     m_addind(p_id)  ;sets A to character ID
@@ -123,13 +131,16 @@ _:  .db "GOOD"
   
 
 dispCharslots_temp_chartable:
-#macro X(idx, gender, dispname, varname)
+#macro X(idx, portraitid, gender, dispname, varname)
     .db dispname
 #endmacro
 #include "src/xdefs/players.z80"
 
-
-
+dispCharslots_temp_portraittable:
+#macro X(idx, portraitid, gender, dispname, varname)
+    .db portraitid
+#endmacro
+#include "src/xdefs/players.z80"
 
 
 
