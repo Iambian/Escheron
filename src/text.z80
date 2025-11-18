@@ -373,14 +373,42 @@ deindtohl:
 	ex  de,hl
 	ret
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ;==============================================================================
 printChar:
-	ld  de,textImageBuffer
+	ld  de,textImageBuffer +1
     ld  L,a
     ld  h,0
     ld  c,L
     ld  b,h
-    add hl,hl
+    add hl,hl	; x2
+	sub SYM_START
+	jr	nc,printChar_bigBig
     add hl,bc   ;multiply by 3 to arrive at fixed-width font offset.
     ld  bc,fontData
     add hl,bc
@@ -399,6 +427,9 @@ printChar:
 	inc de
 	res 7,c
 printChar_thinVertSkip:
+	xor a,a
+	ld	(de),a
+	inc de	;ensure top row is empty. chr 1+5+1 (or 2+5+0) = 7 tall
 	ld	a,c
 	rlca
 	rlca
@@ -431,6 +462,17 @@ printChar_thinLoop:
 		inc de
 		djnz printChar_thinLoop
 		jr  printChar_render
+printChar_bigBig:
+	add hl,hl	; 4x
+	add hl,hl	; 8x
+	ld	bc,bigBigFontData
+	add	hl,bc
+	ld	a,(hl)
+	inc hl
+	push af
+		ld  bc,7
+		ldir
+		jr	printChar_render
 printChar_wide:
 	;Size is in low nibble of C. It is technically possible for a wide char to
 	;be 8 wide, but bit 3 is repurposed for vertical shift. None of the
@@ -468,7 +510,7 @@ printChar_render:
 	ld  (textx),a
 	ld  a,L
 	ld  L,h
-	ld  b,6
+	ld  b,7
 	ld  ix,textImageBuffer
 	jp  iPutSprite
 
@@ -921,6 +963,178 @@ DCSF_GS_ast			.db $20,$a8,$70,$a8,$20	;
 DCSF_GS_asg			.db $70,$08,$68,$a8,$70	;
 
 fontData_end:
+
+;SYM_FIRE      .equ SYM_START + 0
+;SYM_ICE       .equ SYM_START + 1
+;SYM_LIT       .equ SYM_START + 2
+;SYM_POISON    .equ SYM_START + 3
+;SYM_SLEEP     .equ SYM_START + 4
+;SYM_SWORD     .equ SYM_START + 5
+;SYM_STAFF     .equ SYM_START + 6
+;SYM_SHIELD    .equ SYM_START + 7
+;SYM_CLOTHING  .equ SYM_START + 8
+;SYM_ARMOR     .equ SYM_START + 9
+;SYM_ACCESSORY .equ SYM_START + 10
+;SYM_POTION    .equ SYM_START + 11
+;SYM_KEYITEM   .equ SYM_START + 12
+;SYM_HP        .equ SYM_START + 13
+;SYM_MP        .equ SYM_START + 14
+
+bigBigFontData:
+;00
+.db 7
+.db %01000100 ;FIRE
+.db %00010000
+.db %10110100
+.db %00101000
+.db %01001100
+.db %00111000
+.db %00000000
+;01
+.db 5
+.db %00100000 ;LIT
+.db %01000000
+.db %11100000
+.db %01110000
+.db %00100000
+.db %01000000
+.db %00000000
+;02
+.db 6
+.db %00000000 ;ICE
+.db %10101000
+.db %01110000
+.db %11011000
+.db %01110000
+.db %10101000
+.db %00000000
+;03
+.db 6
+.db %01110000 ;POISON
+.db %10101000
+.db %10101000
+.db %01110000
+.db %01010000
+.db %00000000
+.db %00000000
+;04
+.db 6
+.db %01111000 ;SLEEP
+.db %00010000
+.db %00100000
+.db %01111000
+.db %00000000
+.db %10000000
+.db %00000000
+;05
+.db 7
+.db %01000000 ;SWORD
+.db %01100000
+.db %00110000
+.db %00010100
+.db %00001000
+.db %00010100
+.db %00000000
+;06
+.db 7
+.db %00100000 ;STAFF
+.db %01110000
+.db %01010000
+.db %01011000
+.db %00001000
+.db %00000100
+.db %00000000
+;07
+.db 7
+.db %00111000 ;SHIELD
+.db %01000100
+.db %01010100
+.db %01010100
+.db %01000100
+.db %00101000
+.db %00010000
+;08
+.db 7
+.db %01101100 ;CLOTHING
+.db %01111100
+.db %00111000
+.db %00010000
+.db %00101000
+.db %00111000
+.db %00000000
+;09
+.db 7
+.db %01101100 ;ARMOR
+.db %01010100
+.db %00111000
+.db %00101000
+.db %01010100
+.db %01101100
+.db %01000100
+;10
+.db 7
+.db %00110000 ;ACCESSORY
+.db %01101000
+.db %01000000
+.db %01000000
+.db %01000000
+.db %01101000
+.db %00110000
+;11
+.db 7
+.db %00111000 ;POTION
+.db %00010000
+.db %00010000
+.db %00101000
+.db %01000100
+.db %01111100
+.db %00000000
+;12
+.db 7
+.db %01110000 ;KEYITEM
+.db %01000100
+.db %01111100
+.db %00100000
+.db %00110000
+.db %00100000
+.db %00110000
+;13
+.db 5
+.db %00000000 ;HP
+.db %10010000
+.db %10010000
+.db %11110000
+.db %10010000
+.db %10010000
+.db %00000000
+;14
+.db 6
+.db %00000000 ;MP
+.db %10001000
+.db %11011000
+.db %10101000
+.db %10001000
+.db %10001000
+.db %00000000
+;15
+.db 7
+.db %10010000 ;(new wpn) CLAW
+.db %01001000
+.db %00100000 
+.db %10001100
+.db %01011100
+.db %00011000
+.db %00000000
+
+;16
+;.db %00000000
+;.db %00000000
+;.db %00000000
+;.db %00000000
+;.db %00000000
+;.db %00000000
+;.db %00000000
+
 
 ; Copied from somewhere but I can't recall where. Probably from the ION library.
 ; Graphical routine. Places 8x8 sprite object onto screen using XOR logic.

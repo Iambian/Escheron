@@ -76,7 +76,7 @@ defaultSaveFile:
 .db 0            ;12
 ;player3
 .db CID_GLENN    ;p_id
-.db 0            ;p_status
+.db ENF_POISON|ENF_SLEEP           ;p_status
 .db 1            ;p_lvl
 .db 0            ;p_exp
 .dw 48           ;p_hp

@@ -61,6 +61,7 @@ dispCharslots_temp_chartable:
 #macro X(idx, gender, dispname, varname)
     .db dispname
 #endmacro
+
 #include "src/xdefs/players.z80"
 
 

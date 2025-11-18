@@ -49,6 +49,7 @@ class DCFchar(object):
                 self.width = 8
             self.verticalshift = True if b0 & 0b00001000 else False
             emptyrow = self.bin2arr(0, self.width)
+            self.disparr.append(emptyrow)   # Addition to text sys to align sym
             if self.verticalshift:
                 self.disparr.append(emptyrow)
             # Leading row
@@ -62,13 +63,14 @@ class DCFchar(object):
         else:
             # This is a thin character otherwise.
             self.width = (b0>>4) & 7    #bits 4,5,6 hold width up to 5.
+            emptyrow = self.bin2arr(0, self.width)
+            self.disparr.append(emptyrow)   # Addition to text sys to align sym
             # NOTE: Max width is 5 for thin, not 4, because we also encode the 
             # single pixel whitespace after the end of the glyph. Since a nibble
             # is only 4 pixels wide, specifying an empty bit is unnecessary.
             if self.width > 5:
                 raise ValueError(f"Thin character width may not exceed 5.")
             self.verticalshift = True if b0 & 0b10000000 else False
-            emptyrow = self.bin2arr(0, self.width)
             if self.verticalshift:
                 self.disparr.append(emptyrow)
             # Leading row
@@ -90,7 +92,20 @@ class DCFchar(object):
         for idx in range(7,7-width,-1):
             arr.append(Colors.BLACK if (1<<idx) & bytedata else Colors.WHITE)
         return arr
-
+    
+class BigBigchar(DCFchar):
+    def __init__(self, id, dataarray:list|bytearray, displayname, longname=None):
+        #Binary digits are listed [76543210], 7=MSB, 0=LSB.
+        self.id = id    #ASCII(-adjacent) character code.
+        self.dispname = displayname
+        self.longname = longname
+        self.disparr = []
+        self.width = dataarray[0]
+        body = dataarray[1:]
+        #emptyrow = self.bin2arr(0, self.width) #Not used. consumes full height.
+        for byte in body:
+            self.disparr.append(self.bin2arr(byte, self.width))
+    #Inherits bin2arr()
 
 class DCFDefer(NamedTuple):
     id:int
@@ -172,6 +187,8 @@ class DCFReader(object):
             char = self.defaultchar
         return char
 
+    def update(self, char:DCFchar, charid:int):
+        self.codepoints[charid] = char
 
 
 if __name__ == '__main__':

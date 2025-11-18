@@ -313,6 +313,8 @@ dhl_fetch_long_values 	.equ 7
 #define m_mltacc()      .db 20      ; a0 * a1 -> A
 #define m_djnz(rel)     .db 21, rel-$-1 ;A--, `JR rel` if A != 0
 #define m_write()       .db 22      ; a0 -> [I]
+#define m_jrbz(bt, rel) .db 23, bt, rel-$-1  ;jr if bit b of A is zero
+#define m_debug         .db 31
 ;Recipes
 #define m_seta(v) m_seta0((v>>8)&$FF) \ m_swap() \ m_seta0(v&$FF)
 #define m_seti(v) m_exai() \ m_seta(v) \ m_exai()
@@ -326,7 +328,6 @@ dhl_fetch_long_values 	.equ 7
 #define m_add(v) m_exaap() \ m_seta(v) \ m_addap()
 #define m_setap0(v) m_exaap() \ m_seta0(v) \ m_exaap()
 
-#define m_debug .db 31
 
 ;  #define something()
 

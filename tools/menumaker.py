@@ -132,9 +132,179 @@ class GameMap(object):
         return self.get("gameflags", offset)
 
 
-    
+class FontReader(object):
+    BIGBIGFONTDATA = '''bigBigFontData:
+        ;00
+        .db 7
+        .db %01000100 ;FIRE
+        .db %00010000
+        .db %10110100
+        .db %00101000
+        .db %01001100
+        .db %00111000
+        .db %00000000
+        ;01
+        .db 5
+        .db %00100000 ;LIT
+        .db %01000000
+        .db %11100000
+        .db %01110000
+        .db %00100000
+        .db %01000000
+        .db %00000000
+        ;02
+        .db 6
+        .db %00000000 ;ICE
+        .db %10101000
+        .db %01110000
+        .db %11011000
+        .db %01110000
+        .db %10101000
+        .db %00000000
+        ;03
+        .db 6
+        .db %01110000 ;POISON
+        .db %10101000
+        .db %10101000
+        .db %01110000
+        .db %01010000
+        .db %00000000
+        .db %00000000
+        ;04
+        .db 6
+        .db %01111000 ;SLEEP
+        .db %00010000
+        .db %00100000
+        .db %01111000
+        .db %00000000
+        .db %10000000
+        .db %00000000
+        ;05
+        .db 7
+        .db %01000000 ;SWORD
+        .db %01100000
+        .db %00110000
+        .db %00010100
+        .db %00001000
+        .db %00010100
+        .db %00000000
+        ;06
+        .db 7
+        .db %00100000 ;STAFF
+        .db %01110000
+        .db %01010000
+        .db %01011000
+        .db %00001000
+        .db %00000100
+        .db %00000000
+        ;07
+        .db 7
+        .db %00111000 ;SHIELD
+        .db %01000100
+        .db %01010100
+        .db %01010100
+        .db %01000100
+        .db %00101000
+        .db %00010000
+        ;08
+        .db 7
+        .db %01101100 ;CLOTHING
+        .db %01111100
+        .db %00111000
+        .db %00010000
+        .db %00101000
+        .db %00111000
+        .db %00000000
+        ;09
+        .db 7
+        .db %01101100 ;ARMOR
+        .db %01010100
+        .db %00111000
+        .db %00101000
+        .db %01010100
+        .db %01101100
+        .db %01000100
+        ;10
+        .db 7
+        .db %00110000 ;ACCESSORY
+        .db %01101000
+        .db %01000000
+        .db %01000000
+        .db %01000000
+        .db %01101000
+        .db %00110000
+        ;11
+        .db 7
+        .db %00111000 ;POTION
+        .db %00010000
+        .db %00010000
+        .db %00101000
+        .db %01000100
+        .db %01111100
+        .db %00000000
+        ;12
+        .db 7
+        .db %01110000 ;KEYITEM
+        .db %01000100
+        .db %01111100
+        .db %00100000
+        .db %00110000
+        .db %00100000
+        .db %00110000
+        ;13
+        .db 5
+        .db %00000000 ;HP
+        .db %10010000
+        .db %10010000
+        .db %11110000
+        .db %10010000
+        .db %10010000
+        .db %00000000
+        ;14
+        .db 6
+        .db %00000000 ;MP
+        .db %10001000
+        .db %11011000
+        .db %10101000
+        .db %10001000
+        .db %10001000
+        .db %00000000
+        ;15
+        .db 7
+        .db %10010000 ;(new wpn) CLAW
+        .db %01001000
+        .db %00100000 
+        .db %10001100
+        .db %01011100
+        .db %00011000
+        .db %00000000
+
+        ;16
+        ;.db %00000000
+        ;.db %00000000
+        ;.db %00000000
+        ;.db %00000000
+        ;.db %00000000
+        ;.db %00000000
+        ;.db %00000000
+    '''
+    def __init__(self, gamemap:GameMap):
+        cls = self.__class__
+        self.gamemap = gamemap
+        self.dcf_reader = dcfreader.DCFReader("tools/escheron.dcf")
+        tokens = parser.Tokenizer.from_str(cls.BIGBIGFONTDATA).tokens
+        self.parseobj = parser.Parser(tokens, silent=True)
+        fontdata = self.parseobj.read_data()
+        self.fontdata = [fontdata[i:i+8] for i in range(0, len(fontdata), 8)]
+        for idx, data in enumerate(self.fontdata, start= int(self.gamemap.symtable["SYM_START"].body[0].v)):
+            #print(f"{idx}: {data.hex()}")
+            self.dcf_reader.update(dcfreader.BigBigchar(idx, data, str(idx)), idx)
+        return
 
 
+
+    def get_char(self, charid):
+        return self.dcf_reader.get_char(charid)
 
 
 class MenuMakerApp:
@@ -163,7 +333,7 @@ class MenuMakerApp:
         self.master = master
         self.interim_parseobj = None
         self.update_interval = 0
-        self.dcf_reader = dcfreader.DCFReader("tools/escheron.dcf")
+        self.dcf_reader = FontReader(self.gamemap)
         master.title("Application Title")
         master.state('zoomed')
         master.after(1000, self.autoupdater)
@@ -764,6 +934,14 @@ class MenuMakerApp:
                 adr = self.gamemap.idx()
                 self.gamemap.memory[adr] = self.gamemap.acc1()
                 ptr += 1
+            elif opcode == 23:  # 3b: m_jrbz()  :jr if bit b of A is zero.
+                b = self.gamemap.memory[ptr + 1]
+                rel = self.gamemap.memory[ptr + 2]
+                res = True if (self.gamemap.acc() & (1 << b)) == 0 else False
+                #print(f"jrbz {b}, {rel}: {res}")
+                ptr += 3
+                if res:
+                    ptr += rel if rel < 128 else rel-256
             elif opcode == 31:  # 1b: m_debug  : prints debug info to console
                 a = self.gamemap.acc().to_bytes(2, 'big').hex()
                 ap = self.gamemap.accshad().to_bytes(2, 'big').hex()

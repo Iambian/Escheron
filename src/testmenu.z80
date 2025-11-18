@@ -26,11 +26,11 @@ menu_dispCharslots:
     m_clra()
     m_addind(charslotid2)
     m_exaap()
-    ;m_print(dispCharslots_subchar)
+    m_print(dispCharslots_subchar)
     m_clra()
     m_addind(charslotid3)
     m_exaap()
-    ;m_print(dispCharslots_subchar)
+    m_print(dispCharslots_subchar)
     m_eof
 
 ;input:  I= default save file, AP0 = slot position in data file (0=empty)
@@ -63,12 +63,13 @@ _:  m_clra()
     ;Print portrait placeholder
     ;NOTE: You'll want to use an external routine to perform this function
     ;       or dedicate a command for this feature. Again. You don't want to.
+    m_addxy(0,-1)
     .db "XXXX"  \ m_addxy(-16,4)
     .db "XXXX"  \ m_addxy(-16,4)
     .db "XXXX"  \ m_addxy(-16,3)
     .db "XXXX"  \ m_addxy(-16,5)
     m_addxy(0,-16)
-    m_addxy(20,1)
+    m_addxy(20,2)
     ; First line
     m_clra()
     m_addind(p_id)  ;sets A to character ID
@@ -81,18 +82,45 @@ _:  m_clra()
     m_printacc()
     m_newline()
     m_addxy(20,-1)
-
-    m_debug
-
-
-
-
-    ;.db "Place-\n"  \ m_addxy(20,-1)
-    ; Second line
-    .db "STATDATA\n"  \ m_addxy(0,4)
+    m_print(dispCharslots_show_shortStats)
+    m_newline()
+    m_addxy(0,4)
     m_exiip()   ;restores index
     m_eof
 
+dispCharslots_show_shortStats:
+    m_clra0()
+    m_addind(p_hp + 1)
+    m_swap()
+    m_clra0()
+    m_addind(p_hp + 0)
+    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
+    .db SYM_HP ," "
+    m_print(dispCharslots_show_ispoison)
+    m_print(dispCharslots_show_issleep)
+    m_eof
+
+dispCharslots_show_ispoison:
+    m_clra0()
+    m_addind(p_status)
+    m_jrbz(STATUS_POISON, _)
+    .db SYM_POISON
+_:  m_eof
+dispCharslots_show_issleep:
+    m_clra0()
+    m_addind(p_status)
+    m_jrbz(STATUS_SLEEP, _)
+    .db SYM_SLEEP
+_:  m_eof
+dispCharslots_show_state:
+    m_clra0()
+    m_addind(p_status)
+    m_jrbz(ELM_KO, _)
+    .db "DEAD"
+    m_eof
+_:  .db "GOOD"
+    m_eof
+  
 
 dispCharslots_temp_chartable:
 #macro X(idx, gender, dispname, varname)
