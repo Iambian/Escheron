@@ -50,7 +50,7 @@ X(09, 7 ,GENDER_MALE  , "????   \0","UNK")
 
 #ifndef Y
     #undef X_PLAYERS
-    #macro Y(id, cc)
+    #macro Y(id, maxatk, maxdef, maxmag, maxagi)
         #ifndef X_PLAYERS
             #define X_PLAYERS -1
         #endif
@@ -60,17 +60,17 @@ X(09, 7 ,GENDER_MALE  , "????   \0","UNK")
         #define X_PLAYERS eval(X_PLAYERS + 1)
     #endmacro
 #endif
-
-Y(CID_NULL  ,0)
-Y(CID_MAYA  ,0)
-Y(CID_EDMUND,0)
-Y(CID_GLENN ,0)
-Y(CID_ROSE  ,0)
-Y(CID_BARIUS,0)
-Y(CID_KYRIE ,0)
-Y(CID_TALOS ,0)
-Y(CID_LARS  ,0)
-Y(CID_UNK   ,0)
+;   id   max:atk,def,mag,agi
+Y(CID_NULL  ,255,255,255,255)
+Y(CID_MAYA  , 60, 60, 99, 60)
+Y(CID_EDMUND, 80, 99, 60, 40)
+Y(CID_GLENN , 99, 80, 40, 60)
+Y(CID_ROSE  , 60, 60, 80, 80)
+Y(CID_BARIUS, 80, 60, 40, 99)
+Y(CID_KYRIE , 40, 40, 99, 99)
+Y(CID_TALOS ,120, 60, 80, 80)
+Y(CID_LARS  , 60, 60, 80, 80)
+Y(CID_UNK   , 60, 60, 80, 80)
 
 
 

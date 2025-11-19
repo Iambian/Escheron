@@ -53,6 +53,7 @@ textacc         .var(2)     ;text system accumulator
 textidx         .var(2)     ;text system index register
 textaccshadow   .var(2)     ;text system shadow accumulator
 textidxshadow   .var(2)     ;text system shadow index
+textaccshadow2  .var(2)
 
 ; -- variables go here
 .varvalidate(saveSScreen_int-saveSScreen_mid)
@@ -250,6 +251,27 @@ dhl_fetch_long_values 	.equ 7
 #define mf_SIGNED_SHOW_POS (1<<dhl_show_pos_sign)
 #define mf_USE_LONG_VALUES (1<<dhl_fetch_long_values)
 
+mmb_list_short      .equ 0
+mmb_list_long       .equ 1
+mmb_list_hpboost    .equ 2
+mmb_list_mpboost    .equ 3
+mmb_list_atkboost   .equ 4
+mmb_list_defboost   .equ 5
+mmb_list_magboost   .equ 6
+mmb_list_agiboost   .equ 7
+mmb_list_onlystatus .equ 8
+mmb_single          .equ 9
+
+#define mm_LIST_SHORT       (1 << mmb_list_short     )
+#define mm_LIST_LONG        (1 << mmb_list_long      )
+#define mm_LIST_HPBOOST     (1 << mmb_list_hpboost   )
+#define mm_LIST_MPBOOST     (1 << mmb_list_mpboost   )
+#define mm_LIST_ATKBOOST    (1 << mmb_list_atkboost  )
+#define mm_LIST_DEFBOOST    (1 << mmb_list_defboost  )
+#define mm_LIST_MAGBOOST    (1 << mmb_list_magboost  )
+#define mm_LIST_AGIBOOST    (1 << mmb_list_agiboost  )
+#define mm_LIST_ONLYSTATUS  (1 << mmb_list_onlystatus)
+#define mm_LIST_SINGLE      (1 << mmb_single         )
 
 ;#define m_eof .db 0
 ;#define m_setxy(x,y) .db 1,x,y
@@ -314,6 +336,7 @@ dhl_fetch_long_values 	.equ 7
 #define m_djnz(rel)     .db 21, rel-$-1 ;A--, `JR rel` if A != 0
 #define m_write()       .db 22      ; a0 -> [I]
 #define m_jrbz(bt, rel) .db 23, bt, rel-$-1  ;jr if bit b of A is zero
+#define m_exaap2()      .db 24      ; A <-> ASHAD2
 
 #define m_portrait      .db 30      ;Remove this later and require a call.
 #define m_debug         .db 31
@@ -345,6 +368,12 @@ dhl_fetch_long_values 	.equ 7
 #define GENDER_BOTH 3
 #define GENDER_UNKNOWN 4
 #define GENDER_ALL 255
+
+; I'm not sure where this is supposed to be defined
+; so here's as good a place as any.
+MAX_ALLOWED_HP .EQU 600
+MAX_ALLOWED_MP .EQU 255
+
 
 
 ;Symbol extensions used by the text rendering system to draw icons

@@ -116,6 +116,10 @@ class GameMap(object):
         if set is not None:
             self.set2("textaccshadow", set)
         return self.get2("textaccshadow")
+    def accshad2(self, set=None):
+        if set is not None:
+            self.set2("textaccshadow2", set)
+        return self.get2("textaccshadow2")
     
     def NLH(self):
         return self.getval("NEWLINE_HEIGHT")
@@ -866,7 +870,7 @@ class MenuMakerApp:
                 if exception:
                     self.parser_status_label.config(text=f"Exc: {exception}")
                 else:
-                    self.parser_status_label.config(text=f"{len(data)} bytes at {origin:04x} ran successfully.")
+                    self.parser_status_label.config(text=f"{len(data)} bytes at 0x{origin:04x} ran successfully.")
                 break
             if (ptr < bound_start or ptr >= bound_end) or EOF_encountered:
                 if exception:
@@ -924,7 +928,7 @@ class MenuMakerApp:
                 self.gamemap.acc1(self.gamemap.memory[ptr + 1])
                 ptr += 2
             elif opcode == 9:   # 1b: m_menuopt()
-                raise NotImplementedError("OPCODE 9 requires that I have an actual menu system.")
+                #raise NotImplementedError("OPCODE 9 requires that I have an actual menu system.")
                 ptr += 1        # TODO: Implement menuopt logic
             elif opcode == 10:  # 1b: m_newline()
                 self.gamemap.x(self.gamemap.cr())
@@ -989,6 +993,11 @@ class MenuMakerApp:
                 ptr += 3
                 if res:
                     ptr += rel if rel < 128 else rel-256
+            elif opcode == 24:  # 1b: m_exapp()     :swaps A with APP
+                a,b = (self.gamemap.acc(), self.gamemap.accshad2())
+                self.gamemap.acc(b)
+                self.gamemap.accshad2(a)
+                ptr += 1
             elif opcode == 30:  # 1b: m_portrait : A=pid. Temporary command.
                 self.render_portrait(self.gamemap.acc())
                 ptr += 1
@@ -997,7 +1006,8 @@ class MenuMakerApp:
                 ap = self.gamemap.accshad().to_bytes(2, 'big').hex()
                 i = self.gamemap.idx().to_bytes(2, 'big').hex()
                 ip = self.gamemap.idxshad().to_bytes(2, 'big').hex()
-                print(f"ACC: ${a}, ACP: ${ap}, IDX: ${i}, IDP: ${ip}")
+                ap2 = self.gamemap.accshad2().to_bytes(2, 'big').hex()
+                print(f"ACC: ${a}, ACP: ${ap}, IDX: ${i}, IDP: ${ip}, AC2: ${ap2}")
                 ptr += 1
             else:
                 nx, _ = self.print_char(opcode, self.gamemap.x(), self.gamemap.y())
