@@ -368,6 +368,10 @@ class MenuMakerApp:
         master.title("Application Title")
         master.state('zoomed')
         master.after(1000, self.autoupdater)
+        # Run-time binding symbol name to function dict
+        self.callbind = dict()
+        self.callbind['menu_drawPortrait'] = lambda: self.render_portrait(self.gamemap.acc())
+
 
         self.input_history_file = "tools/menumaker_input.txt"
         master.protocol("WM_DELETE_WINDOW", self._on_closing) # Handle window close event
@@ -826,6 +830,7 @@ class MenuMakerApp:
         input_text = self.text_input.get("1.0", tk.END).strip()
         #print(f"Input received: {input_text}") # For debugging
         tokenstream = parser.TokenStream.from_str(input_text)
+        fullcallbind = dict()
         try:
             exception = None
             parseobj = parser.Parser(tokenstream.tokens, self.gamemap.symtable, silent=True)
@@ -833,6 +838,18 @@ class MenuMakerApp:
             segment:parser.SegmentDef = parseobj.segments["__DEFAULT"]
             origin = segment.baseaddr
             data = segment.data
+            #NOTE: fullcallbind relates assembly address to label name. Then you
+            #   use that label as a key i nself.callbind to call routine
+            for key in self.callbind:
+                if key in parseobj.symtable:
+                    try:
+                        val = int(parseobj.symtable[key].v)
+                        if val in fullcallbind:
+                            print(f"Labels must have unique values/addresses. Found redefinition of '{fullcallbind[val]}' in '{key}', with value: {val} ")
+                        else:
+                            fullcallbind[val] = key
+                    except:
+                        continue
             if "__REPARSE_INTERVAL"  in parseobj.symtable:
                 try:
                     newinter = int(parseobj.symtable["__REPARSE_INTERVAL"].body[0].v)
@@ -919,7 +936,12 @@ class MenuMakerApp:
             elif opcode == 6:   # 3b: m_call(adr)
                 lo_adr = self.gamemap.memory[ptr + 1]
                 hi_adr = self.gamemap.memory[ptr + 2]
-                raise NotImplementedError("OPCODE 6 (CALL) requires Z80 simulator or equivalent.")
+                adr = (hi_adr*256)+lo_adr
+                if adr in fullcallbind:
+                    k = fullcallbind[adr]
+                    if k in self.callbind:
+                        f = self.callbind[k]
+                        f()
                 ptr += 3        # TODO: Implement call logic
             elif opcode == 7:   # 1b: m_clra0()
                 self.gamemap.acc1(0)
@@ -997,9 +1019,6 @@ class MenuMakerApp:
                 a,b = (self.gamemap.acc(), self.gamemap.accshad2())
                 self.gamemap.acc(b)
                 self.gamemap.accshad2(a)
-                ptr += 1
-            elif opcode == 30:  # 1b: m_portrait : A=pid. Temporary command.
-                self.render_portrait(self.gamemap.acc())
                 ptr += 1
             elif opcode == 31:  # 1b: m_debug  : prints debug info to console
                 a = self.gamemap.acc().to_bytes(2, 'big').hex()

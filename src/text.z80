@@ -1273,3 +1273,51 @@ imPutSpriteInvSkip1:
 	djnz	imPutSpriteInvLoop1
 	ret
 
+;===============================================================================
+; Temporary location for menu system calls.
+; Once settled, move these to the menu system.
+;
+
+menu_drawPortrait:
+	ld	hl,(textacc)
+	add hl,hl 	;x2
+	add hl,hl	;x4
+	add hl,hl	;x8
+	add hl,hl	;x16
+	add hl,hl	;x32
+	ld	de,dispCharslots_temp_portraittable
+	add hl,de
+	push hl
+	pop ix
+	ld	hl,(textx)
+	ld  a,l
+	ld	l,h
+	ld  b,8
+	push hl
+		push af
+			; B=height L=y A=x IX=sprPtr; note: IX = IX+B at end.
+			call iPutSpriteInv	
+		pop af
+	pop hl
+	push hl
+		push af
+			add a,8
+			call iPutSpriteInv
+		pop af
+	pop hl
+	ld	de,8
+	add hl,de
+	push hl
+		push af
+			call iPutSpriteInv
+		pop af
+	pop hl
+	add a,8
+	jp iPutSpriteInv
+
+
+dispCharslots_temp_portraittable:
+#macro X(idx, portraitid, gender, dispname, varname)
+    .db portraitid
+#endmacro
+#include "src/xdefs/players.z80"

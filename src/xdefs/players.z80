@@ -31,7 +31,7 @@
             #endif
         #endmacro
     #else
-        #macro X(idx, gender, dispname, varname)
+        #macro X(idx, portraitid, gender, dispname, varname)
             #define X_PLAYERS
         #endmacro
     #endif

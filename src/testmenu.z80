@@ -131,7 +131,7 @@ dispCharslots_slotFromSingle:
     m_exaap()
     m_exai()    ;restore index
     m_exaap()   ;awesome.
-    m_portrait
+    m_call(menu_drawPortrait)
     m_addxy(20,0)
     m_exaap2()
     m_jrbz(mmb_single , _)
@@ -450,8 +450,10 @@ dispCharslots_temp_maxagitable:
 #endmacro
 #include "src/xdefs/players.z80"
 
-
-
+; THIS LABEL WILL BE DEFINED IN THE MENU SYSTEM UPON INTEGRATION
+menu_drawPortrait:
+    .db $00
+    .db $C9
 
 
 

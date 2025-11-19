@@ -337,8 +337,6 @@ mmb_single          .equ 9
 #define m_write()       .db 22      ; a0 -> [I]
 #define m_jrbz(bt, rel) .db 23, bt, rel-$-1  ;jr if bit b of A is zero
 #define m_exaap2()      .db 24      ; A <-> ASHAD2
-
-#define m_portrait      .db 30      ;Remove this later and require a call.
 #define m_debug         .db 31
 ;Recipes
 #define m_seta(v) m_seta0((v>>8)&$FF) \ m_swap() \ m_seta0(v&$FF)

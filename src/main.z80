@@ -129,7 +129,7 @@ address_test .equ $
 #include "src/text.z80"
 
 dispCharslots_temp_chartable:
-#macro X(idx, gender, dispname, varname)
+#macro X(idx, portraitid, gender, dispname, varname)
     .db dispname
 #endmacro
 #include "src/xdefs/players.z80"
