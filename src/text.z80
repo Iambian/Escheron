@@ -307,6 +307,101 @@ printF_skipswapaccbytes:
 ;printF_skip:
 	ret
 
+printF_opers:	;rename this later. Testing to see how the routine would look.
+	;%OOOSAAA
+	push de
+		ld 	hl,gameflags
+		ld	c,a
+		and a,7
+		call addAtoHL
+		ld	a,c
+		ld	d,0
+		ld	e,(hl)
+		bit 3,a
+		jr	z,+_
+		inc hl
+		ld	d,(hl)
+_:		ld	hl,(textacc)
+		rlca
+		rlca
+		rlca
+		and 7
+		ld	b,a
+		djnz +_
+		;OR
+		ld	a,h
+		or	d
+		ld	h,a
+		ld  a,l
+		or  e
+		ld	l,a
+		jr	printF_opers_finish
+_:		djnz +_
+		;AND
+		ld	a,h
+		and	d
+		ld	h,a
+		ld  a,l
+		and e
+		ld	l,a
+		jr	printF_opers_finish
+_:		djnz +_
+		;XOR
+		ld	a,h
+		xor	d
+		ld	h,a
+		ld  a,l
+		xor	e
+		ld	l,a
+		jr	printF_opers_finish
+_:		djnz +_
+		;ADD
+		add hl,de
+		jr	printF_opers_finish
+_:		djnz +_
+		;SUB
+		or	a
+		sbc hl,de
+		jr	printF_opers_finish
+_:		djnz +_
+		;NOT - this is actually the fastest way.
+		ld	a,d
+		cpl
+		ld	h,a
+		ld  a,e
+		cpl
+		ld	l,a
+		jr	printF_opers_finish
+_:		djnz +_
+		;NEG
+		xor a
+		ld	l,a
+		ld  h,a
+		sbc hl,de
+		jr  printF_opers_finish
+_:		ex 	de,hl
+printF_opers_finish:
+		ld	(textacc),hl
+	pop de
+	ret
+
+
+
+
+
+#define m_XF_LD 0
+#define m_XF_OR 1
+#define m_XF_AND 2
+#define m_XF_XOR 3
+#define m_XF_ADD 4
+#define m_XF_SUB 5
+#define m_XF_NOT 6
+#define m_XF_NEG 7
+
+
+
+
+
 .echo "Sizeof printF routine ",$-printFOffpage
 
 printF_multaccsub:

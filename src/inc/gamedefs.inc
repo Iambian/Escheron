@@ -273,6 +273,15 @@ mmb_single          .equ 9
 #define mm_LIST_ONLYSTATUS  (1 << mmb_list_onlystatus)
 #define mm_LIST_SINGLE      (1 << mmb_single         )
 
+#define m_XF_LD 0
+#define m_XF_OR 1
+#define m_XF_AND 2
+#define m_XF_XOR 3
+#define m_XF_ADD 4
+#define m_XF_SUB 5
+#define m_XF_NOT 6
+#define m_XF_NEG 7
+
 ;#define m_eof .db 0
 ;#define m_setxy(x,y) .db 1,x,y
 ;#define m_addxy(x,y) .db 2,x,y
@@ -311,6 +320,12 @@ mmb_single          .equ 9
 ; ACC (A) = A0:A1, ACC PRIME (AP) = AP
 ; IDX (I) = IDX, IDX PRIME (IP) = IP
 ;
+;Most of the archetecture is accumulator-based. Most instructions will go
+;through it, utilizing exchanges to move values around, and ADD to double up
+;on both math and moving/duplicating data. Each "register" is 2 bytes wide.
+;
+;
+;
 
 #define m_eof           .db 0
 #define m_setxy(x,y)    .db 1,x,y
@@ -325,7 +340,7 @@ mmb_single          .equ 9
 #define m_newline()     .db 10      ;CTRL CODE: LF
 #define m_swap()        .db 11      ; a0 <-> a1
 #define m_exaap()       .db 12      ; A <-> AP
-#define m_setleft()     .db 13      ;CTRL CODE: CR
+#define m_setleft()     .db 13      ;CTRL CODE: CR. Resets to this X-pos on LF.
 #define m_exiip()       .db 14      ; I <-> IP
 #define m_exai()        .db 15      ; A <-> I
 #define m_addap()       .db 16      ; A + AP -> A
@@ -337,7 +352,24 @@ mmb_single          .equ 9
 #define m_write()       .db 22      ; a0 -> [I]
 #define m_jrbz(bt, rel) .db 23, bt, rel-$-1  ;jr if bit b of A is zero
 #define m_exaap2()      .db 24      ; A <-> ASHAD2
+;%SSSAAAAA exchange up to 8b from reg A+ with address in flagbank. Can save entire register frame.
+#define m_exf(fb,size)  .db 25,fb&31+(((size-1)&7)<<5)
+;%OOOSAAAA fbank adr opers with A, store to A, 1 or 2 bytes.
+#define m_ldaf(fb,size)  .db 26, fb&15+(((size-1)&1)<<4)+((m_XF_LD  &7)<<5)
+#define m_oraf(fb,size)  .db 26, fb&15+(((size-1)&1)<<4)+((m_XF_OR  &7)<<5)
+#define m_andaf(fb,size) .db 26, fb&15+(((size-1)&1)<<4)+((m_XF_AND &7)<<5)
+#define m_xoraf(fb,size) .db 26, fb&15+(((size-1)&1)<<4)+((m_XF_XOR &7)<<5)
+#define m_addaf(fb,size) .db 26, fb&15+(((size-1)&1)<<4)+((m_XF_ADD &7)<<5)
+#define m_subaf(fb,size) .db 26, fb&15+(((size-1)&1)<<4)+((m_XF_SUB &7)<<5)
+#define m_notaf(fb,size) .db 26, fb&15+(((size-1)&1)<<4)+((m_XF_NOT &7)<<5)
+#define m_negaf(fb,size) .db 26, fb&15+(((size-1)&1)<<4)+((m_XF_NEG &7)<<5)
+
+#define m_ldind(v)      .db 27,v    ; uint8_t([ I + v ]) -> a0. Clears a1
+
 #define m_debug         .db 31
+
+
+
 ;Recipes
 #define m_seta(v) m_seta0((v>>8)&$FF) \ m_swap() \ m_seta0(v&$FF)
 #define m_seti(v) m_exai() \ m_seta(v) \ m_exai()
@@ -350,7 +382,7 @@ mmb_single          .equ 9
 #define m_clri() m_exai() \ m_clra() \ m_exai()
 #define m_add(v) m_exaap() \ m_seta(v) \ m_addap()
 #define m_setap0(v) m_exaap() \ m_seta0(v) \ m_exaap()
-
+#define m_ldind2b(v) m_ldind(v+1) \ m_swap() \ m_addind(v)
 
 ;  #define something()
 

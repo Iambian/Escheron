@@ -70,6 +70,8 @@ class GameMap(object):
         else:
             raise ValueError(f"Object [{label}] of unknown type")
         return value
+    def getaddr(self, label):
+        return int(self.symtable[label].v)
     def exchange(self,f1,f2):
         a = f1()
         b = f2()
@@ -1020,6 +1022,54 @@ class MenuMakerApp:
                 self.gamemap.acc(b)
                 self.gamemap.accshad2(a)
                 ptr += 1
+            elif opcode == 25:  # 2b: m_exf()   ;%SSSAAAAA
+                bytecode = self.gamemap.memory[ptr + 1]
+                size = ((bytecode >> 5) & 7) + 1
+                offset = bytecode & 31
+                flagbank = self.gamemap.getaddr("gameflags")
+                regframe = self.gamemap.getaddr("textacc")
+                for idx in range(size):
+                    a = self.gamemap.memory[regframe]
+                    self.gamemap.memory[regframe] = self.gamemap.memory[flagbank+offset]
+                    self.gamemap.memory[flagbank+offset] = a
+                    flagbank += 1
+                    regframe += 1
+                ptr += 2
+            elif opcode == 26:  #2b m_Xaf(). %OOOSAAAA. Massively overloaded.
+                bytecode = self.gamemap.memory[ptr + 1]
+                is2byte = False if ((bytecode >> 4) & 1) == 0 else True
+                offset = bytecode & 15
+                oper = (bytecode >> 5) & 7
+                acc = self.gamemap.acc()
+                flagbank = self.gamemap.getaddr("gameflags")
+                other = self.gamemap.memory[flagbank + offset]
+                if is2byte:
+                    other += (self.gamemap.memory[flagbank + offset + 1] << 8)
+                else:
+                    acc = acc & 0xFF
+                if oper == 0:
+                    acc = other
+                elif oper == 1:
+                    acc = acc | other
+                elif oper == 2:
+                    acc = acc & other
+                elif oper == 3:
+                    acc = acc ^ other
+                elif oper == 4:
+                    acc = acc + other
+                elif oper == 5:
+                    acc = acc - other
+                elif oper == 6:
+                    acc = (-other) & 0xFFFF
+                elif oper == 7:
+                    acc = (~other) & 0xFFFF
+                self.gamemap.acc(acc)
+            elif opcode == 27:  # 2b: m_ldind()
+                offset = self.gamemap.memory[ptr + 1]
+                offset_int8 = offset if offset < 128 else offset-256
+                memlookup = self.gamemap.memory[self.gamemap.idx()+offset_int8]
+                self.gamemap.acc(memlookup & 0xFF)
+                ptr += 2
             elif opcode == 31:  # 1b: m_debug  : prints debug info to console
                 a = self.gamemap.acc().to_bytes(2, 'big').hex()
                 ap = self.gamemap.accshad().to_bytes(2, 'big').hex()

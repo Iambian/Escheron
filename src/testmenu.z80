@@ -1,6 +1,144 @@
+;NOTE: Prior iteration is using 915 bytes for partial charstatus and main menu
 #define __REPARSE_INTERVAL 0
 
+
+
+
+chardisp_options    .equ 8
+menu_slotoffset     .equ 13     ;1b charslot id offset (0-2)
+menu_slotid         .equ 13     ;1b ID of character slot (1-N)
+menu_slotpos        .equ 13     ;2b slot address
+menu_basefile       .equ 11     ;2b index to save file
+menu_tempswap       .equ 15
+
+
+
+
+
+#define mx_clear m_ldaf(menu_zero, 2)
+
 .org $4000
+; -- SHOW MAIN MENU
+    m_drawbox(0,0,96,64)    ;mainbox
+    ;m_drawbox(60,45,92,63)  ;moneybox
+    m_addxy(0,2)
+    m_seta(defaultSaveFile)
+    m_exai()
+    m_ldind2b(gold_stash)
+    m_dispacc(mf_5DIGIT|mf_RIGHT_ALIGN) \ .db "G"
+    m_drawbox(60,0,92,46)   ;statusbox
+    .db "Item\nMagic\nEquip\nStatus\nSave"
+    m_seta(mm_LIST_SHORT)
+    m_exaf(chardisp_options, 2)
+    m_print(menu_dc_multi)
+    m_eof
+
+
+menu_dc_single:
+
+
+menu_dc_multi:
+    m_exai()                    ;move save file pointer to accumulator
+    m_exaf(menu_basefile, 2)    ;and write that out to memory
+    m_exai()                    ;and back to index, because we're using it.
+    ;
+    m_ldind(charslotid1)
+    m_exaf(menu_slotid, 2)
+    m_print(menu_dc_lines)
+    ;
+    m_ldind(charslotid2)
+    m_exaf(menu_slotid, 2)
+    m_print(menu_dc_lines)
+    ;
+    m_ldind(charslotid3)
+    m_exaf(menu_slotid, 2)
+    m_print(menu_dc_lines)
+    m_eof
+
+
+;input: (menu_slotoffset) = slot offset, I = savefileindex
+menu_dc_lookup_from_offset:
+    m_ldaf(menu_slotoffset)
+    m_addi()
+    m_exai()
+    m_ldind(0)
+    m_exaf(menu_slotid, 2)
+.assert((player0-playerobj) < 128, "Distance to first charslot must be int8.")
+;input: (menu_slotid) = slot id.
+menu_dc_lookup_from_id:
+    m_seta0(player0-playerobj)
+    m_sext()                    ;one slot prior
+    m_addaf(menu_basefile, 2)   ;and set the adjusted address to 1 slot prior.
+    m_exai()                    ;Store result into index.
+    m_ldaf(menu_slotid-1, 2)    ;Get slot ID into MSB of A
+    m_seta0(playerobj)          ;Slot size into LSB
+    m_mltacc()                  ;Multiply to get distance into modified index
+    m_addai()                   ;And complete the address to character data.
+    m_exaf(menu_slotpos, 2)     ;Store result safely.
+    m_ldai(menu_slotpos, 2)     ;Retrieve it again because we'll need it now.
+    m_exai()                    ;... in index.
+    m_eof
+
+
+menu_dc_lines:
+    m_printf(menu_dc_lookup_from_id)
+menu_dc_lines_from_single:
+    m_seta(1)
+    m_addind(p_id)
+    m_djnz(_)
+    m_addxy(0, 19)
+    m_eof
+_:  m_swap()
+    ;Begin portrait render. I = character data start
+    ;
+    ;the stuff after this needs to be reworked. i hadn't written the lookup
+    ;routines at the time the following was written.
+    ;
+
+
+
+    m_exai()    ;charid to index.
+    m_seta(dispCharslots_temp_portraittable)    ;discard old index for LUT adr
+    m_addai()       ;get offset into LUT
+    m_exai()        ;full address into index, MSB=0.
+    m_ldind(0)
+    m_call(menu_drawPortrait)
+    m_addxy(20, 0)
+    m_ldaf(chardisp_options, 2)
+    m_jrbz(mmb_single, _)
+    m_addxy(4, 0)
+_:  m_ldaf(menu_basefile, 2)
+    m_exai()        ;restore index into save file
+
+
+
+    m_seta0()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     m_seta(1)
     m_djnz(_)
 

@@ -134,10 +134,16 @@ dispCharslots_temp_chartable:
 #endmacro
 #include "src/xdefs/players.z80"
 
+#macro testext(primary, secondary)
+    #ifndef secondary
+        #define secondary "NULL"
+    #endif
+    .echo "Primary: ", primary, ", secondary: ",secondary,"."
+#endmacro
 
-
-
-
+#define secondary "not-null"
+testext("Hello")
+.echo "After-macro: ",secondary
 
 .nextpage
 
