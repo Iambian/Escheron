@@ -53,18 +53,17 @@
 ; [negative][instruction-width]
 ;
 
-m_seta($1234)
 
 
 
-dispCharslots_temp_chartable:
-#macro X(idx, gender, dispname, varname)
-    .db dispname
-#endmacro
 
-#include "src/xdefs/players.z80"
+;dispCharslots_temp_chartable:
+;#macro X(idx, gender, dispname, varname)
+;    .db dispname
+;#endmacro
+;#include "src/xdefs/players.z80"
 
-
+m_exfa(11,2)
 
 
 ;m_setxy($05,5)    ;this is a comment

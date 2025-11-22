@@ -3,66 +3,87 @@
 
 
 
-
-chardisp_options    .equ 8
-menu_slotoffset     .equ 13     ;1b charslot id offset (0-2)
-menu_slotid         .equ 13     ;1b ID of character slot (1-N)
-menu_slotpos        .equ 13     ;2b slot address
+menu_temp           .equ 8      ;1b temporary purposes
+chardisp_options    .equ 9      ;2b flags
 menu_basefile       .equ 11     ;2b index to save file
-menu_tempswap       .equ 15
+menu_slotoffset     .equ 13     ;1b (use 2) charslot id offset (0-2)
+menu_slotid         .equ 13     ;1b (use 2) ID of character slot (1-N)
+menu_slotpos        .equ 13     ;2b slot address
+menu_tempswap       .equ 15     ;Extended memory
 
 
 
 
 
-#define mx_clear m_ldaf(menu_zero, 2)
+;#define mx_clear m_ldaf(menu_zero, 2)
 
 .org $4000
+; -- Init base state
+    m_seta(defaultSaveFile)
+    m_ldfa(menu_basefile, 2)
+    m_exai()
+
+; -- DRAW SINGLE CHARACTER
+    m_drawbox(0,0,96,24)        ;BG: character box
+    m_seta(0)   ;charslot 2
+    m_ldfa(menu_slotoffset, 2)
+    m_print(menu_dc_single)
+    m_drawbox(0,24,96,64)       ;FG: status details box
+    m_print(menu_dc_char_details)
+    m_eof
+
 ; -- SHOW MAIN MENU
     m_drawbox(0,0,96,64)    ;mainbox
     ;m_drawbox(60,45,92,63)  ;moneybox
-    m_addxy(0,2)
-    m_seta(defaultSaveFile)
-    m_exai()
-    m_ldind2b(gold_stash)
-    m_dispacc(mf_5DIGIT|mf_RIGHT_ALIGN) \ .db "G"
-    m_drawbox(60,0,92,46)   ;statusbox
-    .db "Item\nMagic\nEquip\nStatus\nSave"
-    m_seta(mm_LIST_SHORT)
-    m_exaf(chardisp_options, 2)
+    ;m_addxy(0,2)
+    ;m_ldind2(gold_stash)
+    ;m_dispacc(mf_5DIGIT|mf_RIGHT_ALIGN) \ .db "G"
+    ;m_drawbox(60,0,92,46)   ;statusbox
+    ;.db "Item\nMagic\nEquip\nStatus\nSave"
+    m_seta(mm_LIST_MAGBOOST)
+    m_ldfa(chardisp_options, 2)
     m_print(menu_dc_multi)
     m_eof
 
 
 menu_dc_single:
+    m_drawbox(0,0,24,24)
+    m_setxy(4,4)
+    m_setleft()
+    m_seta(mm_LIST_SINGLE)
+    m_ldfa(chardisp_options, 2)
+    m_print(menu_dc_lookup_from_offset)
+    m_print(menu_dc_lines_from_single)
+    m_eof
 
-
+;(menu_basefile) = ptr to save file start
 menu_dc_multi:
-    m_exai()                    ;move save file pointer to accumulator
-    m_exaf(menu_basefile, 2)    ;and write that out to memory
-    m_exai()                    ;and back to index, because we're using it.
+    m_ldaf(menu_basefile, 2)
+    m_exai()        ;place into index
+    m_setxy(8,5)
+    m_setleft()
     ;
     m_ldind(charslotid1)
-    m_exaf(menu_slotid, 2)
+    m_ldfa(menu_slotid, 2)
     m_print(menu_dc_lines)
     ;
     m_ldind(charslotid2)
-    m_exaf(menu_slotid, 2)
+    m_ldfa(menu_slotid, 2)
     m_print(menu_dc_lines)
     ;
     m_ldind(charslotid3)
-    m_exaf(menu_slotid, 2)
+    m_ldfa(menu_slotid, 2)
     m_print(menu_dc_lines)
     m_eof
 
 
 ;input: (menu_slotoffset) = slot offset, I = savefileindex
 menu_dc_lookup_from_offset:
-    m_ldaf(menu_slotoffset)
+    m_ldaf(menu_slotoffset, 2)
     m_addi()
     m_exai()
     m_ldind(0)
-    m_exaf(menu_slotid, 2)
+    m_ldfa(menu_slotid, 2)
 .assert((player0-playerobj) < 128, "Distance to first charslot must be int8.")
 ;input: (menu_slotid) = slot id.
 menu_dc_lookup_from_id:
@@ -73,52 +94,240 @@ menu_dc_lookup_from_id:
     m_ldaf(menu_slotid-1, 2)    ;Get slot ID into MSB of A
     m_seta0(playerobj)          ;Slot size into LSB
     m_mltacc()                  ;Multiply to get distance into modified index
-    m_addai()                   ;And complete the address to character data.
-    m_exaf(menu_slotpos, 2)     ;Store result safely.
-    m_ldai(menu_slotpos, 2)     ;Retrieve it again because we'll need it now.
-    m_exai()                    ;... in index.
+    m_addi()                    ;And complete the address to character data.
+    m_debug
+    m_ldfa(menu_slotpos, 2)     ;Copy result to memory
+    m_exai()                    ;and move result in index.
     m_eof
 
-
+;input: A = slotID (0-6)
 menu_dc_lines:
-    m_printf(menu_dc_lookup_from_id)
-menu_dc_lines_from_single:
     m_seta(1)
     m_addind(p_id)
     m_djnz(_)
-    m_addxy(0, 19)
+    m_addxy(0, 19)      ;if slotid was zero, skip downward to next row.
     m_eof
-_:  m_swap()
-    ;Begin portrait render. I = character data start
-    ;
-    ;the stuff after this needs to be reworked. i hadn't written the lookup
-    ;routines at the time the following was written.
-    ;
-
-
-
-    m_exai()    ;charid to index.
-    m_seta(dispCharslots_temp_portraittable)    ;discard old index for LUT adr
-    m_addai()       ;get offset into LUT
-    m_exai()        ;full address into index, MSB=0.
+_:  
+    m_print(menu_dc_lookup_from_id)
+;input: I = character slot address
+menu_dc_lines_from_single:
+    ; Begin portrait render
+    m_ldind(p_id)
+    m_exai()    ;storing charID into index for addition purposes.
+    m_seta(dispCharslots_temp_portraittable)
+    m_addi()
+    m_exai()    ;completed address to portraitid in I
     m_ldind(0)
     m_call(menu_drawPortrait)
+    ; Position text cursor to start of first line, clearing box edge if single.
     m_addxy(20, 0)
     m_ldaf(chardisp_options, 2)
     m_jrbz(mmb_single, _)
     m_addxy(4, 0)
-_:  m_ldaf(menu_basefile, 2)
-    m_exai()        ;restore index into save file
+_:  ; Begin printing character name
+    m_ldaf(menu_slotpos, 2)
+    m_exai()        ;restore character data address to I
+    m_ldind(p_id)   ;character ID
+    m_swap()        ;move character ID to a1 (MSB)
+    m_seta0(8)      ;character names are fixed-width 8 wide (including 0-term)
+    m_mltacc()      ;a0*a1 = offset to name
+    m_exaap()       ;move to temp
+    m_seta(dispCharslots_temp_chartable)
+    m_addap()       ;complete address to string to display
+    m_printacc()    ;print string at that address
+    m_newline()
+    m_addxy(20,-1)
+    m_ldaf(chardisp_options, 2)
+    m_jrbz(mmb_single, _)
+    m_addxy(4, 0)
+_:  ; Text ptr advanced to start of second line. This part is flags-adjustable.
+    m_print(menu_dc_line_second)
+    ;prep return registers
+    m_newline()
+    m_addxy(0, 4)
+    m_ldaf(menu_basefile, 2)
+    m_exai()
+    m_eof
 
 
+menu_dc_line_second:
+    m_ldaf(chardisp_options, 2)
+    m_jrbz(mmb_list_short, _)
+    m_ldind2(p_hp)
+    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
+    .db SYM_HP ," "
+    m_print(menu_dc_line_msg_poison_or_sleep)
+    m_eof
+_:  m_jrbz(mmb_list_long, _)
+    m_print(menu_dc_line_msg_state)
+    m_newline()
+    m_addxy(48, -(2*NEWLINE_HEIGHT)+1)
+    m_print(menu_dc_line_msg_hpmhp)
+    m_newline()
+    m_addxy(48, -1)
+    m_print(menu_dc_line_msg_mpmmp)
+    m_eof
+_:  m_jrbz(mmb_list_hpboost , _)
+    m_ldind2(p_maxhp)
+    m_dispacc(mf_4DIGIT|mf_RIGHT_ALIGN)
+    .assert(MAX_ALLOWED_HP == 600, "Mismatch between defined MAX_ALLOWED_HP value and value used here.")
+    .db " ", SYM_HP ," (600 max)"
+    m_eof
+_:  m_jrbz(mmb_list_mpboost , _)
+    m_ldind(p_maxmp)
+    m_dispacc(mf_4DIGIT|mf_RIGHT_ALIGN)
+    .assert(MAX_ALLOWED_MP == 255, "Mismatch between defined MAX_ALLOWED_MP value and value used here.")
+    .db " ",SYM_MP," (255 max)"
+    m_eof
+_:  m_jrbz(mmb_list_atkboost , _)
+    m_ldind(p_atk)
+    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
+    .db " ATK ("
+    m_seta(dispCharslots_temp_maxatktable)
+    m_exaap()
+    m_print(menu_dc_line_msg_maxfinish)
+    m_eof
+_:  m_jrbz(mmb_list_defboost , _)
+    m_ldind(p_def)
+    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
+    .db " DEF ("
+    m_seta(dispCharslots_temp_maxdeftable)
+    m_exaap()
+    m_print(menu_dc_line_msg_maxfinish)
+    m_eof
+_:  m_jrbz(mmb_list_magboost , _)
+    m_ldind(p_mgc)
+    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
+    .db " MAG ("
+    m_seta(dispCharslots_temp_maxmagtable)
+    m_exaap()
+    m_print(menu_dc_line_msg_maxfinish)
+    m_eof
+_:  m_jrbz(mmb_list_agiboost , _)
+    m_ldind(p_agi)
+    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
+    .db " AGI ("
+    m_seta(dispCharslots_temp_maxagitable)
+    m_exaap()
+    m_print(menu_dc_line_msg_maxfinish)
+    m_eof
+_:  m_jrbz(mmb_list_onlystatus , _)
+    m_print(menu_dc_line_msg_state)
+    m_eof
+_:  m_jrbz(mmb_single , _)
+    m_print(menu_dc_line_msg_state)
+    m_newline()
+    m_addxy(52, -(2*NEWLINE_HEIGHT)+1)
+    m_print(menu_dc_line_msg_hpmhp)
+    m_newline()
+    m_addxy(52, -1)
+    m_print(menu_dc_line_msg_mpmmp)
+    m_eof
+;Placeholder for future additions
+;_:  m_jrbz( , _)
+;    m_exaap2()
+;    ;
+;    m_eof
+_:   m_eof  ;No match? No display.
 
-    m_seta0()
+; AP = table address to use
+menu_dc_line_msg_maxfinish:
+    m_ldind(p_id)
+    m_addap()
+    m_exiip()   ;save current index
+    m_exai()    ;move address to max stat byte to index
+    m_ldind(0)  ;Retrieve that byte
+    m_dispacc(mf_3DIGIT)
+    .db " max)" ;then display it.
+    m_exiip()   ;Restore original index.
+    m_eof
 
+menu_dc_line_msg_hpmhp:
+    m_ldind2(p_hp)
+    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
+    .db "/"
+    m_ldind2(p_maxhp)
+    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
+    .db SYM_HP
+    m_eof
 
+menu_dc_line_msg_mpmmp:
+    m_ldind(p_mp)
+    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
+    .db "/"
+    m_ldind(p_maxmp)
+    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
+    .db SYM_MP
+    m_eof
 
+menu_dc_line_msg_state:
+    m_ldind(p_status)
+    m_ldfa(menu_temp, 1)
+    m_seta0(ENF_POISON|ENF_SLEEP|ENF_KO)
+    m_andaf(menu_temp, 1)
+    m_cpjnz(0, _)
+    .db "GOOD"
+    m_eof
+_:  m_jrbz(ELM_KO, _)
+    .db "DEAD"
+    m_eof
+menu_dc_line_msg_poison_or_sleep:
+_:  m_ldind(p_status)
+    m_jrbz(STATUS_POISON, _)
+    .db SYM_POISON
+_:  m_jrbz(STATUS_SLEEP, _)
+    .db SYM_SLEEP
+_:  m_eof
 
-
-
+; This was placed here because both tradition AND because  a relative jump
+; stands no chance of jumping over this monstrosity when it is finished.
+menu_dc_char_details:
+    ; Preload
+    m_ldaf(menu_slotpos, 2) ;This gets filled out during name render.
+    m_exai()
+    ; Column 1
+    m_addxy(1,0)
+    m_setleft()
+    .db "Attack\nDefense\nMagic\nAgility\n"
+    ; Column 2
+    m_addxy(30, -(4*NEWLINE_HEIGHT))
+    m_setleft()
+    m_ldind(p_atk)
+    ;TODO: ADD EQUIP BONUSES TO ATTACK
+    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
+    m_newline()
+    m_ldind(p_def)
+    ;TODO: ADD EQUIP BONUSES TO DEFENSE
+    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
+    m_newline()
+    m_ldind(p_mgc)
+    ;TODO: ADD EQUIP BONUSES TO MAGIC
+    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
+    m_newline()
+    m_ldind(p_agi)
+    ;TODO: ADD EQUIP BONUSES TO AGILITY
+    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
+    m_newline()
+    ; Column 3
+    m_addxy(15, -(4*NEWLINE_HEIGHT))
+    m_setleft()
+    .db "Hit Rate\nEvasion\n"
+    m_addxy(3,0)    ;subtle nudge
+    .db "__Resist__\n"
+    ;TODO: ADD EQUIPMENT BONUS DISPLAY WRT ELEMENTAL/STATUS RESISTANCES.
+    m_newline()
+    ; Column 4
+    m_addxy(30, -(4*NEWLINE_HEIGHT))
+    m_setleft()
+    m_seta(99)
+    ;TODO: ACTUALLY CALCULATE HIT RATE
+    m_dispacc(mf_2DIGIT|mf_RIGHT_ALIGN)
+    .db "%\n"
+    m_seta(0)
+    ;TODO: ACTUALLY CALCULATE EVASION
+    m_dispacc(mf_2DIGIT|mf_RIGHT_ALIGN)
+    .db "%"
+    m_eof
 
 
 

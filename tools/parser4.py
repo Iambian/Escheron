@@ -176,7 +176,7 @@ class Parser(object):
         return self.curseg.data
 
     
-    def parse(self, tokens:list[Token], passid=1, depth=1, nontrivial_expansion=True):
+    def parse(self, tokens:list[Token], passid=1, depth=1, nontrivial_expansion=True, force_eval=False):
         cls = self.__class__
         noflow_preop_tokenvals = {"#IF", "#IFDEF", "#IFNDEF", "#DEFINE", "#MACRO", "#UNDEF"}
         tokenstream = TokenStream(tokens)
@@ -212,20 +212,24 @@ class Parser(object):
                     self.ifstack[-1] = IfDef(cur_entry.token, newcond)
                     continue
                 if token0v == "#ELIF":
-                    if len(line) < 2:
-                        err(token0, f"Missing parameters for preop {token0.v}")
-                    ifexpr = self.parse(TokenStream(line[1:]), 2, depth+1)
-                    ifresult = True if self.eval_expr(ifexpr, 2) != 0 else False
-                    newcond = self.ifstack[-1].cond
-                    if newcond is False:
-                        if ifresult is True:
-                            newcond = True
-                    else:
-                        newcond = None
-                    self.ifstack[-1] = IfDef(self.ifstack[-1].token, newcond)
+                    # The below conditional is necessary for fullskip blocks
+                    # where there are nested if/elif/else blocks. The condition
+                    # may throw an error that they'd never otherwise thrown if
+                    # the containing block is being executed instead of skipped.
+                    if self.ifstack[-1].cond is not None:
+                        if len(line) < 2:
+                            err(token0, f"Missing parameters for preop {token0.v}")
+                        ifexpr = self.parse(line[1:], 2, depth+1, force_eval=True)
+                        ifresult = True if self.eval_val(self.eval_expr(ifexpr, 2)) != 0 else False
+                        newcond = self.ifstack[-1].cond
+                        if newcond is False:
+                            if ifresult is True:
+                                newcond = True
+                        else:
+                            newcond = None
+                        self.ifstack[-1] = IfDef(self.ifstack[-1].token, newcond)
                     continue
-            if len(self.ifstack) and not self.ifstack[-1].cond:
-                #print(f"SKIPPING: {line}")
+            if len(self.ifstack) and not self.ifstack[-1].cond and not force_eval:
                 if token0v in {"#IF", "#IFDEF", "#IFNDEF"}:
                     self.ifstack.append(IfDef(token0, None))
                 continue
@@ -858,6 +862,7 @@ class Parser(object):
     
     
     def eval_pair(self, base:int, oper:Token, nval:int) -> int:
+        #print(f"NUMERIC EVAL {base} {oper.v} {nval}")
         if oper.v == "+":
             base += nval
         elif oper.v == "-":
@@ -899,7 +904,7 @@ class Parser(object):
         return base
     
 
-    def eval_val(self, token:Token, passnum=1, unarystack=None):
+    def eval_val(self, token:Token, passnum=1, unarystack=None) -> int:
         if unarystack is None:
             unarystack = []
         tokenv = token.v
@@ -981,6 +986,11 @@ class Parser(object):
 
 class TokenStream(object):
     def __init__(self, tokenlist: list[Token]):
+        if not isinstance(tokenlist,list):
+            raise ValueError(f"Incorrect input type. Expected list, got {type(tokenlist)} from {tokenlist}")
+        for i in tokenlist:
+            if not isinstance(i, Token):
+                raise ValueError(f"Incorrect type in tokenlist. Got {type(i)}")
         self.tokens = tokenlist
         self.reset()
 
@@ -1001,6 +1011,11 @@ class TokenStream(object):
 
     def resubmit_tokens(self, tokenlist:list[Token]):
         # Tokens maybe re-inserted at the start of the stream for reprocessing.
+        if not isinstance(tokenlist, list):
+            raise ValueError(f"Object being resubmitted is not a list. {type(tokenlist)} found.")
+        for token in tokenlist:
+            if not isinstance(token, Token):
+                raise ValueError(f"Object in resubmit is not a token. {token}, type: {type(token)}")
         self.resub_tokens.extendleft(list(reversed(tokenlist)))
 
     def gettok(self) -> list[Token]:

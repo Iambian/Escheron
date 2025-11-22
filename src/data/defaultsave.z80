@@ -18,7 +18,7 @@ defaultSaveFile:
 .db $55,$66,$77,$88               ;prng seed (2/2) for underdeep map gen
 ;player1
 .db CID_MAYA     ;p_id
-.db 0            ;p_status
+.db ENF_POISON            ;p_status
 .db 1            ;p_lvl
 .db 0            ;p_exp
 .dw 22           ;p_hp

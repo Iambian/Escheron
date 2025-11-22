@@ -880,6 +880,7 @@ class MenuMakerApp:
         bound_end = origin+len(data)
         EOF_encountered = None
         print_stack = []
+        print("---")
         while True:
             if EOF_encountered:
                 if len(print_stack):
@@ -1022,20 +1023,31 @@ class MenuMakerApp:
                 self.gamemap.acc(b)
                 self.gamemap.accshad2(a)
                 ptr += 1
-            elif opcode == 25:  # 2b: m_exf()   ;%SSSAAAAA
+            elif opcode == 25:  # 2b: m_exfa()/m_ldfa()   ;%SSCAAAAA. Size indicates power of two here.
                 bytecode = self.gamemap.memory[ptr + 1]
-                size = ((bytecode >> 5) & 7) + 1
+                #print(f"Bytecode renders: {bytecode.to_bytes(1,'big').hex()}")
+                bitcodesize = ((bytecode >> 6) & 3)
+                size = 1 << bitcodesize
                 offset = bytecode & 31
+                oper = (bytecode >> 5) & 1
                 flagbank = self.gamemap.getaddr("gameflags")
                 regframe = self.gamemap.getaddr("textacc")
+                #print(f"Size: {size}: orig: {bitcodesize}")
                 for idx in range(size):
                     a = self.gamemap.memory[regframe]
-                    self.gamemap.memory[regframe] = self.gamemap.memory[flagbank+offset]
-                    self.gamemap.memory[flagbank+offset] = a
+                    if oper == 0:
+                        # Exchange A <-> [mem]
+                        #print(f"EXCH {a} <-> {self.gamemap.memory[flagbank+offset]}")
+                        self.gamemap.memory[regframe] = self.gamemap.memory[flagbank+offset]
+                        self.gamemap.memory[flagbank+offset] = a
+                    else:
+                        # Mov A -> [mem]
+                        #print(f"LOAD {a} <-> {self.gamemap.memory[flagbank+offset]}")
+                        self.gamemap.memory[flagbank+offset] = a
                     flagbank += 1
                     regframe += 1
                 ptr += 2
-            elif opcode == 26:  #2b m_Xaf(). %OOOSAAAA. Massively overloaded.
+            elif opcode == 26:  #2b m_Xaf(). %OOOSAAAA. Massively overloaded. I guess size would be power of two here too.
                 bytecode = self.gamemap.memory[ptr + 1]
                 is2byte = False if ((bytecode >> 4) & 1) == 0 else True
                 offset = bytecode & 15
@@ -1064,12 +1076,20 @@ class MenuMakerApp:
                 elif oper == 7:
                     acc = (~other) & 0xFFFF
                 self.gamemap.acc(acc)
+                ptr += 2
             elif opcode == 27:  # 2b: m_ldind()
                 offset = self.gamemap.memory[ptr + 1]
                 offset_int8 = offset if offset < 128 else offset-256
                 memlookup = self.gamemap.memory[self.gamemap.idx()+offset_int8]
                 self.gamemap.acc(memlookup & 0xFF)
                 ptr += 2
+            elif opcode == 28:  # 3b: cpjnz() compare val with a0, jump if not equal
+                arg1 = self.gamemap.acc() & 0xFF
+                arg2 = self.gamemap.memory[ptr + 1]
+                rel = self.gamemap.memory[ptr + 2]
+                ptr += 3
+                if arg1 != arg2:
+                    ptr += rel if rel < 128 else rel-256
             elif opcode == 31:  # 1b: m_debug  : prints debug info to console
                 a = self.gamemap.acc().to_bytes(2, 'big').hex()
                 ap = self.gamemap.accshad().to_bytes(2, 'big').hex()

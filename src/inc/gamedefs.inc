@@ -281,6 +281,8 @@ mmb_single          .equ 9
 #define m_XF_SUB 5
 #define m_XF_NOT 6
 #define m_XF_NEG 7
+#define m_FX_EX 0
+#define m_FX_LD 1
 
 ;#define m_eof .db 0
 ;#define m_setxy(x,y) .db 1,x,y
@@ -326,6 +328,17 @@ mmb_single          .equ 9
 ;
 ;
 ;
+#macro twobitlogsub2(num)
+    #if num <= 1
+        0
+    #elif num <= 2
+        1
+    #elif num <= 4
+        2
+    #else
+        3
+    #endif
+#endmacro
 
 #define m_eof           .db 0
 #define m_setxy(x,y)    .db 1,x,y
@@ -352,8 +365,10 @@ mmb_single          .equ 9
 #define m_write()       .db 22      ; a0 -> [I]
 #define m_jrbz(bt, rel) .db 23, bt, rel-$-1  ;jr if bit b of A is zero
 #define m_exaap2()      .db 24      ; A <-> ASHAD2
-;%SSSAAAAA exchange up to 8b from reg A+ with address in flagbank. Can save entire register frame.
-#define m_exf(fb,size)  .db 25,fb&31+(((size-1)&7)<<5)
+;%SSCAAAAA C=oper(0:ex,1:ldtomem), does oper (1<SS) bytes starting at short adr A.
+;input size is in actual bytes and is converted via macro
+#define m_exfa(fb,size) .db 25, fb&31+(twobitlogsub2(size)<<6)+(m_FX_EX<<5)
+#define m_ldfa(fb,size) .db 25, fb&31+(twobitlogsub2(size)<<6)+(m_FX_LD<<5)
 ;%OOOSAAAA fbank adr opers with A, store to A, 1 or 2 bytes.
 #define m_ldaf(fb,size)  .db 26, fb&15+(((size-1)&1)<<4)+((m_XF_LD  &7)<<5)
 #define m_oraf(fb,size)  .db 26, fb&15+(((size-1)&1)<<4)+((m_XF_OR  &7)<<5)
@@ -363,8 +378,9 @@ mmb_single          .equ 9
 #define m_subaf(fb,size) .db 26, fb&15+(((size-1)&1)<<4)+((m_XF_SUB &7)<<5)
 #define m_notaf(fb,size) .db 26, fb&15+(((size-1)&1)<<4)+((m_XF_NOT &7)<<5)
 #define m_negaf(fb,size) .db 26, fb&15+(((size-1)&1)<<4)+((m_XF_NEG &7)<<5)
-
+;
 #define m_ldind(v)      .db 27,v    ; uint8_t([ I + v ]) -> a0. Clears a1
+#define m_cpjnz(v, rel) .db 28,v, rel-$-1
 
 #define m_debug         .db 31
 
@@ -382,7 +398,7 @@ mmb_single          .equ 9
 #define m_clri() m_exai() \ m_clra() \ m_exai()
 #define m_add(v) m_exaap() \ m_seta(v) \ m_addap()
 #define m_setap0(v) m_exaap() \ m_seta0(v) \ m_exaap()
-#define m_ldind2b(v) m_ldind(v+1) \ m_swap() \ m_addind(v)
+#define m_ldind2(v) m_ldind(v+1) \ m_swap() \ m_addind(v)
 
 ;  #define something()
 
