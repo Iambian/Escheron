@@ -34,11 +34,11 @@ class GameMap(object):
         cls = self.__class__
         self.memory = [0] * 65536
         # Definitions
-        tokens = parser.Tokenizer.from_str(cls.symfile).tokens
+        tokens = parser.Tokenizer.from_str(cls.symfile)
         self.incparse = parser.Parser(tokens, silent=True)
         self.symtable = self.incparse.symtable
         #Default data
-        tokens = parser.Tokenizer.from_str(cls.defaultsave).tokens
+        tokens = parser.Tokenizer.from_str(cls.defaultsave)
         parserobj = parser.Parser(tokens, self.symtable, silent=True)
         segment = parserobj.curseg
         segorg = segment.baseaddr
@@ -298,7 +298,7 @@ class FontReader(object):
         cls = self.__class__
         self.gamemap = gamemap
         self.dcf_reader = dcfreader.DCFReader("tools/escheron.dcf")
-        tokens = parser.Tokenizer.from_str(cls.BIGBIGFONTDATA).tokens
+        tokens = parser.Tokenizer.from_str(cls.BIGBIGFONTDATA)
         self.parseobj = parser.Parser(tokens, silent=True)
         fontdata = self.parseobj.read_data()
         self.fontdata = [fontdata[i:i+8] for i in range(0, len(fontdata), 8)]
@@ -323,7 +323,7 @@ class PortraitData(object):
     '''
     def __init__(self):
         cls = self.__class__
-        tokens = parser.Tokenizer.from_str(cls.PORTRAIT_DATA).tokens
+        tokens = parser.Tokenizer.from_str(cls.PORTRAIT_DATA)
         self.parseobj = parser.Parser(tokens, silent=True)
         imgdata = self.parseobj.read_data()
         imgdata = [self.bin2arr(i, 8) for i in imgdata]
@@ -831,11 +831,11 @@ class MenuMakerApp:
 
         input_text = self.text_input.get("1.0", tk.END).strip()
         #print(f"Input received: {input_text}") # For debugging
-        tokenstream = parser.TokenStream.from_str(input_text)
+        tokenstream = parser.Tokenizer.from_str(input_text)
         fullcallbind = dict()
         try:
             exception = None
-            parseobj = parser.Parser(tokenstream.tokens, self.gamemap.symtable, silent=True)
+            parseobj = parser.Parser(tokenstream, self.gamemap.symtable, silent=True)
             self.interim_parseobj = parseobj
             segment:parser.SegmentDef = parseobj.segments["__DEFAULT"]
             origin = segment.baseaddr
@@ -1018,10 +1018,8 @@ class MenuMakerApp:
                 ptr += 3
                 if res:
                     ptr += rel if rel < 128 else rel-256
-            elif opcode == 24:  # 1b: m_exapp()     :swaps A with APP
-                a,b = (self.gamemap.acc(), self.gamemap.accshad2())
-                self.gamemap.acc(b)
-                self.gamemap.accshad2(a)
+            elif opcode == 24:  # 1b: m_inci()
+                self.gamemap.idx(self.gamemap.idx()+1)
                 ptr += 1
             elif opcode == 25:  # 2b: m_exfa()/m_ldfa()   ;%SSCAAAAA. Size indicates power of two here.
                 bytecode = self.gamemap.memory[ptr + 1]

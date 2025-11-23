@@ -1,18 +1,17 @@
+
+
 ;NOTE: Prior iteration is using 915 bytes for partial charstatus and main menu
+;new size 1588. size with old code removed is 805. 
 #define __REPARSE_INTERVAL 0
 
 
-
-menu_temp           .equ 8      ;1b temporary purposes
+menu_temp           .equ 7      ;2b temporary purposes
 chardisp_options    .equ 9      ;2b flags
 menu_basefile       .equ 11     ;2b index to save file
 menu_slotoffset     .equ 13     ;1b (use 2) charslot id offset (0-2)
 menu_slotid         .equ 13     ;1b (use 2) ID of character slot (1-N)
 menu_slotpos        .equ 13     ;2b slot address
 menu_tempswap       .equ 15     ;Extended memory
-
-
-
 
 
 ;#define mx_clear m_ldaf(menu_zero, 2)
@@ -95,7 +94,6 @@ menu_dc_lookup_from_id:
     m_seta0(playerobj)          ;Slot size into LSB
     m_mltacc()                  ;Multiply to get distance into modified index
     m_addi()                    ;And complete the address to character data.
-    m_debug
     m_ldfa(menu_slotpos, 2)     ;Copy result to memory
     m_exai()                    ;and move result in index.
     m_eof
@@ -292,10 +290,15 @@ menu_dc_char_details:
     ; Column 2
     m_addxy(30, -(4*NEWLINE_HEIGHT))
     m_setleft()
+    ;Attack stat calculation
+    m_seta(EOFST_ATK)
+    m_exaap()
+    m_print(menu_dc_item_getstats)
     m_ldind(p_atk)
-    ;TODO: ADD EQUIP BONUSES TO ATTACK
+    m_addaf(menu_temp, 2)
     m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
     m_newline()
+    ;Defense stat calculation
     m_ldind(p_def)
     ;TODO: ADD EQUIP BONUSES TO DEFENSE
     m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
@@ -329,435 +332,59 @@ menu_dc_char_details:
     .db "%"
     m_eof
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    m_seta(1)
-    m_djnz(_)
-
-    ; -- SHOW INDIVIDUAL CHARACTER STATUS SCREEN
-    m_drawbox(0,0,96,24)        ;BG: character box
-    m_seti(defaultSaveFile)
-    m_seta(0)
-    m_exaap()
-    m_print(menu_dispCharSingle)
-    m_drawbox(0,24,96,64)       ;FG: (draw this later) status details box
-    ;Show character details.
-    m_print(menu_dispCharSingle_details)
+;input: I = adr to char data, AP = equipment offset (the stat we are finding)
+;output: A= sum of all stats
+menu_dc_item_getstats:
+    m_clra()
+    m_ldfa(menu_temp, 2)    ;menu_temp will be our running total
+    m_seta0(p_wpn)  ;offset to weapon slot. Shield, armor, accessory following.
+    m_addi()        ;set base address to start of equipment stack.
+    m_exai()        ;and set this as our new index. Remember to restore later.
+    m_print(menu_dc_item_singlestat)    ;fetch weapon data
+    m_print(menu_dc_item_singlestat)    ;fetch offhand data
+    m_print(menu_dc_item_singlestat)    ;fetch armor data
+    m_print(menu_dc_item_singlestat)    ;fetch accessory data
+    m_ldaf(menu_basefile, 2)
+    m_exai()                            ;set I back to start of chardat
+    ;m_ldaf(menu_temp, 2)                ;return sum
     m_eof
 
-_:  ; -- SHOW MAIN MENU
-    m_drawbox(0,0,96,64)    ;mainbox
-    ;m_drawbox(60,45,92,63)  ;moneybox
-    m_addxy(0,2)
-    m_clra()
-    m_seti(defaultSaveFile)
-    m_addind(gold_stash+1)
+
+;input: I=equipment slot, AP = equipment stat offset to add
+;output: (menu_temp) added to, I = I+1
+menu_dc_item_singlestat:
+    m_ldind(0)
+    m_cpjnz(0, _)   ;jump to end if item slot empty.
+;The math required. See? Algebra *is* useful for more than passing a class.
+; stat = [itemdatastart+(slotsize*(itemid-1))+itemstat_offset]
+; stat = [itemdatastart+(slotsize*itemid - slotsize)+itemstat_offset]
+; stat = [itemdatastart-slotsize+(slotsize*itemid)+itemstat_offset]
     m_swap()
-    m_addind(gold_stash+0)
-    ;m_dispacc(mf_5DIGIT|mf_RIGHT_ALIGN) \ .db "G"
-    ;m_drawbox(60,0,92,46)   ;statusbox
-    ;.db "Item\nMagic\nEquip\nStatus\nSave"
-    m_clra()
-    m_seta(mm_LIST_LONG)
-    m_exaap2()
-    m_print(menu_dispCharList)
-    m_eof
-
-
-; FOR DISPLAYING A SINGLE CHARACTER
-;input: AP = character slot
-;Assumes that the input is valid.
-menu_dispCharSingle:
-    m_drawbox(0,0,24,24)
-    m_setxy(4,4)
-    m_setleft()
-    m_seta(mm_LIST_SINGLE)
-    m_exaap2()
-    m_print(dispCharslots_loopup_data_from_offset)
-    m_print(dispCharslots_slotFromSingle)
-    m_eof
-
-; FOR DISPLAYING LIST OF CHARACTERS
-;input: AP2 = display flags (shortlist or longlist)
-menu_dispCharList:
-    m_setxy(8,5)
-    m_setleft()
-    ; Baseline established. Show char 1
-    m_clra()
-    m_addind(charslotid1)
-    m_exaap()
-    m_print(dispCharslots_slotFromList)
-    ; Show char 2
-    m_clra()
-    m_addind(charslotid2)
-    m_exaap()
-    m_print(dispCharslots_slotFromList)
-    ; Show char 3
-    m_clra()
-    m_addind(charslotid3)
-    m_exaap()
-    m_print(dispCharslots_slotFromList)
-    m_eof
-
-
-;in: AP = slotOffset, IDX = saveFileBase
-;out: A=0, IDX=playerIDbase, IDP = saveFileBase
-dispCharslots_loopup_data_from_offset:
-    m_clra()
-    m_addi()
-    m_addap()
-    m_exiip()
-    m_exai()
-    m_clra()
-    m_addind(0)
-    m_exaap()
-    m_exiip()
-.assert((player0-playerobj) < 128, "Distance to first charslot must be int8.")
-;in: AP = playerID, IDX = saveFileBase
-;out: A=0, IX=playerIDbase, IDP = saveFileBase
-dispCharslots_lookup_data:
-    m_clra()
-    m_addi()
-    m_exiip()
-    m_exai()
-    m_clra0()
-    m_swap()
-    m_seta0(player0-playerobj)
-    m_sext()
-    m_addi()
-    m_exai()
-    m_clra0()
-    m_addap()
-    m_swap()
-    m_seta0(playerobj)
+    m_seta0(EOFST_LENGTH)
     m_mltacc()
-    m_addi()
-    m_exai()
-    m_eof
-
-
-
-;input:  IDX= default save file, AP0 = slot position in data file (0=empty)
-dispCharslots_slotFromList:
-    m_clra0()
-    m_swap()
-    m_seta0(1)
-    m_addap()
-    m_djnz(_)
-    m_addxy(0,19)
-    m_eof
-_:  m_print(dispCharslots_lookup_data)
-dispCharslots_slotFromSingle:
-    ;Start portrait render
-    m_clra()
-    m_addind(p_id)  ;sets A to character ID
-    m_exaap()
-    m_seta(dispCharslots_temp_portraittable)
-    m_addap()   ;address to byte holding portraitid
-    m_exai()    ;portraitid to index
-    m_exaap()   ;store old index to AP
-    m_clra()
-    m_addind(0) ;retrieve portraitid
-    m_exaap()
-    m_exai()    ;restore index
-    m_exaap()   ;awesome.
-    m_call(menu_drawPortrait)
-    m_addxy(20,0)
-    m_exaap2()
-    m_jrbz(mmb_single , _)
-    m_addxy(4,0)
-_:  m_exaap2()
-    ; First line first cell (NAME) [Always the same regardless of display type]
-    m_clra()
-    m_addind(p_id)  ;sets A to character ID
-    m_swap()
-    m_seta0(8)  ;characters 8-wide
-    m_mltacc()
-    m_exaap()
-    m_seta(dispCharslots_temp_chartable)
-    m_addap()
-    m_printacc()
-    m_newline()
-    m_addxy(20,-1)
-    m_exaap2()
-    m_jrbz(mmb_single , _)
-    m_addxy(4,0)
-_:  m_exaap2()
-    ; Second line first cell. Varies depending on input
-    m_print(dispCharslots_finishSecond)
-    m_newline()
-    m_addxy(0,4)
-    m_exiip()   ;restores index
+    m_exiip()       ;save pointer to item slot
+    m_exai()        ;store middle term
+    m_seta(dispCharslots_temp_geartable-EOFST_LENGTH)
+    m_addi()        ;sum middle term and start term
+    m_addap()       ;sum final term. Address completed.
+    m_exai()        ;put that address into I
+    m_ldind(0)      ;get stat value from table
+    m_addaf(menu_temp, 2)
+    m_ldfa(menu_temp, 2)
+    m_exiip()       ;restore item slot pointer
+_:  m_inci()        ;next slot
     m_eof
 
 
 
 
 
-dispCharslots_finishSecond:
-    m_exaap2()  ;expose the flags
-    m_jrbz(mmb_list_short, _)
-    m_exaap2()   ;return flags to storage
-    m_clra0()
-    m_addind(p_hp + 1)
-    m_swap()
-    m_clra0()
-    m_addind(p_hp + 0)
-    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
-    .db SYM_HP ," "
-    m_print(dispCharslots_show_ispoison)
-    m_print(dispCharslots_show_issleep)
-    m_eof
-_:  m_jrbz(mmb_list_long, _)
-    m_exaap2()
-    m_print(dispCharslots_show_state)
-    m_newline()
-    m_addxy(48, -(2*NEWLINE_HEIGHT)+1)
-    m_print(dispCharslots_show_hpmaxhp)
-    m_newline()
-    m_addxy(48, -1)
-    m_print(dispCharslots_show_mpmaxmp)
-    m_eof
-_:  m_jrbz(mmb_list_hpboost , _)
-    m_exaap2()
-    m_clra0()
-    m_addind(p_maxhp + 1)
-    m_swap()
-    m_clra0()
-    m_addind(p_maxhp + 0)
-    m_dispacc(mf_4DIGIT|mf_RIGHT_ALIGN)
-    .assert(MAX_ALLOWED_HP == 600, "Mismatch between defined MAX_ALLOWED_HP value and value used here.")
-    .db " ",SYM_HP," (600 max)"
-    m_eof
-_:  m_jrbz(mmb_list_mpboost , _)
-    m_exaap2()
-    m_clra0()
-    m_swap()
-    m_clra0()
-    m_addind(p_maxmp)
-    m_dispacc(mf_4DIGIT|mf_RIGHT_ALIGN)
-    .assert(MAX_ALLOWED_MP == 255, "Mismatch between defined MAX_ALLOWED_MP value and value used here.")
-    .db " ",SYM_MP," (255 max)"
-    m_eof
-_:  m_jrbz(mmb_list_atkboost , _)
-    m_exaap2()
-    m_clra0()
-    m_swap()
-    m_clra0()
-    m_addind(p_atk)
-    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
-    .db " ATK ("
-    m_seta(dispCharslots_temp_maxatktable)
-    m_exaap()
-    m_print(dispCharslots_finishMaxPrint)
-    m_eof
-_:  m_jrbz(mmb_list_defboost , _)
-    m_exaap2()
-    m_clra0()
-    m_swap()
-    m_clra0()
-    m_addind(p_def)
-    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
-    .db " DEF ("
-    m_seta(dispCharslots_temp_maxdeftable)
-    m_exaap()
-    m_print(dispCharslots_finishMaxPrint)
-    m_eof
-_:  m_jrbz(mmb_list_magboost , _)
-    m_exaap2()
-    m_clra0()
-    m_swap()
-    m_clra0()
-    m_addind(p_atk)
-    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
-    .db " MAG ("
-    m_seta(dispCharslots_temp_maxmagtable)
-    m_exaap()
-    m_print(dispCharslots_finishMaxPrint)
-    m_eof
-_:  m_jrbz(mmb_list_agiboost , _)
-    m_exaap2()
-    m_clra0()
-    m_swap()
-    m_clra0()
-    m_addind(p_atk)
-    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
-    .db " AGI ("
-    m_seta(dispCharslots_temp_maxagitable)
-    m_exaap()
-    m_print(dispCharslots_finishMaxPrint)
-    m_eof
-_:  m_jrbz(mmb_list_onlystatus , _)
-    m_exaap2()
-    m_print(dispCharslots_show_state)
-    m_eof
-_:  m_jrbz(mmb_single , _)
-    m_exaap2()
-    m_print(dispCharslots_show_state)
-    m_newline()
-    m_addxy(52, -(2*NEWLINE_HEIGHT)+1)
-    m_print(dispCharslots_show_hpmaxhp)
-    m_newline()
-    m_addxy(52, -1)
-    m_print(dispCharslots_show_mpmaxmp)
-    m_eof
-;_:  m_jrbz( , _)
-;    m_exaap2()
-;    ;
-;    m_eof
-_:  m_exaap2() 
-    m_eof
-    
 
-dispCharslots_show_hpmaxhp:
-    m_clra0()
-    m_addind(p_hp + 1)
-    m_swap()
-    m_clra0()
-    m_addind(p_hp + 0)
-    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
-    .db "/"
-    m_clra0()
-    m_addind(p_maxhp + 1)
-    m_swap()
-    m_clra0()
-    m_addind(p_maxhp + 0)
-    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
-    .db SYM_HP
-    m_eof
 
-dispCharslots_show_mpmaxmp:
-    m_clra0()
-    m_swap()
-    m_clra0()
-    m_addind(p_mp)
-    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
-    .db "/"
-    m_clra0()
-    m_addind(p_maxmp)
-    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
-    .db SYM_MP
-    m_eof
 
-dispCharslots_show_ispoison:
-    m_clra0()
-    m_addind(p_status)
-    m_jrbz(STATUS_POISON, _)
-    .db SYM_POISON
-_:  m_eof
-dispCharslots_show_issleep:
-    m_clra0()
-    m_addind(p_status)
-    m_jrbz(STATUS_SLEEP, _)
-    .db SYM_SLEEP
-_:  m_eof
-dispCharslots_show_state:
-    m_clra0()
-    m_addind(p_status)
-    m_jrbz(ELM_KO, _)
-    .db "DEAD"
-    m_eof
-_:  m_jrbz(STATUS_POISON, _)
-    .db SYM_POISON
-    m_print(dispCharslots_show_issleep)
-    m_eof
-_:  m_jrbz(STATUS_SLEEP, _)
-    .db SYM_SLEEP
-    m_eof
-_:  .db "GOOD"
-    m_eof
 
-;in: AP = table, IDX=charslotaddress
-dispCharslots_finishMaxPrint:
-    m_clra0()
-    m_swap()
-    m_clra0()
-    m_addind(p_id)
-    m_addap()
-    m_exai()    ;adr to idx
-    m_exaap()   ;preserve old idx in AP
-    m_clra0()
-    m_swap()
-    m_clra0()
-    m_addind(0) ;value from address
-    m_exaap()
-    m_exai()    ;old idx restored.
-    m_exaap()   ;the value we're looking for.
-    m_dispacc(mf_3DIGIT)
-    .db " max)"
-    m_eof
 
-  
-; This was placed here instead of inline because DJNZ can't jump past this stub.
-menu_dispCharSingle_details:
-    m_exiip()   ;character address was preserved from prior display.
-    m_addxy(1,0)
-    m_setleft()
-    .db "Attack\nDefense\nMagic\nAgility\n"
-    m_addxy(30, -(4*NEWLINE_HEIGHT))
-    m_setleft()
-    m_clra0()
-    m_swap()
-    m_clra0()
-    m_addind(p_atk)
-    ;TODO: ADD EQUIPMENT BONUSES WITH THIS
-    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
-    m_newline()
-    m_clra0()
-    m_addind(p_def)
-    ;TODO: ADD EQUIPMENT BONUSES WITH THIS
-    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
-    m_newline()
-    m_clra0()
-    m_addind(p_mgc)
-    ;TODO: ADD EQUIPMENT BONUSES WITH THIS
-    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
-    m_newline()
-    m_clra0()
-    m_addind(p_agi)
-    ;TODO: ADD EQUIPMENT BONUSES WITH THIS
-    m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
-    m_newline()
-    m_addxy(15, -(4*NEWLINE_HEIGHT))
-    m_setleft()
-    .db "Hit Rate\nEvasion\n"
-    m_addxy(3,0)    ;subtle nudge
-    .db "__Resist__\n"
-    ;TODO: ADD EQUIPMENT BONUS DISPLAY WRT ELEMENTAL/STATUS RESISTANCES.
-    
-    m_newline()
-    m_addxy(30, -(4*NEWLINE_HEIGHT))
-    m_setleft()
-    m_clra0()
-    m_swap()
-    m_seta0(99)
-    ;TODO: ACTUALLY CALCULATE HIT RATE
-    m_dispacc(mf_2DIGIT|mf_RIGHT_ALIGN)
-    .db "%\n"
-    m_clra0()
-    m_swap()
-    m_seta0(0)
-    ;TODO: ACTUALLY CALCULATE EVASION
-    m_dispacc(mf_2DIGIT|mf_RIGHT_ALIGN)
-    .db "%"
-    m_eof
+
 
 
 dispCharslots_temp_chartable:
@@ -802,7 +429,10 @@ menu_drawPortrait:
     .db $00
     .db $C9
 
-
-
+dispCharslots_temp_geartable:
+#macro X(id,nm,gc,at,de,wi,ag,hi,cr,f1,f2,f3)
+    .db at,de,wi,ag,hi,cr,f1,f2,f3
+#endmacro
+#include "src/xdefs/items.z80"
 
 

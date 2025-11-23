@@ -2,7 +2,21 @@
 ;If you include this without defining an X-macro, the default action will
 ;be to register variable names with their accompanying extensions/alterations
 
+#ifndef GAMEDEFS_LOADED
+    .error "You must include gamedefs.inc before including this file."
+#endif
 
+#ifndef X
+    #ifndef X_MAGIC_INCGUARD
+        #define X_MAGIC_INCGUARD
+        #include "src/xdefs/spells.z80"
+        #macro X(idx, cost, dispname, varname)
+            #define X_NAME concat(varname,"_ON_ITEM")
+            X_NAME  .equ ( idx | EQPR_H_ITEM )
+            #undefine X_NAME
+        #endmacro
+    #endif
+#endif
 
 
 #ifndef X

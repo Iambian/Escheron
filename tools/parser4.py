@@ -88,12 +88,13 @@ class Parser(object):
     MATH_OPS = {'+','-','*','/','&','|','^','<<','>>','==','!=','<','>','<=','>=','&&','||'}
     UNARY_OPS = {'+','-','~'}
     Z80INST = {'ADC', 'ADD', 'AND', 'BIT', 'CALL', 'CCF', 'CP', 'CPD', 'CPI', 'CPIR', 'CPL', 'DAA', 'DEC', 'DI', 'DJNZ', 'EI', 'EX', 'EXX', 'HALT', 'IM', 'IN', 'INC', 'IND', 'INDR', 'INI', 'INIR', 'JP', 'JR', 'LD', 'LDD', 'LDI', 'NEG', 'NOP', 'OR',  'OTDR', 'OTIR', 'OUT', 'OUTD', 'OUTI', 'POP', 'PUSH', 'RES', 'RET', 'RETI', 'RETN' 'RL', 'RLA', 'RLC', 'RLCA', 'RLD', 'RR', 'RRA', 'RRCA', 'RRD', 'RST', 'SBC', 'SCF', 'SET', 'SLA', 'SLL', 'SRA', 'SRL', 'SUB', 'XOR'}
-    def __init__(self, tokens: list[Token], oldsymtable=None, silent=False):
+    def __init__(self, tokens: "Tokenizer", oldsymtable=None, silent=False):
         if silent:
             self.__class__.DEBUGMODE = False
         if oldsymtable is None:
             oldsymtable = dict()
-        self.tokens:list[Token] = tokens
+        self.tokens:list[Token] = tokens.tokens
+        self.inclist:dict[str,list[Token]] = tokens.tokenfiles
         self.symtable: dict[str,MacroDef|Token] = dict()
         self.labels: dict[str,LabelDef] = dict() # Persists
         self.anonlabels: list[AnonDef] = list()  # Persists
@@ -161,7 +162,7 @@ class Parser(object):
 
     @classmethod
     def from_filename(cls, filename):
-        return cls(Tokenizer.from_filename(filename).tokens)
+        return cls(Tokenizer.from_filename(filename))
     
     def read_data(self, segname="__DEFAULT"):
         ''' NOTE: To read data from currently-selected segment, you must
@@ -178,7 +179,7 @@ class Parser(object):
     
     def parse(self, tokens:list[Token], passid=1, depth=1, nontrivial_expansion=True, force_eval=False):
         cls = self.__class__
-        noflow_preop_tokenvals = {"#IF", "#IFDEF", "#IFNDEF", "#DEFINE", "#MACRO", "#UNDEF"}
+        noflow_preop_tokenvals = {"#INCLUDE", "#IF", "#IFDEF", "#IFNDEF", "#DEFINE", "#MACRO", "#UNDEF"}
         tokenstream = TokenStream(tokens)
         tokenstreamiter = tokenstream.getline()
         results = []
@@ -238,6 +239,13 @@ class Parser(object):
                 if len(line) < 2:
                     err(token0, f"Missing parameters for preop {token0.v}")
                 token1, token1v, token1t = (line[1], line[1].v, line[1].type)
+                if token0v == "#INCLUDE":
+                    if token1v not in self.inclist:
+                        err(token1, f"Include file \"{token1v}\" not found.")
+                    #print(f"Include list: {self.inclist.keys()}")
+                    tokenstream.resubmit_tokens(self.inclist[token1v])
+                    #self.parse(self.inclist[token1v], passid, depth+1, nontrivial_expansion, force_eval)
+                    continue
                 if token0v in {"#IFDEF", "#IFNDEF"}:
                     b = True if (token1v in self.symtable) or (token1v+'(' in self.symtable) else False
                     #print(f"IF(N)DEF TOK: {token1v} location verify: {b}")
@@ -985,13 +993,18 @@ class Parser(object):
 
 
 class TokenStream(object):
-    def __init__(self, tokenlist: list[Token]):
-        if not isinstance(tokenlist,list):
-            raise ValueError(f"Incorrect input type. Expected list, got {type(tokenlist)} from {tokenlist}")
-        for i in tokenlist:
+    def __init__(self, tokenlist: "list[Token]|Tokenizer"):
+        if not isinstance(tokenlist,(list,Tokenizer)):
+            raise ValueError(f"Incorrect input type. Expected list or Tokenizer, got {type(tokenlist)} from {tokenlist}")
+        if isinstance(tokenlist,Tokenizer):
+            self.tokens = tokenlist.tokens
+            self.embeds = tokenlist.tokenfiles
+        else:
+            self.tokens = tokenlist
+            self.embeds = dict()
+        for i in self.tokens:
             if not isinstance(i, Token):
                 raise ValueError(f"Incorrect type in tokenlist. Got {type(i)}")
-        self.tokens = tokenlist
         self.reset()
 
     def __iter__(self):
@@ -999,11 +1012,11 @@ class TokenStream(object):
 
     @classmethod
     def from_filename(cls, filename):
-        return cls(Tokenizer.from_filename(filename).tokens)
+        return cls(Tokenizer.from_filename(filename))
     
     @classmethod
     def from_str(cls, textdata):
-        return cls(Tokenizer.from_str(textdata).tokens)
+        return cls(Tokenizer.from_str(textdata))
 
     def reset(self):
         self.resub_tokens = deque()
@@ -1096,21 +1109,27 @@ class Tokenizer(object):
     get_token = re.compile(TOK_REGEX).match
     UNESCAPE_LISTING = {"N":lambda:'\n',"R":lambda:'\r',"T":lambda:'\t',"0":lambda:'\0',"\\":lambda:'\\',"\'":lambda:'\'',"\"":lambda:'\"','#':lambda:chr(random.randint(0,255)) }
 
-    def __init__(self, tokendata=list[Token]):
+    def __init__(self, tokendata:list[Token] = None, tokenfiles:dict[str,list[Token]] = None):
         self.tokens:list[Token] = tokendata
+        if tokenfiles is None:
+            tokenfiles = dict()
+        self.tokenfiles:dict[str,list[Token]] = tokenfiles
 
     @classmethod
     def from_filename(cls, filename):
-        return cls(cls.makestream(filename))
+        return cls(*cls.makestream(filename))
     
     @classmethod
     def from_str(cls, textdata:str):
-        return cls(cls.makestream("NUL",1,textdata))
+        return cls(*cls.makestream("NUL", depth=1, textdata=textdata))
 
     @classmethod
-    def makestream(cls, filename, depth=1, textdata:str=None):
+    def makestream(cls, filename, depth=1, textdata:str=None, incsfound:dict[str,list[Token]]=None) -> Tuple[list[Token], dict[str,list[Token]]]:
+        tokendict:dict[str,list[Token]] = dict()
+        if incsfound is not None:
+            tokendict = incsfound
         if depth > cls.MAX_INCLUDE_DEPTH:
-            raise ValueError(redmsg("Include depth exceeded."))
+            raise ValueError(redmsg("Include depth exceeded max depth."))
         tokenstream = []
         if depth==1 and textdata is not None and filename=="NUL":
             filedata = textdata.split('\n')
@@ -1135,16 +1154,18 @@ class Tokenizer(object):
                 if token1.type != "STRING":
                     err(token1, f"Invalid #INCLUDE parameter :{token1.v}")
                 includefile = token1.v
-                try:
-                    includestream = cls.makestream(includefile, depth+1)
-                except Exception as e:
-                    printerr(token0, f"Depth {depth}: Exception stack unwinding.")
-                    raise e
-                tokenstream.extend(includestream)
-                continue
+                if not includefile in tokendict:
+                    tokendict[includefile] = None
+                    try:
+                        includestream , _ = cls.makestream(includefile, depth=depth+1, incsfound=tokendict)
+                    except Exception as e:
+                        printerr(token0, f"Depth {depth}: Exception stack unwinding.")
+                        raise e
+                    tokendict[includefile] = includestream
+                
             tokenline.append(NEWLINE_TOKEN)
             tokenstream.extend(tokenline)
-        return tokenstream
+        return (tokenstream, tokendict)
     
     @classmethod
     def tokenize(cls, line:str) -> Iterator[SubToken]:

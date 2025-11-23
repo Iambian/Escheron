@@ -344,10 +344,10 @@ mmb_single          .equ 9
 #define m_setxy(x,y)    .db 1,x,y
 #define m_addxy(x,y)    .db 2,x,y
 #define m_drawbox(x1,y1,x2,y2) .db 3,x1,y1,x2,y2
-#define m_dispacc(flags) .db 4,flags    ;numeric display A given flags.
+#define m_dispacc(flg)  .db 4,flg   ;numeric display A given flags.
 #define m_printacc()    .db 5       ;prints at address A
-#define m_call(adr)     .db 6, lo(adr), hi(adr)
-#define m_clra0()       .db 7       ; 0 -> a0
+#define m_call(adr)     .db 6, lo(adr), hi(adr)     ;Run z80 ASM code.
+#define m_clra0()       .db 7       ; Clears a0
 #define m_seta0(v)      .db 8,v     ; v -> a0
 #define m_menuopt()     .db 9       ;CTRL CODE: TAB
 #define m_newline()     .db 10      ;CTRL CODE: LF
@@ -364,12 +364,12 @@ mmb_single          .equ 9
 #define m_djnz(rel)     .db 21, rel-$-1 ;A--, `JR rel` if A != 0
 #define m_write()       .db 22      ; a0 -> [I]
 #define m_jrbz(bt, rel) .db 23, bt, rel-$-1  ;jr if bit b of A is zero
-#define m_exaap2()      .db 24      ; A <-> ASHAD2
+#define m_inci()        .db 24      ;I++
 ;%SSCAAAAA C=oper(0:ex,1:ldtomem), does oper (1<SS) bytes starting at short adr A.
 ;input size is in actual bytes and is converted via macro
 #define m_exfa(fb,size) .db 25, fb&31+(twobitlogsub2(size)<<6)+(m_FX_EX<<5)
 #define m_ldfa(fb,size) .db 25, fb&31+(twobitlogsub2(size)<<6)+(m_FX_LD<<5)
-;%OOOSAAAA fbank adr opers with A, store to A, 1 or 2 bytes.
+;%OOOSAAAA [fbank adr] opers with A, store to A, 1 or 2 bytes.
 #define m_ldaf(fb,size)  .db 26, fb&15+(((size-1)&1)<<4)+((m_XF_LD  &7)<<5)
 #define m_oraf(fb,size)  .db 26, fb&15+(((size-1)&1)<<4)+((m_XF_OR  &7)<<5)
 #define m_andaf(fb,size) .db 26, fb&15+(((size-1)&1)<<4)+((m_XF_AND &7)<<5)
@@ -380,7 +380,7 @@ mmb_single          .equ 9
 #define m_negaf(fb,size) .db 26, fb&15+(((size-1)&1)<<4)+((m_XF_NEG &7)<<5)
 ;
 #define m_ldind(v)      .db 27,v    ; uint8_t([ I + v ]) -> a0. Clears a1
-#define m_cpjnz(v, rel) .db 28,v, rel-$-1
+#define m_cpjnz(v, rel) .db 28,v, rel-$-1   ;`JR rel` if a0 != v
 
 #define m_debug         .db 31
 
@@ -395,6 +395,7 @@ mmb_single          .equ 9
 #define m_mltacc1(v) m_swap() \ m_seta0(v) \ m_mltacc() \ m_swap() \ m_clra0() \ m_swap()
 #define m_mltacc2(v) m_swap() \ m_seta0(v) \ m_mltacc() \ m_clra0() \ m_swap()
 #define m_clra() m_clra0() \ m_swap() \ m_clra0()
+#define m_seta_m1() m_clra0() \ m_djnz($+1) \ m_sext()
 #define m_clri() m_exai() \ m_clra() \ m_exai()
 #define m_add(v) m_exaap() \ m_seta(v) \ m_addap()
 #define m_setap0(v) m_exaap() \ m_seta0(v) \ m_exaap()
@@ -523,6 +524,12 @@ EQPR_M_ATTK .equ 2<<4
 EQPR_M_RALL .equ 3<<4
 
 EQPR_L_MASK .equ 7<<0  ;//could be 15<<0, but we use only 3 bits
+
+;
+;NOTE:  Spells unleashed when equipment is used as an "item" in battle are
+;       defined where spells are defined, instantiated upon first invocation
+;       of `src/xdefs/spells.inc`. This is include-guarded.
+;
 
 EQ_RES_FIRE     .equ EQPR_H_PROP | EQPR_M_RESI | ELM_FIRE    
 EQ_RES_LIT      .equ EQPR_H_PROP | EQPR_M_RESI | ELM_LIT     
