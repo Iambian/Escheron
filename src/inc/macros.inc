@@ -26,6 +26,58 @@
 #define xy(x,y) (256*y)+x
 #define ml(m,l) (256*m)+l
 
+#macro assert(condition, message_if_failed)
+    #if eval((condition) < 1)
+        #define errmsg eval(message_if_failed)
+        #define err "Assert failed: ", errmsg
+        .error err
+    #endif
+#endmacro
+
+; Inverse operation of 2**n (or 1<<n), upper limit selectable keep bit width
+; limited. Truncates decimal. `bitlim` starts at 1 (for one bit)
+#macro log2lim(num,bitlim)
+    #if (num <= 1) && (bitlim > 0)
+        0
+    #elif (num <= 2) && (bitlim > 0)
+        1
+    #elif (num <= 4) && (bitlim > 1)
+        2
+    #elif (num <= 8) && (bitlim > 1)
+        3
+    #elif (num <= 16) && (bitlim > 2)
+        4
+    #elif (num <= 32) && (bitlim > 2)
+        5
+    #elif (num <= 64) && (bitlim > 2)
+        6
+    #elif (num <= 128) && (bitlim > 2)
+        7
+    #elif (num <= 256) && (bitlim > 3)
+        8
+    #elif (num <= 512) && (bitlim > 3)
+        9
+    #elif (num <= 1024) && (bitlim > 3)
+        10
+    #elif (num <= 2048) && (bitlim > 3)
+        11
+    #elif (num <= 4096) && (bitlim > 3)
+        12
+    #elif (num <= 8192) && (bitlim > 3)
+        13
+    #elif (num <= 16384) && (bitlim > 3)
+        14
+    #elif (num <= 32768) && (bitlim > 3)
+        15
+    #else
+        .error "Log2lim input out of range."
+    #endif
+#endmacro
+
+#macro twobitlogsub2(num)
+    log2lim(num, 2)
+#endmacro
+
 ;Use this right before the first executable line in your app.
 ;This macro initializes pagination for multipage apps, sets origin to $4000,
 ;and pastes a minimal application header. Code begins execution immediately
@@ -94,14 +146,6 @@
         .warn "Possibly insufficient space remaining for app signature."
         .warn "Your app might not successfully sign. You should have at"
         .warn "least 70 bytes of last page free space to fit the signature."
-    #endif
-#endmacro
-
-#macro assert(condition, message_if_failed)
-    #if eval((condition) < 1)
-        #define errmsg eval(message_if_failed)
-        #define err "Assert failed: ", errmsg
-        .error err
     #endif
 #endmacro
 
@@ -302,6 +346,8 @@
     .dw lbl
     .db getpage(lbl)
 #endmacro
+
+
 
 #define .branch(lbl) branch(lbl)
 #define .initapp initapp

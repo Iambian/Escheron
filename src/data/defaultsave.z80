@@ -58,8 +58,8 @@ defaultSaveFile:
 .db 10           ;p_def
 .db 06           ;p_mgc
 .db 18           ;p_agi
-.db 0 ; SWD_BROAD    ;p_wpn
-.db 0 ; SHL_LARGE    ;p_shl
+.db SWD_MYTHRIL    ;p_wpn
+.db SHL_AEGIS    ;p_shl
 .db 0 ; ARM_PLATE    ;p_arm
 .db 0            ;p_acc
 .db 0 ; SPL_ESUNA    ;01 p_spells

@@ -281,64 +281,35 @@ mmb_single          .equ 9
 #define m_XF_SUB 5
 #define m_XF_NOT 6
 #define m_XF_NEG 7
+
 #define m_FX_EX 0
 #define m_FX_LD 1
 
-;#define m_eof .db 0
-;#define m_setxy(x,y) .db 1,x,y
-;#define m_addxy(x,y) .db 2,x,y
-;#define m_call(adr) .db 3,lo(adr),hi(adr)
-;#define m_print(adr) .db 4,lo(adr),hi(adr)
-;#define m_printacc(flags) .db 5,flags
-;#define m_jrfnz(flagid,rel) .db 6,flagid,rel-$-2
-;#define m_jrfz(flagid,rel) .db 7,flagid,rel-$-2
-;#define m_drawbox(x1,y1,x2,y2) .db 8,x1,y1,x2,y2
-;#define m_menuopt() .db 9
-;#define m_newline() .db 10
-;#define m_setflag(flagid) .db 11,flagid
-;#define m_togflag(flagid) .db 12,flagid
-;#define m_setleftmargin() .db 13
-;#define m_clracc() .db 14
-;#define m_exacc() .db 15
-;#define m_setacc1(val1b) .db 16,val1b
-;#define m_setacc2(val2b) .db 17,lo(val2b),hi(val2b)
-;#define m_adrtoacc1(adr) .db 18,lo(adr),hi(adr)
-;#define m_adrtoacc2(adr) .db 19,lo(adr),hi(adr)
-;#define m_setidx(adr) .db 20,lo(adr),hi(adr)
-;#define m_addindexed(offset) .db 21, offset
-;#define m_mltacc(val) .db 22,val
-;#define m_mltacc2(val) .db 23,val
-;#define m_signext() .db 24
-;#define m_swapaccbytes() .db 25
-;#define m_addidxtoacc() .db 26
-;#define m_exaccidx() .db 27
-;#define m_addaccshad() .db 28
-;#define m_getaccind() .db 29
-;#define m_djnz(rel) .db 30, rel-$-1
+#define m_JR_BZ (0<<4)
+#define m_JR_BNZ (1<<4)
+#define m_JR_BPZ (2<<4)
+#define m_JR_BPNZ (3<<4)
+;NOTE: Unconditional jump consumes 8-15
+;NOTE: [td0001] Make those consumed bits extend the jump range.
+;       (i.e. .db 23 \ .dw FSSS_SSSS_SSSS_SSSS, where F=1, S = int15_t)
+#define m_JR_UNCOND (8<<4)
 
-; BEGIN TRANSITIONING TO NEW BYTECODES 
-; (a few of these are non-negotiably the same)
+; BEGIN TRANSITIONING TO NEW BYTECODES
+;TODO:  SCRAP THE OLD ASSEMBLY AND REPURPOSE ITS REMAINS. CMDS 0-10 MOSTLY SAME
+; Register file. All registers are 2 bytes wide.
+; [A]   - Accumulator, splits into low byte [a0] and high byte [a1]
+;           Most instructions will involve this register.
+; [AP]  - Accumulator Prime. Temporary storage for argument passing and math ops
+; [I]   - Index. May be used in math ops. Primary use is indexed operations.
+; [IP]  - Index Prime. For storing and swapping for indexing an additional adr.
 ;
-; ACC (A) = A0:A1, ACC PRIME (AP) = AP
-; IDX (I) = IDX, IDX PRIME (IP) = IP
-;
-;Most of the archetecture is accumulator-based. Most instructions will go
-;through it, utilizing exchanges to move values around, and ADD to double up
-;on both math and moving/duplicating data. Each "register" is 2 bytes wide.
-;
-;
-;
-#macro twobitlogsub2(num)
-    #if num <= 1
-        0
-    #elif num <= 2
-        1
-    #elif num <= 4
-        2
-    #else
-        3
-    #endif
+
+#macro REL(rel_adr_val, bitrange)
+    #define R_BITMIN (-1<<(bitrange-1))
+    #define R_BITMAX ((1 <<(bitrange-1))-1)
+    .assert((rel_adr_val <= R_BITMAX) && (rel_adr_val >= R_BITMIN)), "Relative address outside allowed range")
 #endmacro
+
 
 #define m_eof           .db 0
 #define m_setxy(x,y)    .db 1,x,y
@@ -363,7 +334,15 @@ mmb_single          .equ 9
 #define m_mltacc()      .db 20      ; a0 * a1 -> A
 #define m_djnz(rel)     .db 21, rel-$-1 ;A--, `JR rel` if A != 0
 #define m_write()       .db 22      ; a0 -> [I]
-#define m_jrbz(bt, rel) .db 23, bt, rel-$-1  ;jr if bit b of A is zero
+;%FFFFIIII jump based on FFFF function and IIII immediate.
+;NOTE: Relative kept in check by .db bounding and warns. Never ignore warnings.
+#define m_jrbz(bt, rel)   .db 23, (bt&15)|m_JR_BZ, rel-$-1   ;if A[`bt`] == 0
+#define m_jrbnz(bt, rel)  .db 23, (bt&15)|m_JR_BNZ, rel-$-1  ;if A[`bt`] != 0
+#define m_jrbpz(bt, rel)  .db 23, (bt&15)|m_JR_BPZ, rel-$-1  ;if AP[`bt`] == 0
+#define m_jrbpnz(bt, rel) .db 23, (bt&15)|m_JR_BPNZ, rel-$-1 ;if AP[`bt`] != 0
+;See note [td0001] regarding bit arrangement.
+#define m_jr(rel)         .db 23, (m_JR_UNCOND)|(((rel-$-2)>>8)&$7F),((rel-$-1)&$FF)
+;For traversing indexed regions
 #define m_inci()        .db 24      ;I++
 ;%SSCAAAAA C=oper(0:ex,1:ldtomem), does oper (1<SS) bytes starting at short adr A.
 ;input size is in actual bytes and is converted via macro
@@ -382,11 +361,9 @@ mmb_single          .equ 9
 #define m_ldind(v)      .db 27,v    ; uint8_t([ I + v ]) -> a0. Clears a1
 #define m_cpjnz(v, rel) .db 28,v, rel-$-1   ;`JR rel` if a0 != v
 
-#define m_debug         .db 31
+#define m_debug         .db 31      ;TEMP CMD: TESTER DUMPS REGFILE AND FLAGBANK
 
-
-
-;Recipes
+;Recipes - Uses script system as microcode to make some operations easier to read
 #define m_seta(v) m_seta0((v>>8)&$FF) \ m_swap() \ m_seta0(v&$FF)
 #define m_seti(v) m_exai() \ m_seta(v) \ m_exai()
 #define m_print(adr) m_seta(adr) \ m_printacc()

@@ -4,7 +4,7 @@
 ;new size 1588. size with old code removed is 805. 
 #define __REPARSE_INTERVAL 0
 
-
+menu_numswap        .equ 5      ;very temporary values. For math purposes
 menu_temp           .equ 7      ;2b temporary purposes
 chardisp_options    .equ 9      ;2b flags
 menu_basefile       .equ 11     ;2b index to save file
@@ -290,25 +290,28 @@ menu_dc_char_details:
     ; Column 2
     m_addxy(30, -(4*NEWLINE_HEIGHT))
     m_setleft()
-    ;Attack stat calculation
+    ;--- Attack stat calculation
     m_seta(EOFST_ATK)
     m_exaap()
     m_print(menu_dc_item_getstats)
-    m_ldind(p_atk)
-    m_addaf(menu_temp, 2)
     m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
     m_newline()
-    ;Defense stat calculation
-    m_ldind(p_def)
-    ;TODO: ADD EQUIP BONUSES TO DEFENSE
+    ;--- Defense stat calculation
+    m_seta(EOFST_DEF)
+    m_exaap()
+    m_print(menu_dc_item_getstats)
     m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
     m_newline()
-    m_ldind(p_mgc)
-    ;TODO: ADD EQUIP BONUSES TO MAGIC
+    ;--- Magic stat calculation
+    m_seta(EOFST_WIS)
+    m_exaap()
+    m_print(menu_dc_item_getstats)
     m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
     m_newline()
-    m_ldind(p_agi)
-    ;TODO: ADD EQUIP BONUSES TO AGILITY
+    ;--- Agility stat calculation
+    m_seta(EOFST_AGI)
+    m_exaap()
+    m_print(menu_dc_item_getstats)
     m_dispacc(mf_3DIGIT|mf_RIGHT_ALIGN)
     m_newline()
     ; Column 3
@@ -322,65 +325,204 @@ menu_dc_char_details:
     ; Column 4
     m_addxy(30, -(4*NEWLINE_HEIGHT))
     m_setleft()
-    m_seta(99)
-    ;TODO: ACTUALLY CALCULATE HIT RATE
+    ;--- Hit rate calculation
+    m_print(menu_dc_item_gethitrate)
+    m_swap()
+    m_seta0(100)
+    m_mltacc()
+    m_clra0()
+    m_swap()
     m_dispacc(mf_2DIGIT|mf_RIGHT_ALIGN)
     .db "%\n"
-    m_seta(0)
-    ;TODO: ACTUALLY CALCULATE EVASION
+    ;--- Evasion calculation
+    m_print(menu_dc_item_getevasion)
+    m_swap()
+    m_seta0(100)
+    m_mltacc()
+    m_clra0()
+    m_swap()
     m_dispacc(mf_2DIGIT|mf_RIGHT_ALIGN)
     .db "%"
     m_eof
 
 ;input: I = adr to char data, AP = equipment offset (the stat we are finding)
+;NOTE: AP also corresponds to character data file. We'll be using that too.
+;We kinda have to do it this way because equipment stats has interactions
 ;output: A= sum of all stats
 menu_dc_item_getstats:
     m_clra()
-    m_ldfa(menu_temp, 2)    ;menu_temp will be our running total
-    m_seta0(p_wpn)  ;offset to weapon slot. Shield, armor, accessory following.
+    m_ldfa(menu_temp, 2)
+    m_seta(p_wpn)   ;offset to weapon slot. Shield, armor, accessory following.
     m_addi()        ;set base address to start of equipment stack.
     m_exai()        ;and set this as our new index. Remember to restore later.
     m_print(menu_dc_item_singlestat)    ;fetch weapon data
+    m_clra()
+    m_addap()                           ;duplicate offset data
+    m_cpjnz(EOFST_ATK, menu_dc_item_getstats_skip_atkcheck)
+    ;Additional checking: if offhand slot is empty, give the weapon 50% bonus
+    m_ldind(0)      ;index points to secondary slot.
+    m_cpjnz(0,menu_dc_item_getstats_skip_atkcheck)
+    m_ldaf(menu_temp, 2)
+    m_swap()
+    m_seta0(128)
+    m_mltacc()      ;division by reciprocal.
+    m_clra0()
+    m_swap()        ;halved value here.
+    m_addaf(menu_temp, 2)   ;add original value for +50%
+    m_ldfa(menu_temp, 2)    ;and store it back
+menu_dc_item_getstats_skip_atkcheck:
+    ;NOTE: Do not concern ourselves with dual-wield mechanics other than that
+    ;   its calculations takes place AFTER the total stats are calculated.
     m_print(menu_dc_item_singlestat)    ;fetch offhand data
     m_print(menu_dc_item_singlestat)    ;fetch armor data
     m_print(menu_dc_item_singlestat)    ;fetch accessory data
-    m_ldaf(menu_basefile, 2)
+    ;restore to start of chardat, then immediately preserve it.
+    m_ldaf(menu_slotpos, 2)             ;address to character
     m_exai()                            ;set I back to start of chardat
-    ;m_ldaf(menu_temp, 2)                ;return sum
+    m_exiip()
+    m_jrbpnz(2, _)  ;Jump over character adding if no corresponding stat to use
+    ;Now, add the calculated stats with character's base stat
+    m_seta(p_atk-EOFST_ATK)             ;atk offset in char ptr wrt equip offset
+    m_addaf(menu_slotpos, 2)            ;advance char pointer to begin offset
+    m_addap()                           ;advance char pointer to actual offset
+    m_exai()                            ;set I to that pointer
+    m_ldind(0)                          ;retrieve character stat value
+    m_addaf(menu_temp, 2)               ;and combine it with calculated stat
+    ;Restore I to start of chardat,
+_:  m_exiip()
+    ;and begin clamping down the stat calculation values
+    m_jrbz(15,_)        ;sign check.
+    m_clra()            ;if negative, clamp to zero
+_:  m_swap()
+    m_cpjnz(0, _)       ;check high byte. If still not zero, jump to clamp at 255
+    m_swap()
+    m_eof
+_:  m_clra0()
+    m_swap()
+    m_seta0(255)
     m_eof
 
 
 ;input: I=equipment slot, AP = equipment stat offset to add
 ;output: (menu_temp) added to, I = I+1
 menu_dc_item_singlestat:
-    m_ldind(0)
-    m_cpjnz(0, _)   ;jump to end if item slot empty.
-;The math required. See? Algebra *is* useful for more than passing a class.
-; stat = [itemdatastart+(slotsize*(itemid-1))+itemstat_offset]
-; stat = [itemdatastart+(slotsize*itemid - slotsize)+itemstat_offset]
-; stat = [itemdatastart-slotsize+(slotsize*itemid)+itemstat_offset]
+    m_ldind(0)      ;get itemID
+    m_cpjnz(0, _)   ;Jump if slot has something to process
+    m_inci()        ;otherwise advance to next item slot and return
+    m_eof
+    ;The math required. See? Algebra *is* useful for more than passing a class.
+    ; stat = [itemdatastart+(slotsize*(itemid-1))+itemstat_offset]
+    ; stat = [itemdatastart+(slotsize*itemid - slotsize)+itemstat_offset]
+_:  ; stat = [itemdatastart-slotsize+(slotsize*itemid)+itemstat_offset]
+menu_dc_item_singlestat_from_id:    ;this label isn't called directly. is jumped to.
     m_swap()
+    m_debug
     m_seta0(EOFST_LENGTH)
-    m_mltacc()
+    m_mltacc()      ;itemID * record_length
     m_exiip()       ;save pointer to item slot
-    m_exai()        ;store middle term
+    m_exai()        ;store middle term into I, discarding what was there before.
     m_seta(dispCharslots_temp_geartable-EOFST_LENGTH)
     m_addi()        ;sum middle term and start term
     m_addap()       ;sum final term. Address completed.
     m_exai()        ;put that address into I
     m_ldind(0)      ;get stat value from table
-    m_addaf(menu_temp, 2)
+    m_jrbpnz(2, _)  ;jump if value 4-7 of 7 in AP. Corresponds to unsigned.
+    m_sext()        ;sign-extend values from indices 0-3 as they are signed.
+_:  m_addaf(menu_temp, 2)
     m_ldfa(menu_temp, 2)
     m_exiip()       ;restore item slot pointer
-_:  m_inci()        ;next slot
+    m_inci()        ;next slot
     m_eof
 
+;Same input as menu_dc_item_getstats. Hit rate is determined by two things:
+; * AGI/2.5 -> (AGI*102)>>8. Use 103 instead of 102 for slight upward rounding.
+; * Primary weapon bonus. Player is allowed to be unarmed. Only weapons go here.
+;NOTE: A secondary weapon contributes nothing to this stat,
+;      even if the primary weapon slot is empty.
+;output: A= raw value. You still have to change it into a percent.
+menu_dc_item_gethitrate:
+    m_seta(EOFST_AGI)
+    m_exaap()
+    m_print(menu_dc_item_getstats)  ;menu_temp contains clamped value
+    m_swap()
+    m_seta0(103)
+    m_mltacc()
+    m_clra0()
+    m_swap()
+    m_ldfa(menu_temp, 2)    ;downrated AGI stat stored.
+    m_ldind(p_wpn)
+    m_cpjnz(0, _)
+    ;The slot is empty. Return downrated AGI stat.
+    m_ldaf(menu_temp, 2)
+    m_eof
+_:  m_print(menu_dc_item_gethitrate_helper)
+    m_ldaf(menu_slotpos, 2)
+    m_exai()    ;restore I to start of chardat
+    m_ldaf(menu_temp, 2)    ;retrieve item hitrate + AGI bonus
+    ; And clamp to max 255
+    m_swap()
+    m_cpjnz(0, _)
+    m_swap()
+    m_eof
+_:  m_clra0()
+    m_swap()
+    m_seta0(255)
+    m_eof
+
+menu_dc_item_gethitrate_helper:
+    m_seta(EOFST_HIT)   ;extract this stat
+    m_exaap()
+    m_ldind(p_wpn)      ;we lost A during call, so reestablish it.
+    m_jr(menu_dc_item_singlestat_from_id)
 
 
+;Same input as menu_dc_item_getstats. Evasion is determined by two things:
+; * AGI/6 -> (AGI*43)>>8. Use 42 instead to round downward.
+; * Secondary item slot. This may be empty. It may contain a weapon.
+;   Since hit/evade stat overlap in item definitions, you should cancel a
+;   lookup if the itemid is less than the first shield, since all weapons
+;   occur before the first defensive item, and no other items at and beyond it
+;   will have a value in the hit field.
+;output: A= sum of all stats
+menu_dc_item_getevasion:
+    m_seta(EOFST_AGI)
+    m_exaap()
+    m_print(menu_dc_item_getstats)  ;menu_temp contains clamped value
+    m_swap()
+    m_seta0(43)
+    m_mltacc()
+    m_clra0()
+    m_swap()
+    m_ldfa(menu_temp, 2)    ;downrated AGI stat stored.
+    m_ldind(p_shl)
+    m_cpjnz(0, ++_)
+    ;The slot is empty. Return downrated AGI stat.
+_:  m_ldaf(menu_temp, 2)
+    m_eof
+_:  ; Check if the object is not a weapon (ID > WEAPON_END-1)
+    m_ldfa(menu_numswap, 2)
+    m_seta(WEAPON_END-1)
+    m_subaf(menu_numswap, 2)
+    m_jrbz(15, --_)     ;No carry until we hit shield. Jump to empty if result not neg.
+    m_print(menu_dc_item_getevasion_helper)
+    m_ldaf(menu_slotpos, 2)
+    m_exai()    ;restore I to start of chardat
+    m_ldaf(menu_temp, 2)    ;retrieve item hitrate + AGI bonus
+    ; And clamp to max 255
+    m_swap()
+    m_cpjnz(0, _)
+    m_swap()
+    m_eof
+_:  m_clra0()
+    m_swap()
+    m_seta0(255)
+    m_eof
 
-
-
-
+menu_dc_item_getevasion_helper:
+    m_seta(EOFST_HIT)   ;extract this stat
+    m_exaap()
+    m_ldind(p_shl)      ;we lost A during call, so reestablish it.
+    m_jr(menu_dc_item_singlestat_from_id)
 
 
 

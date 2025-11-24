@@ -1010,14 +1010,34 @@ class MenuMakerApp:
                 adr = self.gamemap.idx()
                 self.gamemap.memory[adr] = self.gamemap.acc1()
                 ptr += 1
-            elif opcode == 23:  # 3b: m_jrbz()  :jr if bit b of A is zero.
-                b = self.gamemap.memory[ptr + 1]
+            elif opcode == 23:  # 3b: multi-use jump instruction
+                param = self.gamemap.memory[ptr + 1]
+                b = param & 0x0F
+                oper = (param & 0xF0) >> 4
                 rel = self.gamemap.memory[ptr + 2]
-                res = True if (self.gamemap.acc() & (1 << b)) == 0 else False
-                #print(f"jrbz {b}, {rel}: {res}")
+                if oper == 0:
+                    res = True if (self.gamemap.acc() & (1 << b)) == 0 else False
+                elif oper == 1:
+                    res = True if (self.gamemap.acc() & (1 << b)) != 0 else False
+                elif oper == 2:
+                    res = True if (self.gamemap.accshad() & (1 << b)) == 0 else False
+                elif oper == 3:
+                    res = True if (self.gamemap.accshad() & (1 << b)) != 0 else False
+                elif oper >= 8:
+                    res = True
+                    rel = rel|((param & 0x7F) << 8)
+                    #print(f"Bytecode data: {bytes(self.gamemap.memory[ptr:ptr+3]).hex()}")
+                else:
+                    raise ValueError(f"Invalid operator found in CMD 23. Bit: {b}, oper: {oper}, rel (raw): {rel} ")
+                #print(f"jr oper {oper}, {b}, {rel}: {res}")
                 ptr += 3
+                if oper < 8:
+                    rel = rel if rel < 128 else rel-256
+                else:
+                    rel = rel if rel < 16384 else rel-32768
+                    #print(f"Newrel at {rel}")
                 if res:
-                    ptr += rel if rel < 128 else rel-256
+                    ptr += rel
             elif opcode == 24:  # 1b: m_inci()
                 self.gamemap.idx(self.gamemap.idx()+1)
                 ptr += 1
@@ -1094,7 +1114,12 @@ class MenuMakerApp:
                 i = self.gamemap.idx().to_bytes(2, 'big').hex()
                 ip = self.gamemap.idxshad().to_bytes(2, 'big').hex()
                 ap2 = self.gamemap.accshad2().to_bytes(2, 'big').hex()
-                print(f"ACC: ${a}, ACP: ${ap}, IDX: ${i}, IDP: ${ip}, AC2: ${ap2}")
+                flagadr = self.gamemap.getaddr("gameflags")
+                hilite = 7*2
+                flagstring = bytes(self.gamemap.memory[flagadr:flagadr+16]).hex()
+                tempstr = parser.yellowmsg(flagstring[hilite:hilite+4])
+                flagstring = flagstring[:hilite]+tempstr+flagstring[hilite+4:]
+                print(f"ACC: ${a}, ACP: ${ap}, IDX: ${i}, IDP: ${ip}, AC2: ${ap2}, FMEM: {flagstring}")
                 ptr += 1
             else:
                 nx, _ = self.print_char(opcode, self.gamemap.x(), self.gamemap.y())
