@@ -285,14 +285,22 @@ mmb_single          .equ 9
 #define m_FX_EX 0
 #define m_FX_LD 1
 
-#define m_JR_BZ (0<<4)
-#define m_JR_BNZ (1<<4)
-#define m_JR_BPZ (2<<4)
-#define m_JR_BPNZ (3<<4)
+#define m_JR_OPERS (0 << 6)
+#define m_JR_UNCOND (1 << 6)
+#define m_JSR_UNCOND (2 << 6)
+#define m_JSR_REG (3 << 6)
+#define m_JR_BZ   (m_JR_OPERS | (0<<4))
+#define m_JR_BNZ  (m_JR_OPERS | (1<<4))
+#define m_JR_BPZ  (m_JR_OPERS | (2<<4))
+#define m_JR_BPNZ (m_JR_OPERS | (3<<4))
+#define m_JSR_A   (m_JSR_REG | (0<<4))
+#define m_JSR_AP  (m_JSR_REG | (1<<4))
+#define m_JSR_I   (m_JSR_REG | (2<<4))
+#define m_JSR_IP  (m_JSR_REG | (3<<4))
+
 ;NOTE: Unconditional jump consumes 8-15
 ;NOTE: [td0001] Make those consumed bits extend the jump range.
 ;       (i.e. .db 23 \ .dw FSSS_SSSS_SSSS_SSSS, where F=1, S = int15_t)
-#define m_JR_UNCOND (8<<4)
 
 ; BEGIN TRANSITIONING TO NEW BYTECODES
 ;TODO:  SCRAP THE OLD ASSEMBLY AND REPURPOSE ITS REMAINS. CMDS 0-10 MOSTLY SAME
@@ -304,20 +312,22 @@ mmb_single          .equ 9
 ; [IP]  - Index Prime. For storing and swapping for indexing an additional adr.
 ;
 
-#macro REL(rel_adr_val, bitrange)
-    #define R_BITMIN (-1<<(bitrange-1))
-    #define R_BITMAX ((1 <<(bitrange-1))-1)
-    .assert((rel_adr_val <= R_BITMAX) && (rel_adr_val >= R_BITMIN)), "Relative address outside allowed range")
+#macro RELCHK(rel_adr_val, bitrange)
+    #define R_MINEVAL ((rel_adr_val) >= (-1<<(bitrange-1)))
+    #define R_MAXEVAL ((rel_adr_val) <= ((1 <<(bitrange-1))-1))
+    .echo "PRIMARY VALUE ", (-1<<(bitrange-1)), ", SECONDARY VALUE ", ((1 <<(bitrange-1))-1), ", RELATIVE ADDR: ",rel_adr_val
+    .echo "EVAL MIN: ", R_MINEVAL, ", EVAL MAX: ",R_MAXEVAL
+    .assert(R_MINEVAL && R_MAXEVAL, "Relative address outside allowed range")
 #endmacro
 
 
 #define m_eof           .db 0
 #define m_setxy(x,y)    .db 1,x,y
 #define m_addxy(x,y)    .db 2,x,y
-#define m_drawbox(x1,y1,x2,y2) .db 3,x1,y1,x2,y2
+;   slot 3 empty
 #define m_dispacc(flg)  .db 4,flg   ;numeric display A given flags.
-#define m_printacc()    .db 5       ;prints at address A
-#define m_call(adr)     .db 6, lo(adr), hi(adr)     ;Run z80 ASM code.
+;   slot 5 empty
+#define m_run(adr)      .db 6, lo(adr), hi(adr)     ;Run z80 ASM code.
 #define m_clra0()       .db 7       ; Clears a0
 #define m_seta0(v)      .db 8,v     ; v -> a0
 #define m_menuopt()     .db 9       ;CTRL CODE: TAB
@@ -334,14 +344,17 @@ mmb_single          .equ 9
 #define m_mltacc()      .db 20      ; a0 * a1 -> A
 #define m_djnz(rel)     .db 21, rel-$-1 ;A--, `JR rel` if A != 0
 #define m_write()       .db 22      ; a0 -> [I]
-;%FFFFIIII jump based on FFFF function and IIII immediate.
-;NOTE: Relative kept in check by .db bounding and warns. Never ignore warnings.
-#define m_jrbz(bt, rel)   .db 23, (bt&15)|m_JR_BZ, rel-$-1   ;if A[`bt`] == 0
-#define m_jrbnz(bt, rel)  .db 23, (bt&15)|m_JR_BNZ, rel-$-1  ;if A[`bt`] != 0
-#define m_jrbpz(bt, rel)  .db 23, (bt&15)|m_JR_BPZ, rel-$-1  ;if AP[`bt`] == 0
-#define m_jrbpnz(bt, rel) .db 23, (bt&15)|m_JR_BPNZ, rel-$-1 ;if AP[`bt`] != 0
-;See note [td0001] regarding bit arrangement.
-#define m_jr(rel)         .db 23, (m_JR_UNCOND)|(((rel-$-2)>>8)&$7F),((rel-$-1)&$FF)
+;%FFAAIIII Operation based on FF. F may merge AAIIII to rel. Else, defined below
+#define m_jrbz(b,rel)   .db 23, m_JR_BZ|(b&15), rel-$-1   ;if A[`bt`] == 0
+#define m_jrbnz(b,rel)  .db 23, m_JR_BNZ|(b&15), rel-$-1  ;if A[`bt`] != 0
+#define m_jrbpz(b,rel)  .db 23, m_JR_BPZ|(b&15), rel-$-1  ;if AP[`bt`] == 0
+#define m_jrbpnz(b,rel) .db 23, m_JR_BPNZ|(b&15), rel-$-1 ;if AP[`bt`] != 0
+#define m_jr(rel)       .db 23, m_JR_UNCOND|(hi(rel-$-2)&$3F), lo(rel-$-1,14)
+#define m_jsr(rel)      .db 23, m_JSR_UNCOND|(hi(rel-$-2)&$3F), lo(rel-$-1) \ RELCHK(rel-$, 14)
+#define m_jsra()        .db 23, m_JSR_A
+#define m_jsrap()       .db 23, m_JSR_AP
+#define m_jsri()        .db 23, m_JSR_I
+#define m_jsrip()       .db 23, m_JSR_IP
 ;For traversing indexed regions
 #define m_inci()        .db 24      ;I++
 ;%SSCAAAAA C=oper(0:ex,1:ldtomem), does oper (1<SS) bytes starting at short adr A.
@@ -377,7 +390,9 @@ mmb_single          .equ 9
 #define m_add(v) m_exaap() \ m_seta(v) \ m_addap()
 #define m_setap0(v) m_exaap() \ m_seta0(v) \ m_exaap()
 #define m_ldind2(v) m_ldind(v+1) \ m_swap() \ m_addind(v)
-
+;
+#define m_drawbox(x1,y1,x2,y2) m_run(menu_drawBox) \ .db x1,y1,x2,y2
+#define m_printacc() m_jsra()
 ;  #define something()
 
 ;==============================================================================

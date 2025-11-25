@@ -1410,6 +1410,24 @@ menu_drawPortrait:
 	add a,8
 	jp iPutSpriteInv
 
+menu_drawBox:
+	di
+	pop af		;return address. Flags not disturbed during this operation.
+	pop hl		;text pointer
+	ld	e,(hl)
+	inc hl
+	ld 	d,(hl)
+	inc hl
+	ld	c,(hl)
+	inc hl
+	ld	b,(hl)
+	inc hl
+	push hl
+	push af
+	ei
+	;Drawbox routine goes here
+	ret
+
 
 dispCharslots_temp_portraittable:
 #macro X(idx, portraitid, gender, dispname, varname)

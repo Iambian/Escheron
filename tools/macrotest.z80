@@ -62,9 +62,11 @@
 ;    .db dispname
 ;#endmacro
 ;#include "src/xdefs/players.z80"
-
-m_exfa(11,2)
-
+.org $7FFD
+;m_jsr(_)   ;basic test. expected relative output = 0
+m_jsr($5FFF)  ;basic test. expected relative output = -2
+_:
+;.dw ($6002-$8000-2)
 
 ;m_setxy($05,5)    ;this is a comment
 ;.db "Welcome \rto Americana.\nPlease make your\nselection, followed\nby the pound\nsign now.\n"

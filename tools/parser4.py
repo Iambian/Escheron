@@ -75,19 +75,23 @@ def err(token:Token, msg:str):
 def printerr(token:Token, msg:str):
     print(errmsg(token, msg))
 def tokline2mini(tokenline:list[Token]):
+    return ''.join([f"{i.v}" for i in tokenline])
     return ' '.join([f"[{i.type}/{i.v}]" for i in tokenline])
 
 
 
 class Parser(object):
     DEBUGMODE = False
-    SHOW_SYMTABLE = True
+    SHOW_SYMTABLE = False
     SHOW_SYMTABLE_MODE = None       #None|"SYM"|"MAC"|"ANON"
     SHOW_PARSE_LINESTART = True
     MAX_RECURSION_DEPTH = 12
     MATH_OPS = {'+','-','*','/','&','|','^','<<','>>','==','!=','<','>','<=','>=','&&','||'}
     UNARY_OPS = {'+','-','~'}
     Z80INST = {'ADC', 'ADD', 'AND', 'BIT', 'CALL', 'CCF', 'CP', 'CPD', 'CPI', 'CPIR', 'CPL', 'DAA', 'DEC', 'DI', 'DJNZ', 'EI', 'EX', 'EXX', 'HALT', 'IM', 'IN', 'INC', 'IND', 'INDR', 'INI', 'INIR', 'JP', 'JR', 'LD', 'LDD', 'LDI', 'NEG', 'NOP', 'OR',  'OTDR', 'OTIR', 'OUT', 'OUTD', 'OUTI', 'POP', 'PUSH', 'RES', 'RET', 'RETI', 'RETN' 'RL', 'RLA', 'RLC', 'RLCA', 'RLD', 'RR', 'RRA', 'RRCA', 'RRD', 'RST', 'SBC', 'SCF', 'SET', 'SLA', 'SLL', 'SRA', 'SRL', 'SUB', 'XOR'}
+    #
+    #
+    #
     def __init__(self, tokens: "Tokenizer", oldsymtable=None, silent=False):
         if silent:
             self.__class__.DEBUGMODE = False
@@ -296,12 +300,13 @@ class Parser(object):
                 if token0v in {"#DEFINE", "#DEF"}:
                     #Expansion control
                     try:
-                        if token1v.endswith('('):
+                        if token1v.endswith('(') or "$" in [t.v for t in line if t.type == "OPER"]:
                             raise Exception("Do not show this error. This exists solely to cancel parse()/eval().")
                         macrobody = self.parse(macrobody, passid, depth+1)
                         macrobody = self.eval_expr(macrobody, -1)
                     except Exception as e:
                         s  = traceback.format_exc()
+                        print(s)
                     # Deal with expansion results
                     if isinstance(macrobody, Token):
                         macrodef = MacroDef(token1, paramlist, [macrobody])
@@ -500,6 +505,8 @@ class Parser(object):
                     print(redmsg(".error directive encountered. Raising error using text available."))
                     err(token, f"{line}")
                 elif dirid == ".ECHO":
+                    data = self.parse_bytestream(line[diridx+1:], None, passid)
+                    print(data)
                     # You'll want to figure out how this is going to work.
                     pass
                 elif dirid in (".DB", ".BYTE"):
@@ -716,15 +723,15 @@ class Parser(object):
                     continue
             # If no string condition caught, process a number instead
             exprval = int(self.eval_expr(param, passid).v)
-            int_min = -(1 << (8*bytewidth-1))
-            int_max = (1 << (8*bytewidth))-1
-            #print(f"Boundaries: {int_min}, {int_max}")
-            if ((exprval < int_min) or (exprval > int_max)) and passid > 1 and bytewidth:
-                print(warnmsg(param[0],f"Expression evalulates outside bounds. Value {exprval} is being truncated."))
             if bytewidth is None:
                 # Is a number but is not outputting data (.echo)
                 result.extend(str(exprval).encode("ASCII"))
             else:
+                int_min = -(1 << (8*bytewidth-1))
+                int_max = (1 << (8*bytewidth))-1
+                #print(f"Boundaries: {int_min}, {int_max}")
+                if ((exprval < int_min) or (exprval > int_max)) and passid > 1 and bytewidth:
+                    print(warnmsg(param[0],f"Expression evalulates outside bounds. Value {exprval} is being truncated."))
                 # Is a number and it is being output.
                 # Default action is to chop bits that won't fit.
                 # Value clamping logic is here in case of future feature.
@@ -803,6 +810,7 @@ class Parser(object):
         curval:int = None
         oper:Token = None
         unarystack:list[str] = list()
+        print(f"Evaluating: {tokline2mini(tokenline)}")
         for token in tokens:
             # Special case for expressions leading with unary operators.
             # Special case ends on a value or value-yielding paren group.
@@ -834,6 +842,10 @@ class Parser(object):
                     if len(paramlist) != 1:
                         err(token, "Illegal comma use in expression.")
                     token = self.eval_expr(paramlist[0], passnum, depth+1)
+                    try:
+                        print(f"Paren resolve: 0x{int(token.v).to_bytes(2, 'big').hex()}")
+                    except:
+                        print(f"Paren resolve print failure. Raw value: {token}")
             # This one is also a passthrough to evalulate labels. Unary stack
             # will be consumed to produce a Token NUM.
             if token.type == "IDENT" or (token.type == "OPER" and token.v == "$"):
@@ -871,6 +883,7 @@ class Parser(object):
     
     def eval_pair(self, base:int, oper:Token, nval:int) -> int:
         #print(f"NUMERIC EVAL {base} {oper.v} {nval}")
+        oldbase = base
         if oper.v == "+":
             base += nval
         elif oper.v == "-":
@@ -909,6 +922,7 @@ class Parser(object):
             base = 1 if (base != 0 or nval != 0) else 0
         else:
             err(oper, f"Unknown or unsupported operator '{oper.v}'")
+        print(f"Pair eval {oldbase}{oper.v}{nval} = {base}")
         return base
     
 
@@ -922,10 +936,11 @@ class Parser(object):
             if isinstance(tokenv, int):
                 tokenv = str(tokenv)
             tokenv = str(tokenv).upper()
-            if tokenv.endswith(('H','D','B')):
-                tokenv = tokenv[:-1]
             if tokenv.startswith(('$','%')):
                 tokenv = tokenv[1:]
+            else:
+                if tokenv.endswith(('H','D','B')):
+                    tokenv = tokenv[:-1]
             # Number base conversion to type int
             if "HEX" in tokent:
                 value = int(tokenv, 16)
@@ -947,6 +962,7 @@ class Parser(object):
         elif tokent == "OPER" and tokenv == "$":
             # Doing it this way lets us use numeric unary operator processing.
             origintoken = from_token(token, "NUM", str(self.origin))
+            #print(f"ORIGIN TOKEN: {self.origin} {origintoken}")
             value = self.eval_val(origintoken, passnum, unarystack)
         elif tokent == "IDENT" and tokenv == self.anonchar:
             # Anonymous label processing. Unary operators here have a very

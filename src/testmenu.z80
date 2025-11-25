@@ -1,5 +1,4 @@
 
-
 ;NOTE: Prior iteration is using 915 bytes for partial charstatus and main menu
 ;new size 1588. size with old code removed is 805. 
 #define __REPARSE_INTERVAL 0
@@ -116,7 +115,7 @@ menu_dc_lines_from_single:
     m_addi()
     m_exai()    ;completed address to portraitid in I
     m_ldind(0)
-    m_call(menu_drawPortrait)
+    m_run(menu_drawPortrait)
     ; Position text cursor to start of first line, clearing box edge if single.
     m_addxy(20, 0)
     m_ldaf(chardisp_options, 2)
@@ -416,7 +415,6 @@ menu_dc_item_singlestat:
 _:  ; stat = [itemdatastart-slotsize+(slotsize*itemid)+itemstat_offset]
 menu_dc_item_singlestat_from_id:    ;this label isn't called directly. is jumped to.
     m_swap()
-    m_debug
     m_seta0(EOFST_LENGTH)
     m_mltacc()      ;itemID * record_length
     m_exiip()       ;save pointer to item slot
@@ -570,6 +568,11 @@ dispCharslots_temp_maxagitable:
 menu_drawPortrait:
     .db $00
     .db $C9
+; THIS LABEL WILL BE DEFINED IN THE MENU SYSTEM UPON INTEGRATION
+menu_drawBox:
+    .db $00
+    .db $C9
+
 
 dispCharslots_temp_geartable:
 #macro X(id,nm,gc,at,de,wi,ag,hi,cr,f1,f2,f3)

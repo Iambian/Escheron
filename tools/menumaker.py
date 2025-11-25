@@ -4,6 +4,7 @@ import dcfreader
 import parser4 as parser
 import os
 import time
+import inspect
 
 # TODO: FIX SIGNED VS NONSIGNED ARITHMETIC IN SCRIPT SYSTEM. THIS BUG IS VISIBLE
 # WHEN TRYING TO PERFORM m_addxy() WITH NEGATIVE NUMBERS.
@@ -373,6 +374,7 @@ class MenuMakerApp:
         # Run-time binding symbol name to function dict
         self.callbind = dict()
         self.callbind['menu_drawPortrait'] = lambda: self.render_portrait(self.gamemap.acc())
+        self.callbind['menu_drawBox'] = lambda x1,y1,x2,y2: self.menusystem_render_box(x1,y1,x2,y2)
 
 
         self.input_history_file = "tools/menumaker_input.txt"
@@ -617,6 +619,11 @@ class MenuMakerApp:
                         except:
                             pass
 
+    def menusystem_render_box(self, x1, y1, x2, y2):
+        self._drawBlackBoxWithBordersRoutine(x1, y1, x2, y2)
+        self.gamemap.cr((self.gamemap.BML()+x1)&0xFF)
+        self.gamemap.x(self.gamemap.cr())
+        self.gamemap.y((y1+self.gamemap.BMT())&0xFF)
 
     def _create_pixel_grid(self, canvas_width, canvas_height):
         # Calculate pixel dimensions based on integer pixel size
@@ -841,7 +848,7 @@ class MenuMakerApp:
             origin = segment.baseaddr
             data = segment.data
             #NOTE: fullcallbind relates assembly address to label name. Then you
-            #   use that label as a key i nself.callbind to call routine
+            #   use that label as a key in self.callbind to call routine
             for key in self.callbind:
                 if key in parseobj.symtable:
                     try:
@@ -917,35 +924,35 @@ class MenuMakerApp:
                 self.gamemap.x((self.gamemap.x()+x) & 0xFF)
                 self.gamemap.y((self.gamemap.y()+y) & 0xFF)
                 ptr += 3
-            elif opcode == 3:   # 5b: m_drawbox(x1,y1,x2,y2)
-                x1 = self.gamemap.memory[ptr + 1]
-                y1 = self.gamemap.memory[ptr + 2]
-                x2 = self.gamemap.memory[ptr + 3]
-                y2 = self.gamemap.memory[ptr + 4]
-                self._drawBlackBoxWithBordersRoutine(x1, y1, x2, y2)
-                self.gamemap.cr((self.gamemap.BML()+x1)&0xFF)
-                self.gamemap.x(self.gamemap.cr())
-                self.gamemap.y((y1+self.gamemap.BMT())&0xFF)
-                ptr += 5
+            elif opcode == 3:   #  obsoleted
+                ptr += 1
             elif opcode == 4:   # 2b: m_dispacc()
                 flags = self.gamemap.memory[ptr + 1]
                 number = self.gamemap.acc()
                 self._print_number(number, flags)
                 ptr += 2
-            elif opcode == 5:   # 1b:  m_printacc(flags)
-                print_stack.append(ptr+1)
-                ptr = self.gamemap.acc()
-                continue
-            elif opcode == 6:   # 3b: m_call(adr)
+            elif opcode == 5:   # obsoleted
+                ptr += 1
+            elif opcode == 6:   # 3(+n)b: m_run(adr)
+                #NOTE: Supports reading args inline with text engine.
+                #   One data byte per argument, arguments determined by
+                #   function signature. In the assembly, the callee is 
+                #   what will manipulate the stack frame to make this so.
                 lo_adr = self.gamemap.memory[ptr + 1]
                 hi_adr = self.gamemap.memory[ptr + 2]
                 adr = (hi_adr*256)+lo_adr
+                fargs = []
                 if adr in fullcallbind:
                     k = fullcallbind[adr]
                     if k in self.callbind:
                         f = self.callbind[k]
-                        f()
-                ptr += 3        # TODO: Implement call logic
+                        fsig = inspect.signature(f)
+                        fargs = [0] * len(fsig.parameters)
+                        for i in range(len(fargs)):
+                            fargs[i] = self.gamemap.memory[ptr + 3 + i]
+                        #print(f"Runcode {adr}:{k}, args: {fargs}, function: {f}")
+                        f(*fargs)
+                ptr += (3+len(fargs))
             elif opcode == 7:   # 1b: m_clra0()
                 self.gamemap.acc1(0)
                 ptr += 1
@@ -1013,31 +1020,41 @@ class MenuMakerApp:
             elif opcode == 23:  # 3b: multi-use jump instruction
                 param = self.gamemap.memory[ptr + 1]
                 b = param & 0x0F
-                oper = (param & 0xF0) >> 4
+                topoper = (param & 0xC0) >> 6
+                oper = (param & 0x30) >> 4
                 rel = self.gamemap.memory[ptr + 2]
-                if oper == 0:
-                    res = True if (self.gamemap.acc() & (1 << b)) == 0 else False
-                elif oper == 1:
-                    res = True if (self.gamemap.acc() & (1 << b)) != 0 else False
-                elif oper == 2:
-                    res = True if (self.gamemap.accshad() & (1 << b)) == 0 else False
-                elif oper == 3:
-                    res = True if (self.gamemap.accshad() & (1 << b)) != 0 else False
-                elif oper >= 8:
+                if topoper == 0:    #JRB
+                    if oper == 0:
+                        res = True if (self.gamemap.acc() & (1 << b)) == 0 else False
+                    elif oper == 1:
+                        res = True if (self.gamemap.acc() & (1 << b)) != 0 else False
+                    elif oper == 2:
+                        res = True if (self.gamemap.accshad() & (1 << b)) == 0 else False
+                    else:
+                        res = True if (self.gamemap.accshad() & (1 << b)) != 0 else False
+                    ptr += 3
+                    if res:
+                        ptr += (rel if rel < 128 else rel-256)
+                elif topoper == 1:  #JR unconditional
                     res = True
-                    rel = rel|((param & 0x7F) << 8)
-                    #print(f"Bytecode data: {bytes(self.gamemap.memory[ptr:ptr+3]).hex()}")
-                else:
-                    raise ValueError(f"Invalid operator found in CMD 23. Bit: {b}, oper: {oper}, rel (raw): {rel} ")
-                #print(f"jr oper {oper}, {b}, {rel}: {res}")
-                ptr += 3
-                if oper < 8:
-                    rel = rel if rel < 128 else rel-256
-                else:
-                    rel = rel if rel < 16384 else rel-32768
-                    #print(f"Newrel at {rel}")
-                if res:
-                    ptr += rel
+                    rel = rel|((param & 0x3F) << 8)
+                    ptr = 3 + (rel if rel < 8096 else rel-16384)
+                elif topoper == 2:  #JSR/ relative call
+                    print_stack.append(ptr + 3)
+                    ptr = 3 + (rel if rel < 8096 else rel-16384)
+                    continue
+                else: #JSR@reg / abs call from reg. No rel supplied
+                    if oper == 0:
+                        v = self.gamemap.acc()
+                    elif oper == 1:
+                        v = self.gamemap.accshad()
+                    elif oper == 2:
+                        v = self.gamemap.idx()
+                    else:
+                        v = self.gamemap.idxshad()
+                    print_stack.append(ptr + 2)
+                    ptr = v
+                    continue
             elif opcode == 24:  # 1b: m_inci()
                 self.gamemap.idx(self.gamemap.idx()+1)
                 ptr += 1
@@ -1119,7 +1136,7 @@ class MenuMakerApp:
                 flagstring = bytes(self.gamemap.memory[flagadr:flagadr+16]).hex()
                 tempstr = parser.yellowmsg(flagstring[hilite:hilite+4])
                 flagstring = flagstring[:hilite]+tempstr+flagstring[hilite+4:]
-                print(f"ACC: ${a}, ACP: ${ap}, IDX: ${i}, IDP: ${ip}, AC2: ${ap2}, FMEM: {flagstring}")
+                print(f": ${a}, AP: ${ap}, I: ${i}, IP: ${ip}, FMEM: {flagstring}")
                 ptr += 1
             else:
                 nx, _ = self.print_char(opcode, self.gamemap.x(), self.gamemap.y())

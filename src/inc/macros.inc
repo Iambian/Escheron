@@ -21,8 +21,8 @@
 #define VERBOSE_OUTPUT
 
 #define getpage(adr) ((adr&$00FF0000)>>16)+0
-#define lo(adr) (adr&$FF)+0
-#define hi(adr) ((adr>>8)&$FF)+0
+#define lo(adr) ((adr)&$FF)+0
+#define hi(adr) (((adr)>>8)&$FF)+0
 #define xy(x,y) (256*y)+x
 #define ml(m,l) (256*m)+l
 

@@ -151,6 +151,12 @@ testext("Hello")
 
 m_exfa(31,2)
 
+startlabeltest0292 .equ $
+.org $7FFD
+_:
+m_jsr($5FFF)  ;basic test. expected relative output = -8192
+.org $-(-_)+startlabeltest0292
+
 .endapp
 ;TODO: FIND WABBITEMU AND TEST THIS GOODAMNED APP TO SEE IF IT'S COMPILING RIGHT
 .end
