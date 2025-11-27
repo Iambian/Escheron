@@ -926,10 +926,21 @@ class MenuMakerApp:
                 ptr += 3
             elif opcode == 3:   #  obsoleted
                 ptr += 1
-            elif opcode == 4:   # 2b: m_dispacc()
+            elif opcode == 4:   # 2b: m_dispacc() and overloaded company
                 flags = self.gamemap.memory[ptr + 1]
-                number = self.gamemap.acc()
-                self._print_number(number, flags)
+                if flags&0x0F in (6, 7, 0):
+                    oper = flags & 0x07
+                    num = (flags >> 3) & 0x1F
+                    num = num if num<16 else num-32
+                    if oper == 5:
+                        self.gamemap.acc(self.gamemap.acc()+num)
+                    elif oper == 6:
+                        self.gamemap.idx(self.gamemap.idx()+num)
+                    elif oper == 0:
+                        self.gamemap.accshad(self.gamemap.accshad()+num)
+                else:
+                    number = self.gamemap.acc()
+                    self._print_number(number, flags)
                 ptr += 2
             elif opcode == 5:   # obsoleted
                 ptr += 1
@@ -1055,8 +1066,7 @@ class MenuMakerApp:
                     print_stack.append(ptr + 2)
                     ptr = v
                     continue
-            elif opcode == 24:  # 1b: m_inci()
-                self.gamemap.idx(self.gamemap.idx()+1)
+            elif opcode == 24:  # obsoleted
                 ptr += 1
             elif opcode == 25:  # 2b: m_exfa()/m_ldfa()   ;%SSCAAAAA. Size indicates power of two here.
                 bytecode = self.gamemap.memory[ptr + 1]

@@ -1,0 +1,40 @@
+
+Nov 26 2025
+-----------
+
+tools/parser4.py
+
+Macro expansions occur before processing directives since the current architecture requires that directives are processed at depth=1. This affects macros that create #DEFINEs based on the value of $ (current PC) where the value of $ has changed during its invocation prior to the point where actual expansion should have occurred.
+
+Minimal test, as extracted from the project. What appears to happen below (based on testing and debugging output) is that RELCHK() expands and evaluates R_MINEVAL and R_MAXEVAL in the assert at the start of m_jsr() when PC is $7FFD since these are all macro expansions, but .echo only evaluates when it is encountered at the end of the .db sequence since they only run at depth=1, thus, in sequence. The contention here is that in order to resolve this the "right way", all expansions are done without processing and rely on depth=1 to execute all lines, but the design decision was made to make sure that all preprocessor instructions that are part of macros are processed right then and there to avoid inserting preprocessor-related newlines inline with the macros. This decision was made because I needed a to be able make incomplete line macros which, if placed inline, would completethe line. (e.g. `var macro` expands to `var [.equ value]` where the a macro would define the `[.equ value]` part by itself but preprocessor conditionals are not allowed to insert newlines between the `var` and the `.equ`). You'll need to check to see if SPASM actually does this or merely special-cases the use-case of splitting an .equ statement to modify or extend what .equ does.
+
+Anyhoo. That test case.
+
+```
+#macro assert(condition, message_if_failed)
+    #if eval((condition) < 1)
+        #define errmsg eval(message_if_failed)
+        #define err "Assert failed: ", errmsg
+        .error err
+    #endif
+#endmacro
+
+#macro RELCHK(rel_adr_val, bitrange)
+    #define R_MINEVAL ((rel_adr_val) >= (-1<<(bitrange-1)))
+    #define R_MAXEVAL ((rel_adr_val) <= ((1 <<(bitrange-1))-1))
+    .echo "PRIMARY VALUE ", (-1<<(bitrange-1)), ", SECONDARY VALUE ", ((1 <<(bitrange-1))-1), ", RELATIVE ADDR: ",rel_adr_val
+    .echo "EVAL MIN: ", R_MINEVAL, ", EVAL MAX: ",R_MAXEVAL
+    .assert(R_MINEVAL && R_MAXEVAL, "Relative address outside allowed range")
+#endmacro
+
+#define m_jsr(rel)      .db 23, m_JSR_UNCOND|(hi(rel-$-2)&$3F), lo(rel-$-1) \ RELCHK(rel-$, 14)
+
+.org $7FFD
+;m_jsr(_)        ;basic test. Expected output = 0
+m_jsr($5FFF)    ;basic test. Expected output: range error (failed low check)
+;m_jsr($6000)    ;basic test. Expected output: INT14_MIN
+;m_jsr($9FFF)    ;basic test. Expected output: INT14_MAX
+;m_jsr($A000)    ;basic test. Expected output: range error (failed high check)
+_:
+
+```

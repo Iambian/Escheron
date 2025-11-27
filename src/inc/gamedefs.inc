@@ -242,9 +242,15 @@ dhl_fetch_long_values 	.equ 7
 #define mf_3DIGIT 3
 #define mf_4DIGIT 4
 #define mf_5DIGIT 5
-#define mf_6DIGIT 6
-#define mf_7DIGIT 7
-#define mf_8DIGIT 0
+; Following are removed since we are not going to be using that capability.
+; instead, the script system is overloading these values.
+;#define mf_6DIGIT 6
+;#define mf_7DIGIT 7
+;#define mf_8DIGIT 0
+#define mf_DIGITOVERLOAD_ADDFLGTOA  6
+#define mf_DIGITOVERLOAD_ADDFLGTOI  7
+#define mf_DIGITOVERLOAD_ADDFLGTOAP 0
+;
 #define mf_SHOW_LEAD_ZEROES (1<<dhl_show_lead_zeroes)
 #define mf_RIGHT_ALIGN (1<<dhl_right_align_num)
 #define mf_SIGNED_SHOW_NEG (1<<dhl_indic_neg_sign)
@@ -326,6 +332,10 @@ mmb_single          .equ 9
 #define m_addxy(x,y)    .db 2,x,y
 ;   slot 3 empty
 #define m_dispacc(flg)  .db 4,flg   ;numeric display A given flags.
+;overloaded unused digit display to perform int5_t imm add to register.
+#define m_adda_sm(v)    .db 4,((v&31)<<3)+mf_DIGITOVERLOAD_ADDFLGTOA
+#define m_addi_sm(v)    .db 4,((v&31)<<3)+mf_DIGITOVERLOAD_ADDFLGTOI
+#define m_addap_sm(v)   .db 4,((v&31)<<3)+mf_DIGITOVERLOAD_ADDFLGTOAP
 ;   slot 5 empty
 #define m_run(adr)      .db 6, lo(adr), hi(adr)     ;Run z80 ASM code.
 #define m_clra0()       .db 7       ; Clears a0
@@ -355,8 +365,7 @@ mmb_single          .equ 9
 #define m_jsrap()       .db 23, m_JSR_AP
 #define m_jsri()        .db 23, m_JSR_I
 #define m_jsrip()       .db 23, m_JSR_IP
-;For traversing indexed regions
-#define m_inci()        .db 24      ;I++
+;slot 24 empty
 ;%SSCAAAAA C=oper(0:ex,1:ldtomem), does oper (1<SS) bytes starting at short adr A.
 ;input size is in actual bytes and is converted via macro
 #define m_exfa(fb,size) .db 25, fb&31+(twobitlogsub2(size)<<6)+(m_FX_EX<<5)
@@ -393,6 +402,7 @@ mmb_single          .equ 9
 ;
 #define m_drawbox(x1,y1,x2,y2) m_run(menu_drawBox) \ .db x1,y1,x2,y2
 #define m_printacc() m_jsra()
+#define m_inci() m_addi_sm(1)
 ;  #define something()
 
 ;==============================================================================

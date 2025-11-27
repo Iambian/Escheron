@@ -306,7 +306,7 @@ class Parser(object):
                         macrobody = self.eval_expr(macrobody, -1)
                     except Exception as e:
                         s  = traceback.format_exc()
-                        print(s)
+                        #print(s)
                     # Deal with expansion results
                     if isinstance(macrobody, Token):
                         macrodef = MacroDef(token1, paramlist, [macrobody])
@@ -506,7 +506,7 @@ class Parser(object):
                     err(token, f"{line}")
                 elif dirid == ".ECHO":
                     data = self.parse_bytestream(line[diridx+1:], None, passid)
-                    print(data)
+                    print(data.decode(encoding="ASCII", errors="ignore"))
                     # You'll want to figure out how this is going to work.
                     pass
                 elif dirid in (".DB", ".BYTE"):
@@ -810,7 +810,7 @@ class Parser(object):
         curval:int = None
         oper:Token = None
         unarystack:list[str] = list()
-        print(f"Evaluating: {tokline2mini(tokenline)}")
+        #print(f"Evaluating: {tokline2mini(tokenline)}")
         for token in tokens:
             # Special case for expressions leading with unary operators.
             # Special case ends on a value or value-yielding paren group.
@@ -842,10 +842,12 @@ class Parser(object):
                     if len(paramlist) != 1:
                         err(token, "Illegal comma use in expression.")
                     token = self.eval_expr(paramlist[0], passnum, depth+1)
+                    '''
                     try:
                         print(f"Paren resolve: 0x{int(token.v).to_bytes(2, 'big').hex()}")
                     except:
                         print(f"Paren resolve print failure. Raw value: {token}")
+                    '''
             # This one is also a passthrough to evalulate labels. Unary stack
             # will be consumed to produce a Token NUM.
             if token.type == "IDENT" or (token.type == "OPER" and token.v == "$"):
@@ -922,7 +924,7 @@ class Parser(object):
             base = 1 if (base != 0 or nval != 0) else 0
         else:
             err(oper, f"Unknown or unsupported operator '{oper.v}'")
-        print(f"Pair eval {oldbase}{oper.v}{nval} = {base}")
+        #print(f"Pair eval {oldbase}{oper.v}{nval} = {base}")
         return base
     
 
