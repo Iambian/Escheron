@@ -85,6 +85,7 @@ class Parser(object):
     SHOW_SYMTABLE = False
     SHOW_SYMTABLE_MODE = None       #None|"SYM"|"MAC"|"ANON"
     SHOW_PARSE_LINESTART = True
+    SHOW_IF_ELIF_PARSE_ERRORS = False
     MAX_RECURSION_DEPTH = 12
     MATH_OPS = {'+','-','*','/','&','|','^','<<','>>','==','!=','<','>','<=','>=','&&','||'}
     UNARY_OPS = {'+','-','~'}
@@ -93,6 +94,7 @@ class Parser(object):
     #
     #
     def __init__(self, tokens: "Tokenizer", oldsymtable=None, silent=False):
+        self.silent = silent
         if silent:
             self.__class__.DEBUGMODE = False
         if oldsymtable is None:
@@ -224,9 +226,20 @@ class Parser(object):
                     if self.ifstack[-1].cond is not None:
                         if len(line) < 2:
                             err(token0, f"Missing parameters for preop {token0.v}")
-                        ifexpr = self.parse(line[1:], 2, depth+1, force_eval=True)
-                        ifresult = True if self.eval_val(self.eval_expr(ifexpr, 2)) != 0 else False
-                        newcond = self.ifstack[-1].cond
+                        try:
+                            ifexpr = self.parse(line[1:], 2, depth+1, force_eval=True)
+                            ifresult = True if self.eval_val(self.eval_expr(ifexpr, 2)) != 0 else False
+                            newcond = self.ifstack[-1].cond
+                        except Exception as e:
+                            # If there's a problem in parsing this, invalidate
+                            # all branches. This could cause problems later.
+                            # A copy of this solution exists where #IF is.
+                            #if passid > 1:
+                            #    err(token0, e)
+                            if cls.DEBUGMODE and cls.SHOW_IF_ELIF_PARSE_ERRORS:
+                                print(redmsg(traceback.format_exc(e)))
+                            ifresult = None
+                            newcond = None
                         if newcond is False:
                             if ifresult is True:
                                 newcond = True
@@ -258,8 +271,18 @@ class Parser(object):
                     self.ifstack.append(IfDef(token0, b))
                     continue
                 if token0v == "#IF":
-                    ifexpr = self.parse(line[1:], 2, depth+1)
-                    ifres = True if self.eval_val(self.eval_expr(ifexpr,2)) != 0 else False
+                    try:
+                        ifexpr = self.parse(line[1:], 2, depth+1)
+                        ifres = True if self.eval_val(self.eval_expr(ifexpr,2)) != 0 else False
+                    except Exception as e:
+                        # If there's a problem in parsing this, invalidate all
+                        # branches. This could cause problems later. A copy of
+                        # this solution exists where #ELIF is.
+                        #if passid > 1:
+                        #    err(token0, e)
+                        if cls.DEBUGMODE and cls.SHOW_IF_ELIF_PARSE_ERRORS:
+                            print(redmsg(traceback.format_exc(e)))
+                        ifres = None
                     self.ifstack.append(IfDef(token0, ifres))
                 if token0v in {"#UNDEF", "#UNDEFINE"}:
                     if token1v in self.labels:
@@ -506,7 +529,8 @@ class Parser(object):
                     err(token, f"{line}")
                 elif dirid == ".ECHO":
                     data = self.parse_bytestream(line[diridx+1:], None, passid)
-                    print(data.decode(encoding="ASCII", errors="ignore"))
+                    if not self.silent:
+                        print(data.decode(encoding="ASCII", errors="ignore"))
                     # You'll want to figure out how this is going to work.
                     pass
                 elif dirid in (".DB", ".BYTE"):

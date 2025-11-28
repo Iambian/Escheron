@@ -319,7 +319,8 @@ menu_dc_char_details:
     .db "Hit Rate\nEvasion\n"
     m_addxy(3,0)    ;subtle nudge
     .db "__Resist__\n"
-    ;TODO: ADD EQUIPMENT BONUS DISPLAY WRT ELEMENTAL/STATUS RESISTANCES.
+    ;m_addxy(3,0)
+    m_jsr(menu_dc_item_showresist)
     m_newline()
     ; Column 4
     m_addxy(30, -(4*NEWLINE_HEIGHT))
@@ -343,6 +344,23 @@ menu_dc_char_details:
     m_dispacc(mf_2DIGIT|mf_RIGHT_ALIGN)
     .db "%"
     m_eof
+
+menu_dc_item_showresist:
+.db "PLCHLDR",0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ;input: I = adr to char data, AP = equipment offset (the stat we are finding)
 ;NOTE: AP also corresponds to character data file. We'll be using that too.

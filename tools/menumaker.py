@@ -928,19 +928,18 @@ class MenuMakerApp:
                 ptr += 1
             elif opcode == 4:   # 2b: m_dispacc() and overloaded company
                 flags = self.gamemap.memory[ptr + 1]
-                if flags&0x0F in (6, 7, 0):
+                if (flags&0x07) in (6, 7, 0):
                     oper = flags & 0x07
                     num = (flags >> 3) & 0x1F
                     num = num if num<16 else num-32
-                    if oper == 5:
+                    if oper == 6:
                         self.gamemap.acc(self.gamemap.acc()+num)
-                    elif oper == 6:
+                    elif oper == 7:
                         self.gamemap.idx(self.gamemap.idx()+num)
                     elif oper == 0:
                         self.gamemap.accshad(self.gamemap.accshad()+num)
                 else:
-                    number = self.gamemap.acc()
-                    self._print_number(number, flags)
+                    self._print_number(self.gamemap.acc(), flags)
                 ptr += 2
             elif opcode == 5:   # obsoleted
                 ptr += 1
@@ -1049,10 +1048,12 @@ class MenuMakerApp:
                 elif topoper == 1:  #JR unconditional
                     res = True
                     rel = rel|((param & 0x3F) << 8)
-                    ptr = 3 + (rel if rel < 8096 else rel-16384)
+                    #print(f"JR OLD PTR: {ptr}, rel {rel}")
+                    ptr += 3 + (rel if rel < 8096 else rel-16384)
+                    #print(f"JR NES PTR: {ptr}")
                 elif topoper == 2:  #JSR/ relative call
                     print_stack.append(ptr + 3)
-                    ptr = 3 + (rel if rel < 8096 else rel-16384)
+                    ptr += 3 + (rel if rel < 8096 else rel-16384)
                     continue
                 else: #JSR@reg / abs call from reg. No rel supplied
                     if oper == 0:
@@ -1146,7 +1147,7 @@ class MenuMakerApp:
                 flagstring = bytes(self.gamemap.memory[flagadr:flagadr+16]).hex()
                 tempstr = parser.yellowmsg(flagstring[hilite:hilite+4])
                 flagstring = flagstring[:hilite]+tempstr+flagstring[hilite+4:]
-                print(f": ${a}, AP: ${ap}, I: ${i}, IP: ${ip}, FMEM: {flagstring}")
+                print(f"A: ${a}, AP: ${ap}, I: ${i}, IP: ${ip}, FMEM: {flagstring}")
                 ptr += 1
             else:
                 nx, _ = self.print_char(opcode, self.gamemap.x(), self.gamemap.y())
