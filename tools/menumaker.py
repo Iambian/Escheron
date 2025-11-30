@@ -95,10 +95,20 @@ class GameMap(object):
             self.set("textxstart", set)
         return self.get("textxstart")
     
-    def acc1(self, set=None):
+    def acc0(self, set=None):
         if set is not None:
             self.set("textacc", set)
         return self.get("textacc")
+    
+    def acc1(self, setval=None):
+        # Slightly more complex because we don't have a symbol
+        # that directly accesses accumulator high byte
+        adr = self.getaddr("textacc") + 1
+        setval = setval & 0xFF
+        if setval is not None:
+            self.memory[adr] = setval
+        return self.memory[adr]
+
     
     def acc(self, set=None):
         if set is not None:
@@ -924,9 +934,7 @@ class MenuMakerApp:
                 self.gamemap.x((self.gamemap.x()+x) & 0xFF)
                 self.gamemap.y((self.gamemap.y()+y) & 0xFF)
                 ptr += 3
-            elif opcode == 3:   #  obsoleted
-                ptr += 1
-            elif opcode == 4:   # 2b: m_dispacc() and overloaded company
+            elif opcode == 3:   # 2b: m_dispacc() and overloaded company
                 flags = self.gamemap.memory[ptr + 1]
                 if (flags&0x07) in (6, 7, 0):
                     oper = flags & 0x07
@@ -941,13 +949,18 @@ class MenuMakerApp:
                 else:
                     self._print_number(self.gamemap.acc(), flags)
                 ptr += 2
-            elif opcode == 5:   # obsoleted
-                ptr += 1
-            elif opcode == 6:   # 3(+n)b: m_run(adr)
-                #NOTE: Supports reading args inline with text engine.
-                #   One data byte per argument, arguments determined by
-                #   function signature. In the assembly, the callee is 
-                #   what will manipulate the stack frame to make this so.
+            elif opcode == 4:   # 3(+n)b: m_run(adr)
+                # This is a huge mess. All support is simulated. If function
+                # link does not exist, this command is skipped.
+                # Linked Python function consumes N bytes after command based
+                # on number of arguments provided.
+                # The actual Z80 function would manipulate the stack frame.
+                #
+                # The alternative to this would be to have an actual Z80
+                # emulator configured to mimic TI-83 Plus hardware, and for
+                # my parser to be able to assemble Z80 instructions.
+                # None of that's happening any time soon.
+                #
                 lo_adr = self.gamemap.memory[ptr + 1]
                 hi_adr = self.gamemap.memory[ptr + 2]
                 adr = (hi_adr*256)+lo_adr
@@ -963,11 +976,16 @@ class MenuMakerApp:
                         #print(f"Runcode {adr}:{k}, args: {fargs}, function: {f}")
                         f(*fargs)
                 ptr += (3+len(fargs))
-            elif opcode == 7:   # 1b: m_clra0()
+            elif opcode == 5:   # obsoleted
+                ptr += 1
+            elif opcode == 6:   # 1b: m_clra1()
                 self.gamemap.acc1(0)
                 ptr += 1
+            elif opcode == 7:   # 1b: m_clra0()
+                self.gamemap.acc0(0)
+                ptr += 1
             elif opcode == 8:   # 2b: m_seta0(v)
-                self.gamemap.acc1(self.gamemap.memory[ptr + 1])
+                self.gamemap.acc0(self.gamemap.memory[ptr + 1])
                 ptr += 2
             elif opcode == 9:   # 1b: m_menuopt()
                 #raise NotImplementedError("OPCODE 9 requires that I have an actual menu system.")
@@ -976,9 +994,9 @@ class MenuMakerApp:
                 self.gamemap.x(self.gamemap.cr())
                 self.gamemap.y((self.gamemap.NLH()+self.gamemap.y())&0xFF)
                 ptr += 1
-            elif opcode == 11:  # 1b: m_swap()
-                a,b = self.gamemap.acc().to_bytes(2, "little")
-                self.gamemap.acc(a*256+b)
+            elif opcode == 11:  # 1b: m_swap() - Swaps a0 and a1
+                a0, a1 = self.gamemap.acc().to_bytes(2, "little")
+                self.gamemap.acc((a0<<8)|a1)
                 ptr += 1
             elif opcode == 12:  # 1b: m_exaap()
                 self.gamemap.exchange(self.gamemap.acc, self.gamemap.accshad)
@@ -1000,19 +1018,18 @@ class MenuMakerApp:
                 v = (self.gamemap.acc()+self.gamemap.idx())&0xFFFF
                 self.gamemap.acc(v)
                 ptr += 1
-            elif opcode == 18:  # 1b: m_sext()  : Signextends a0 into a1
-                # Consumes 2 more bytes (lo(adr), hi(adr))
-                v = self.gamemap.acc1()
+            elif opcode == 18:  # 1b: m_sext()  : Sign-extends a0 into a1
+                v = self.gamemap.acc0()
                 v = v if not (v & 0x80) else v | 0xFF00
                 self.gamemap.acc(v)
                 ptr += 1
-            elif opcode == 19:  # 2b: m_addind(v)
+            elif opcode == 19:  # 2b: m_addind(v) ; uint8_t([ I + v ]) + A -> A
                 offset = self.gamemap.memory[ptr + 1]
                 offset_int8 = offset if offset < 128 else offset-256
                 memlookup = self.gamemap.memory[self.gamemap.idx()+offset_int8]
-                self.gamemap.acc1(self.gamemap.acc1()+memlookup)
+                self.gamemap.acc(self.gamemap.acc()+memlookup)
                 ptr += 2
-            elif opcode == 20:  # 1b: m_mltacc()
+            elif opcode == 20:  # 1b: m_mltacc() - a0 * a1 = A (8.8 fixed)
                 a, b = self.gamemap.acc().to_bytes(2, "little")
                 self.gamemap.acc(a*b)
                 ptr += 1
@@ -1024,16 +1041,18 @@ class MenuMakerApp:
                 if v != 0:
                     ptr += rel if rel < 128 else rel-256
             elif opcode == 22:  # 1b: m_write()  : a0 -> [I]
-                adr = self.gamemap.idx()
-                self.gamemap.memory[adr] = self.gamemap.acc1()
+                adr = self.gamemap.idx() & 0xFFFF
+                self.gamemap.memory[adr] = self.gamemap.acc0()
                 ptr += 1
-            elif opcode == 23:  # 3b: multi-use jump instruction
+            elif opcode == 23:  # (3b?): Heavily overloaded mostly-jump instr.
                 param = self.gamemap.memory[ptr + 1]
                 b = param & 0x0F
                 topoper = (param & 0xC0) >> 6
                 oper = (param & 0x30) >> 4
                 rel = self.gamemap.memory[ptr + 2]
-                if topoper == 0:    #JRB
+                if topoper == 0:
+                    # JRB__ : 3-byte wide. Bit-condition relative jump.
+                    # 0bTTLLBBBB: T= 0, L= oper, B= bit 0-15
                     if oper == 0:
                         res = True if (self.gamemap.acc() & (1 << b)) == 0 else False
                     elif oper == 1:
@@ -1045,17 +1064,20 @@ class MenuMakerApp:
                     ptr += 3
                     if res:
                         ptr += (rel if rel < 128 else rel-256)
-                elif topoper == 1:  #JR unconditional
-                    res = True
+                elif topoper == 1:
+                    # JR: 3-byte wide. Uncond jump rel with extended adr space.
+                    # 0bTTLLBBBB: T=1, LB= upper 6 bits of int14_t relative.
                     rel = rel|((param & 0x3F) << 8)
-                    #print(f"JR OLD PTR: {ptr}, rel {rel}")
-                    ptr += 3 + (rel if rel < 8096 else rel-16384)
-                    #print(f"JR NES PTR: {ptr}")
-                elif topoper == 2:  #JSR/ relative call
+                    ptr += 3 + (rel if rel < 8192 else rel-16384)
+                elif topoper == 2:
+                    # JSR: 3-byte wide. Uncond call (jump subroutine), ext adr space.
+                    # 0bTTLLBBBB: T=2, LB= upper 6 bits of int14_t relative.
                     print_stack.append(ptr + 3)
-                    ptr += 3 + (rel if rel < 8096 else rel-16384)
+                    ptr += 3 + (rel if rel < 8192 else rel-16384)
                     continue
-                else: #JSR@reg / abs call from reg. No rel supplied
+                else:
+                    # JSR_ : 2 byte wide. Uncond call (jump subroutine), adr in reg.
+                    # 0bTTLLBBBB: T=3, L= oper. B is unused except in overload.
                     if oper == 0:
                         v = self.gamemap.acc()
                     elif oper == 1:
@@ -1063,7 +1085,50 @@ class MenuMakerApp:
                     elif oper == 2:
                         v = self.gamemap.idx()
                     else:
-                        v = self.gamemap.idxshad()
+                        # ALU IMM instructions. Consumes as many bytes as
+                        # it needs. NOT/NEG does not consume any IMM.
+                        params = self.gamemap.memory[ptr + 1]
+                        oper =  params & 0x07
+                        size = 1 if not params & 0x08 else 2
+                        other = self.gamemap.memory[ptr + 2]
+                        acc = self.gamemap.acc()
+                        # Input conditioning
+                        if size == 1:
+                            acc = acc & 0x0F
+                        else:
+                            other = other + (self.gamemap.memory[ptr + 3] << 8)
+                        # ALU operations
+                        if oper == 0:
+                            acc = other
+                            ptr += 2 + size
+                        elif oper == 1:
+                            acc = acc | other
+                            ptr += 2 + size
+                        elif oper == 2:
+                            acc = acc & other
+                            ptr += 2 + size
+                        elif oper == 3:
+                            acc = acc ^ other
+                            ptr += 2 + size
+                        elif oper == 4:
+                            acc = acc + other
+                            ptr += 2 + size
+                        elif oper == 5:
+                            acc = acc - other
+                            ptr += 2 + size
+                        elif oper == 6:
+                            acc = (-acc) & 0xFFFF
+                            ptr += 2
+                        elif oper == 7:
+                            acc = (~acc) & 0xFFFF
+                            ptr += 2
+                        # Output conditioning
+                        if size == 1:
+                            self.gamemap.acc0(acc)
+                        else:
+                            self.gamemap.acc(acc)
+                        continue
+                    # The tail end of the non-ALU stuff.
                     print_stack.append(ptr + 2)
                     ptr = v
                     continue
@@ -1071,14 +1136,19 @@ class MenuMakerApp:
                 ptr += 1
             elif opcode == 25:  # 2b: m_exfa()/m_ldfa()   ;%SSCAAAAA. Size indicates power of two here.
                 bytecode = self.gamemap.memory[ptr + 1]
-                #print(f"Bytecode renders: {bytecode.to_bytes(1,'big').hex()}")
                 bitcodesize = ((bytecode >> 6) & 3)
                 size = 1 << bitcodesize
                 offset = bytecode & 31
                 oper = (bytecode >> 5) & 1
-                flagbank = self.gamemap.getaddr("gameflags")
-                regframe = self.gamemap.getaddr("textacc")
-                #print(f"Size: {size}: orig: {bitcodesize}")
+                f = self.gamemap.getaddr
+                # Memory structure assertions. This is (most of) the register file
+                acc = f("textacc")
+                idx = f("textidx")
+                acp = f("textaccshadow")
+                assert((acc+2 == idx) and (acc+4 == acp))
+                # Establish boundaries, then begin moving data
+                flagbank = f("gameflags")
+                regframe = f("textacc")
                 for idx in range(size):
                     a = self.gamemap.memory[regframe]
                     if oper == 0:
@@ -1093,7 +1163,7 @@ class MenuMakerApp:
                     flagbank += 1
                     regframe += 1
                 ptr += 2
-            elif opcode == 26:  #2b m_Xaf(). %OOOSAAAA. Massively overloaded. I guess size would be power of two here too.
+            elif opcode == 26:  #2b m_Xaf(). %OOOSAAAA. Fairly overloaded.
                 bytecode = self.gamemap.memory[ptr + 1]
                 is2byte = False if ((bytecode >> 4) & 1) == 0 else True
                 offset = bytecode & 15
@@ -1121,16 +1191,19 @@ class MenuMakerApp:
                     acc = (-other) & 0xFFFF
                 elif oper == 7:
                     acc = (~other) & 0xFFFF
-                self.gamemap.acc(acc)
+                if is2byte:
+                    self.gamemap.acc(acc)
+                else:
+                    self.gamemap.acc0(acc)
                 ptr += 2
-            elif opcode == 27:  # 2b: m_ldind()
+            elif opcode == 27:  # 2b: m_ldind(). Explicitly clears a1
                 offset = self.gamemap.memory[ptr + 1]
                 offset_int8 = offset if offset < 128 else offset-256
                 memlookup = self.gamemap.memory[self.gamemap.idx()+offset_int8]
                 self.gamemap.acc(memlookup & 0xFF)
                 ptr += 2
             elif opcode == 28:  # 3b: cpjnz() compare val with a0, jump if not equal
-                arg1 = self.gamemap.acc() & 0xFF
+                arg1 = self.gamemap.acc0()
                 arg2 = self.gamemap.memory[ptr + 1]
                 rel = self.gamemap.memory[ptr + 2]
                 ptr += 3

@@ -302,11 +302,12 @@ mmb_single          .equ 9
 #define m_JSR_A   (m_JSR_REG | (0<<4))
 #define m_JSR_AP  (m_JSR_REG | (1<<4))
 #define m_JSR_I   (m_JSR_REG | (2<<4))
-#define m_JSR_IP  (m_JSR_REG | (3<<4))
+;overloading an overload to implement a0-imm ALU operations
+#define m_IMM_ALU_1B (m_JSR_REG | (3<<4) | (0<<3))
+#define m_IMM_ALU_2B (m_JSR_REG | (3<<4) | (1<<3))
 
-;NOTE: Unconditional jump consumes 8-15
-;NOTE: [td0001] Make those consumed bits extend the jump range.
-;       (i.e. .db 23 \ .dw FSSS_SSSS_SSSS_SSSS, where F=1, S = int15_t)
+;NOTE: [td0001] Unconditional jp/jsr uses otherwise unused bits to extend range.
+;       (i.e. .db 23 \ .dw FFSS_SSSS_SSSS_SSSS, where F=1, S = int14_t)
 
 ; BEGIN TRANSITIONING TO NEW BYTECODES
 ;TODO:  SCRAP THE OLD ASSEMBLY AND REPURPOSE ITS REMAINS. CMDS 0-10 MOSTLY SAME
@@ -330,14 +331,14 @@ mmb_single          .equ 9
 #define m_eof           .db 0
 #define m_setxy(x,y)    .db 1,x,y
 #define m_addxy(x,y)    .db 2,x,y
-;   slot 3 empty
-#define m_dispacc(flg)  .db 4,flg   ;numeric display A given flags.
+#define m_dispacc(flg)  .db 3,flg   ;numeric display A given flags.
 ;overloaded unused digit display to perform int5_t imm add to register.
-#define m_adda_sm(v)    .db 4,((v&31)<<3)+mf_DIGITOVERLOAD_ADDFLGTOA
-#define m_addi_sm(v)    .db 4,((v&31)<<3)+mf_DIGITOVERLOAD_ADDFLGTOI
-#define m_addap_sm(v)   .db 4,((v&31)<<3)+mf_DIGITOVERLOAD_ADDFLGTOAP
+#define m_adda_sm(v)    .db 3,((v&31)<<3)+mf_DIGITOVERLOAD_ADDFLGTOA
+#define m_addi_sm(v)    .db 3,((v&31)<<3)+mf_DIGITOVERLOAD_ADDFLGTOI
+#define m_addap_sm(v)   .db 3,((v&31)<<3)+mf_DIGITOVERLOAD_ADDFLGTOAP
+#define m_run(adr)      .db 4, lo(adr), hi(adr)     ;Run z80 ASM code.
 ;   slot 5 empty
-#define m_run(adr)      .db 6, lo(adr), hi(adr)     ;Run z80 ASM code.
+#define m_clra1()       .db 6       ; Clears a1
 #define m_clra0()       .db 7       ; Clears a0
 #define m_seta0(v)      .db 8,v     ; v -> a0
 #define m_menuopt()     .db 9       ;CTRL CODE: TAB
@@ -359,12 +360,34 @@ mmb_single          .equ 9
 #define m_jrbnz(b,rel)  .db 23, m_JR_BNZ|(b&15), rel-$-1  ;if A[`bt`] != 0
 #define m_jrbpz(b,rel)  .db 23, m_JR_BPZ|(b&15), rel-$-1  ;if AP[`bt`] == 0
 #define m_jrbpnz(b,rel) .db 23, m_JR_BPNZ|(b&15), rel-$-1 ;if AP[`bt`] != 0
-#define m_jr(rel)       .db 23, m_JR_UNCOND|(hi(rel-$-2)&$3F), lo(rel-$-1,14)
+;TODO: ADD RELCHK() MACRO TO m_jr() ONCE WE'VE FIGURED OUT HOW TO FIX THE
+;       PARSER PROBLEM MARKED IN KNOWN_PROBLEMS.TXT ON NOV 26, 2025
+#define m_jr(rel)       .db 23, m_JR_UNCOND|(hi(rel-$-2)&$3F), lo(rel-$-1)
 #define m_jsr(rel)      .db 23, m_JSR_UNCOND|(hi(rel-$-2)&$3F), lo(rel-$-1) \ RELCHK(rel-$, 14)
-#define m_jsra()        .db 23, m_JSR_A
-#define m_jsrap()       .db 23, m_JSR_AP
-#define m_jsri()        .db 23, m_JSR_I
-#define m_jsrip()       .db 23, m_JSR_IP
+;OVERLOADED FUNCTIONALITY. WE HAD TO FIGURE OUT WHAT TO DO WITH THE FINAL SLOT.
+;INSTRUCTION WIDTH INCONSISTENCY IS NOTED. IT GETS EVEN MORE INCONSISTENT WITH
+;THE OVERLOADS THAT HAPPENS NEXT.
+#define m_jsra()        .db 23, m_JSR_A     ;push PC+2, jp [A]
+#define m_jsrap()       .db 23, m_JSR_AP    ;push PC+2, jp [AP]
+#define m_jsri()        .db 23, m_JSR_I     ;push PC+2, jp [I]
+;Overloaded for A-imm ALU operations. Mirrors capabilities of cmd 26 to
+;re-use assembly code for this purpose.
+#define m_lda0(v)      .db 23, m_IMM_ALU_1B|m_XF_LD  , v
+#define m_ora0(v)      .db 23, m_IMM_ALU_1B|m_XF_OR  , v
+#define m_anda0(v)     .db 23, m_IMM_ALU_1B|m_XF_AND , v
+#define m_xora0(v)     .db 23, m_IMM_ALU_1B|m_XF_XOR , v
+#define m_adda0(v)     .db 23, m_IMM_ALU_1B|m_XF_ADD , v
+#define m_suba0(v)     .db 23, m_IMM_ALU_1B|m_XF_SUB , v
+#define m_nota0()      .db 23, m_IMM_ALU_1B|m_XF_NOT
+#define m_nega0()      .db 23, m_IMM_ALU_1B|m_XF_NEG
+#define m_lda(v)       .db 23, m_IMM_ALU_2B|m_XF_LD  , v
+#define m_ora(v)       .db 23, m_IMM_ALU_2B|m_XF_OR  , v
+#define m_anda(v)      .db 23, m_IMM_ALU_2B|m_XF_AND , v
+#define m_xora(v)      .db 23, m_IMM_ALU_2B|m_XF_XOR , v
+#define m_adda(v)      .db 23, m_IMM_ALU_2B|m_XF_ADD , v
+#define m_suba(v)      .db 23, m_IMM_ALU_2B|m_XF_SUB , v
+#define m_nota()       .db 23, m_IMM_ALU_2B|m_XF_NOT
+#define m_nega()       .db 23, m_IMM_ALU_2B|m_XF_NEG
 ;slot 24 empty
 ;%SSCAAAAA C=oper(0:ex,1:ldtomem), does oper (1<SS) bytes starting at short adr A.
 ;input size is in actual bytes and is converted via macro
