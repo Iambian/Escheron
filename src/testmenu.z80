@@ -3,10 +3,16 @@
 ;new size 1588. size with old code removed is 805. 
 #define __REPARSE_INTERVAL 0
 
-menu_numswap        .equ 5      ;very temporary values. For math purposes
+chardisp_options    .equ 5      ;2b flags
+;union boundary: 7
+menu_resist         .equ 7      ;1b resist value
+menu_weakness       .equ 8      ;1b weakness value
+menu_attack         .equ 9      ;1b attack value
 menu_temp           .equ 7      ;2b temporary purposes
-chardisp_options    .equ 9      ;2b flags
+menu_numswap        .equ 9      ;very temporary values. For math purposes
+;
 menu_basefile       .equ 11     ;2b index to save file
+;union boundary 13
 menu_slotoffset     .equ 13     ;1b (use 2) charslot id offset (0-2)
 menu_slotid         .equ 13     ;1b (use 2) ID of character slot (1-N)
 menu_slotpos        .equ 13     ;2b slot address
@@ -345,8 +351,28 @@ menu_dc_char_details:
     .db "%"
     m_eof
 
+;input: I = charstart
+.assert((p_wpn-p_id) < 16, "Distance between p_wpn and p_id too long for short add.")
 menu_dc_item_showresist:
-.db "PLCHLDR",0
+    m_addi_sm(p_wpn-p_id)
+    m_jsr(menu_dc_item_element_collector)   ;Fills all masks
+    m_ldaf(menu_resist, 1)      ; Get resistances
+    m_xoraf(menu_weakness, 1)   ; Set elements where there is a disagreement.
+    m_nota0()                   ; Unset these for a zeroing mask
+    m_andaf(menu_resist, 1)     ; All resistances, minus any that were weak.
+    m_jrbz(ENF_FIRE, _)
+    .db SYM_FIRE
+_:  m_jrbz(ENF_LIT, _)
+    .db SYM_LIT
+_:  m_jrbz(ENF_ICE, _)
+    .db SYM_ICE
+_:  m_jrbz(ENF_POISON, _)
+    .db SYM_POISON
+_:  m_jrbz(ENF_SLEEP, _)
+    .db SYM_SLEEP
+; We don't show any symbols for holy/KO/gravity. For all intents and purposes,
+; nothing's supposed to resist them. A lot of bosses are weak to holy, though.
+_:  m_eof   
 
 
 
@@ -357,6 +383,108 @@ menu_dc_item_showresist:
 
 
 
+
+
+
+
+
+
+
+;input I = address to character inventory start (wpn/shl/arm/acc)
+menu_dc_item_element_collector:
+    ;init elemental storage
+    m_clra0()
+    m_ldfa(menu_resist, 1)
+    m_ldfa(menu_weakness, 1)
+    m_ldfa(menu_attack, 1)
+    m_seta(4)       ;loop parameter.
+_:  m_exaap()       ;protect (or on reentry, reprotect) the loop counter
+    ;find address to character equipment start, saving this before looking up props.
+    m_ldind(0)      ;get item ID from equipment slot
+    m_inci()        ;next item slot
+    m_exiip()       ;save character index index
+    m_swap()
+    m_seta0(EOFST_LENGTH)
+    m_mltacc()
+    m_exai()        ;middle term loaded
+    ;first term loaded + fixed offset
+    m_lda(dispCharslots_temp_geartable-EOFST_LENGTH+EOFST_F1)
+    m_addi()
+    m_exai()        ;I == start of equipment parameters
+    m_jsr(menu_dc_item_element_collect_oneitemparam)
+    m_jsr(menu_dc_item_element_collect_oneitemparam)
+    m_jsr(menu_dc_item_element_collect_oneitemparam)
+    m_exiip()       ;restore to character index
+    m_exaap()       ;expose the loop counter
+    m_djnz(-_)      ;and loop.
+    m_eof
+
+menu_dc_item_element_collect_oneitemparam:
+    ;Break out to subroutine
+    m_ldind(0)  ;retrieve property
+    m_anda0(EQPR_H_MASK)    ;isolating code type bits
+    m_cpjnz(EQPR_H_PROP, menu_dc_item_element_continue)
+    m_ldind(0)  ;reretrieve property, now that we know it's magic typing
+    m_jsr(_)
+menu_dc_item_element_continue:
+    m_inci()
+    m_eof
+;--------
+_:  m_anda0(EQPR_M_MASK)    ;isolating magic property type
+    m_cpjnz(EQPR_M_RESI, _)
+    ;resist one
+    m_jsr(menu_dc_item_element_tomask)
+    m_oraf(menu_resist, 1)
+    m_ldfa(menu_resist, 1)
+    m_eof
+_:  m_cpjnz(EQPR_M_WEAK, _)
+    ;weakness one
+    m_jsr(menu_dc_item_element_tomask)
+    m_oraf(menu_weakness, 1)
+    m_ldfa(menu_weakness, 1)
+    m_eof
+_:  m_cpjnz(EQPR_M_ATTK, _)
+    ;attack one
+    m_jsr(menu_dc_item_element_tomask)
+    m_oraf(menu_attack, 1)
+    m_ldfa(menu_attack, 1)
+    m_eof
+_:  ;resist all. No more codes to check
+    m_seta0($FF)
+    m_ldfa(menu_resist, 1)
+    m_eof
+
+
+; If this is something we have to do more than a few times and we can't
+; make it callable, we'll have to create a dedicated instruction for this.
+; Because all we're doing here is right-shifting 1 by a0 bytes
+menu_dc_item_element_tomask:
+    m_ldind(0)
+    m_anda0(EQPR_L_MASK)
+    m_adda_sm(1)
+    m_djnz(_)
+    m_seta0((1<<0))
+    m_eof
+_:  m_djnz(_)
+    m_seta0((1<<1))
+    m_eof
+_:  m_djnz(_)
+    m_seta0((1<<2))
+    m_eof
+_:  m_djnz(_)
+    m_seta0((1<<3))
+    m_eof
+_:  m_djnz(_)
+    m_seta0((1<<4))
+    m_eof
+_:  m_djnz(_)
+    m_seta0((1<<5))
+    m_eof
+_:  m_djnz(_)
+    m_seta0((1<<6))
+    m_eof
+_:  m_seta0((1<<7))
+    m_eof
 
 
 

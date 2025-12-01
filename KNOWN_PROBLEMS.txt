@@ -1,3 +1,7 @@
+Nov 30 2025
+-----------
+The boundary warning in .db/.dw/.dl statements is utterly unhelpful. Yes, I know that the label that was used is too big to fit in a byte. I want to know WHERE that cock-up of a statement was used, not where the label that was used was. This problem isn't critical, but hot damn it was annoying to find. The only reason I'm not gunning after this is because the problem that this came up in was solved by looking up *where* the symbol in question was used in the code and found the only new instance of it.
+
 
 Nov 26 2025
 -----------

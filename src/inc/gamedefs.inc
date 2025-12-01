@@ -380,12 +380,12 @@ mmb_single          .equ 9
 #define m_suba0(v)     .db 23, m_IMM_ALU_1B|m_XF_SUB , v
 #define m_nota0()      .db 23, m_IMM_ALU_1B|m_XF_NOT
 #define m_nega0()      .db 23, m_IMM_ALU_1B|m_XF_NEG
-#define m_lda(v)       .db 23, m_IMM_ALU_2B|m_XF_LD  , v
-#define m_ora(v)       .db 23, m_IMM_ALU_2B|m_XF_OR  , v
-#define m_anda(v)      .db 23, m_IMM_ALU_2B|m_XF_AND , v
-#define m_xora(v)      .db 23, m_IMM_ALU_2B|m_XF_XOR , v
-#define m_adda(v)      .db 23, m_IMM_ALU_2B|m_XF_ADD , v
-#define m_suba(v)      .db 23, m_IMM_ALU_2B|m_XF_SUB , v
+#define m_lda(v)       .db 23, m_IMM_ALU_2B|m_XF_LD  \ .dw v
+#define m_ora(v)       .db 23, m_IMM_ALU_2B|m_XF_OR  \ .dw v
+#define m_anda(v)      .db 23, m_IMM_ALU_2B|m_XF_AND \ .dw v
+#define m_xora(v)      .db 23, m_IMM_ALU_2B|m_XF_XOR \ .dw v
+#define m_adda(v)      .db 23, m_IMM_ALU_2B|m_XF_ADD \ .dw v
+#define m_suba(v)      .db 23, m_IMM_ALU_2B|m_XF_SUB \ .dw v
 #define m_nota()       .db 23, m_IMM_ALU_2B|m_XF_NOT
 #define m_nega()       .db 23, m_IMM_ALU_2B|m_XF_NEG
 ;slot 24 empty
@@ -416,12 +416,16 @@ mmb_single          .equ 9
 #define m_printidx() m_exai() \ m_printacc() \ m_exai()
 #define m_mltacc1(v) m_swap() \ m_seta0(v) \ m_mltacc() \ m_swap() \ m_clra0() \ m_swap()
 #define m_mltacc2(v) m_swap() \ m_seta0(v) \ m_mltacc() \ m_clra0() \ m_swap()
-#define m_clra() m_clra0() \ m_swap() \ m_clra0()
+#define m_clra() m_clra0() \ m_clra1()
 #define m_seta_m1() m_clra0() \ m_djnz($+1) \ m_sext()
 #define m_clri() m_exai() \ m_clra() \ m_exai()
 #define m_add(v) m_exaap() \ m_seta(v) \ m_addap()
 #define m_setap0(v) m_exaap() \ m_seta0(v) \ m_exaap()
 #define m_ldind2(v) m_ldind(v+1) \ m_swap() \ m_addind(v)
+#define m_exapi()   m_exai() \ m_exaap() \ m_exai()
+#define m_exiap()   m_exapi()
+#define m_exapip()  m_exiip() \ m_exai() \ m_exaap() \ m_exai() \ m_exiip()
+#define m_exipap()  m_exapip()
 ;
 #define m_drawbox(x1,y1,x2,y2) m_run(menu_drawBox) \ .db x1,y1,x2,y2
 #define m_printacc() m_jsra()

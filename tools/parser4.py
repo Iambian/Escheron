@@ -755,7 +755,7 @@ class Parser(object):
                 int_max = (1 << (8*bytewidth))-1
                 #print(f"Boundaries: {int_min}, {int_max}")
                 if ((exprval < int_min) or (exprval > int_max)) and passid > 1 and bytewidth:
-                    print(warnmsg(param[0],f"Expression evalulates outside bounds. Value {exprval} is being truncated."))
+                    print(warnmsg(param[0],f"Expression evaluates outside bounds. Value {exprval} is being truncated."))
                 # Is a number and it is being output.
                 # Default action is to chop bits that won't fit.
                 # Value clamping logic is here in case of future feature.
