@@ -351,24 +351,31 @@ menu_dc_char_details:
     .db "%"
     m_eof
 
+
+;masking logic. A=accumulator, R=resist, W=weakness
+; R W rslt  | A=W ~ &R DONE.                     
+; 0 0  0    |  0  1  0                 
+; 1 0  1    |  0  1  1                  
+; 0 1  0    |  1  0  0                  
+; 1 1  0    |  1  0  0                  
+;
 ;input: I = charstart
 .assert((p_wpn-p_id) < 16, "Distance between p_wpn and p_id too long for short add.")
 menu_dc_item_showresist:
-    m_addi_sm(p_wpn-p_id)
+    m_addi_sm(p_wpn-p_id)       ; Get offset from start of character data equipment
     m_jsr(menu_dc_item_element_collector)   ;Fills all masks
-    m_ldaf(menu_resist, 1)      ; Get resistances
-    m_xoraf(menu_weakness, 1)   ; Set elements where there is a disagreement.
-    m_nota0()                   ; Unset these for a zeroing mask
-    m_andaf(menu_resist, 1)     ; All resistances, minus any that were weak.
-    m_jrbz(ENF_FIRE, _)
+    m_ldaf(menu_weakness, 1)
+    m_nota0()
+    m_andaf(menu_resist, 1)
+    m_jrbz(ELM_FIRE, _)
     .db SYM_FIRE
-_:  m_jrbz(ENF_LIT, _)
+_:  m_jrbz(ELM_LIT, _)
     .db SYM_LIT
-_:  m_jrbz(ENF_ICE, _)
+_:  m_jrbz(ELM_ICE, _)
     .db SYM_ICE
-_:  m_jrbz(ENF_POISON, _)
+_:  m_jrbz(ELM_POISON, _)
     .db SYM_POISON
-_:  m_jrbz(ENF_SLEEP, _)
+_:  m_jrbz(ELM_SLEEP, _)
     .db SYM_SLEEP
 ; We don't show any symbols for holy/KO/gravity. For all intents and purposes,
 ; nothing's supposed to resist them. A lot of bosses are weak to holy, though.
@@ -427,7 +434,7 @@ menu_dc_item_element_collect_oneitemparam:
     m_ldind(0)  ;reretrieve property, now that we know it's magic typing
     m_jsr(_)
 menu_dc_item_element_continue:
-    m_inci()
+    m_inci()    
     m_eof
 ;--------
 _:  m_anda0(EQPR_M_MASK)    ;isolating magic property type

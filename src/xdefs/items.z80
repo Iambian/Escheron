@@ -208,7 +208,8 @@ X(SWD_RAGNAROK,"Ragnarok",-1   , 60, 00, 08, 00,192, 32,EQ_ATK_HOLY,EQ_EFF_CASTB
 X(SWD_EBONY   ,"Ebony   ",00000, 00, 00, 00, 00,192, 16,EQ_ATK_POISON,00,00) 
 X(SWD_PLASMA  ,"Plasma  ",00000, 00, 00, 00, 00,160, 24,EQ_EFF_CASTSHOCK,00,00) 
 X(SWD_ETERNAL ,"Eternal ",00000, 99, 99, 99, 99,255,000,00,00,00)
-X(SWD_SWORD   ,"Sword   ",-1   , 00, 00, 00, 00, 00, 00,00,00,00)
+X(SWD_SWORD   ,"Sword   ",-1   , 00, 00, 00, 00, 00, 00,00,EQ_RES_ALL,00)
+;            ------------,gcost,atk,def,wis,agi,hit,crt,f1,f2,f3
 X(CLA_STEEL   ,"Steel   ",00400, 08, 00, 00, 10,192, 64,EQ_EFF_DEFENSE,00,00) 
 X(CLA_VENOM   ,"Venom   ",01600, 18, 00, 00, 10,192, 96,EQ_EFF_DEFENSE,EQ_ATK_POISON,00)
 X(CLA_CATCLAW ,"Catclaw ",08000, 28, 00, 00, 10,160,128,EQ_EFF_DEFENSE,00,00) 
@@ -221,6 +222,7 @@ X(STA_LILITH  ,"Lilith  ",08800, 24, 00, 28, 05,128, 32,EQ_ATK_SLEEP,00,00)
 X(STA_ZEUS    ,"Zeus    ",11000, 28, 00, 36, 00,160, 16,EQ_ATK_LIT,SPL_TORNADO_ON_ITEM,00) 
 X(STA_SERAPH  ,"Seraph  ",28000, 32, 05, 48, 00,160, 16,EQ_EFF_CASTSHOCK,00,00) 
 X(STA_LEVATEIN,"Levatein",60000, 52, 00, 24, 00,192, 64,SPL_DELUGE_ON_ITEM,00,00) 
+;            ------------,gcost,atk,def,wis,agi,hit,crt,f1,f2,f3
 X(SHL_BUCKLER ,"Buckler ",00080, 00, 02,-02, 00, 24, 00,00,00,00) 
 X(SHL_LARGE   ,"Large   ",00400, 00, 08,-05,-04, 32, 00,00,00,00) 
 X(SHL_MAGIC   ,"Magic   ",03000, 00, 04, 12, 00, 24, 00,00,00,00) 
@@ -242,6 +244,7 @@ X(ARM_MIRROR  ,"Mirror  ",56000, 00, 48,-10,-12,000, 00,EQ_RES_LIT,EQ_RES_GRAVIT
 X(ARM_EBONY   ,"Ebony   ",00000, 00, 00, 00, 00,000, 00,EQ_RES_POISON,00,00) 
 X(ARM_FRAME   ,"Frame   ",00000, 00, 00, 00, 00,000, 00,EQ_RES_GRAVITY,EQ_RES_KO,EQ_EFF_HPREGEN) 
 X(ARM_SWORD   ,"Sword   ",-1   , 00, 00, 00, 00, 00, 00,00,00,00)
+;            ------------,gcost,atk,def,wis,agi,hit,crt,f1,f2,f3
 X(CLO_CLOTHES ,"Clothes ",00060, 00, 05, 00, 02,000, 00,00,00,00) 
 X(CLO_WIZARD  ,"Wizard  ",00600, 00, 08, 12, 00,000, 00,00,00,00) 
 X(CLO_BLAZE   ,"Blaze   ",00900, 00, 10, 08, 00,000, 00,EQ_RES_FIRE,00,00) 

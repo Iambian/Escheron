@@ -9,7 +9,8 @@ import inspect
 # TODO: FIX SIGNED VS NONSIGNED ARITHMETIC IN SCRIPT SYSTEM. THIS BUG IS VISIBLE
 # WHEN TRYING TO PERFORM m_addxy() WITH NEGATIVE NUMBERS.
 
-
+def bits(v:int) -> str:
+    return f"{v:0{8}b}"
 class GameMap(object):
     ''' This is a project-specific blurb. To be honest, the parse_input and
         anything else touching the character renderer is also project-specific,
@@ -1062,6 +1063,7 @@ class MenuMakerApp:
                     else:
                         res = True if (self.gamemap.accshad() & (1 << b)) != 0 else False
                     ptr += 3
+                    #print(f"Bit {b}, oper {oper}, result={res}")
                     if res:
                         ptr += (rel if rel < 128 else rel-256)
                 elif topoper == 1:
@@ -1094,9 +1096,10 @@ class MenuMakerApp:
                         acc = self.gamemap.acc()
                         # Input conditioning
                         if size == 1:
-                            acc = acc & 0x0F
+                            acc = acc & 0xFF
                         else:
                             other = other + (self.gamemap.memory[ptr + 3] << 8)
+                        #print(f"ALU IMM params={bits(params)}, {oper=}, {size=}, other={bits(other)}, acc={bits((acc>>8)&0xFF)}_{bits(acc&0xFF)}")
                         # ALU operations
                         if oper == 0:
                             acc = other
@@ -1117,12 +1120,13 @@ class MenuMakerApp:
                             acc = acc - other
                             ptr += 2 + size
                         elif oper == 6:
-                            acc = (-acc) & 0xFFFF
-                            ptr += 2
-                        elif oper == 7:
                             acc = (~acc) & 0xFFFF
                             ptr += 2
+                        elif oper == 7:
+                            acc = (-acc) & 0xFFFF
+                            ptr += 2
                         # Output conditioning
+                        #print(f"Result: acc={bits((acc>>8)&0xFF)}_{bits(acc&0xFF)}")
                         if size == 1:
                             self.gamemap.acc0(acc)
                         else:
@@ -1188,9 +1192,9 @@ class MenuMakerApp:
                 elif oper == 5:
                     acc = acc - other
                 elif oper == 6:
-                    acc = (-other) & 0xFFFF
-                elif oper == 7:
                     acc = (~other) & 0xFFFF
+                elif oper == 7:
+                    acc = (-other) & 0xFFFF
                 if is2byte:
                     self.gamemap.acc(acc)
                 else:

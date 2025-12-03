@@ -356,10 +356,10 @@ mmb_single          .equ 9
 #define m_djnz(rel)     .db 21, rel-$-1 ;A--, `JR rel` if A != 0
 #define m_write()       .db 22      ; a0 -> [I]
 ;%FFAAIIII Operation based on FF. F may merge AAIIII to rel. Else, defined below
-#define m_jrbz(b,rel)   .db 23, m_JR_BZ|(b&15), rel-$-1   ;if A[`bt`] == 0
-#define m_jrbnz(b,rel)  .db 23, m_JR_BNZ|(b&15), rel-$-1  ;if A[`bt`] != 0
-#define m_jrbpz(b,rel)  .db 23, m_JR_BPZ|(b&15), rel-$-1  ;if AP[`bt`] == 0
-#define m_jrbpnz(b,rel) .db 23, m_JR_BPNZ|(b&15), rel-$-1 ;if AP[`bt`] != 0
+#define m_jrbz(b,rel)   .db 23, m_JR_BZ|((b)&15), rel-$-1   ;if A[`bt`] == 0
+#define m_jrbnz(b,rel)  .db 23, m_JR_BNZ|((b)&15), rel-$-1  ;if A[`bt`] != 0
+#define m_jrbpz(b,rel)  .db 23, m_JR_BPZ|((b)&15), rel-$-1  ;if AP[`bt`] == 0
+#define m_jrbpnz(b,rel) .db 23, m_JR_BPNZ|((b)&15), rel-$-1 ;if AP[`bt`] != 0
 ;TODO: ADD RELCHK() MACRO TO m_jr() ONCE WE'VE FIGURED OUT HOW TO FIX THE
 ;       PARSER PROBLEM MARKED IN KNOWN_PROBLEMS.TXT ON NOV 26, 2025
 #define m_jr(rel)       .db 23, m_JR_UNCOND|(hi(rel-$-2)&$3F), lo(rel-$-1)
